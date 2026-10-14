@@ -1,78 +1,74 @@
-# React + TypeScript + Vite
+# Cobrafy (web)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web de Cobrafy: entrar al negocio, elegir sucursal, ver y armar fichas de clientes, y (si eres dueño) invitar al equipo.
 
-Currently, two official plugins are available:
+## Cómo se guarda la sesión
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+El token **no** va a `localStorage`. Vive en **`sessionStorage`** (`cobrafy.session`).
 
-## React Compiler
+- No basta la memoria: en el celular un refresco a mitad de un alta no puede pedir el correo otra vez.
+- No usamos `localStorage`: el token no debe quedar en el disco después de cerrar la pestaña.
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+Nunca se escribe correo, cédula, contraseña ni token en `console.*` (solo método, ruta y código de error). Las rutas `/invitar/:token` se redactan.
 
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
+## Cabeceras al publicar
 
-## Expanding the ESLint configuration
+El HTML de producción lleva `Referrer-Policy: no-referrer` y un meta CSP estricto.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+**`frame-ancestors` hay que ponerla como cabecera HTTP en el host.** El navegador ignora esa directiva si llega en un `<meta http-equiv>`: el meta del build no bloquea iframes. El hosting (nginx, Cloudflare, Vercel headers, etc.) debe enviar `Content-Security-Policy` con `frame-ancestors 'none'`.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+El resto de directivas sí aplican desde el meta. El hosting debe repetirlas como cabeceras:
 
 ```
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' <origen-del-api-si-es-absoluto>; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+Referrer-Policy: no-referrer
+```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Si `VITE_API_BASE_URL` es una URL absoluta, el origen entra en `connect-src`. `upgrade-insecure-requests` solo se emite en el build de producción cuando el API no es `http://` (si el API es HTTP, esa directiva bloquearía las llamadas).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## API
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+El cliente habla con `cobrafy-backend` (commit de referencia `4ddab7d`) con `Authorization: Bearer`. El negocio activo va en el JWT después de `POST /auth/login` (un solo negocio) o `POST /auth/select-business`. No se manda `X-Business-Id`.
 
+Rutas usadas:
+
+| Método | Ruta | Uso |
+|--------|------|-----|
+| POST | `/auth/login` | Correo y contraseña. Un negocio entra directo; varios responden `needs_business_selection`. |
+| POST | `/auth/select-business` | Elige el negocio y recibe un JWT nuevo. |
+| POST | `/auth/logout` | Salir |
+| GET | `/auth/me` | Usuario, negocio activo, rol y membresías |
+| POST | `/auth/pin` | Configurar o borrar PIN (`password` + `pin`). No sustituye el primer login. |
+| POST | `/auth/pin/unlock` | Abrir una sesión ya autenticada con PIN |
+| GET | `/clients` | Lista (`status`, `collector_membership_id`, `page`, `page_size`) |
+| POST | `/clients/search` | Búsqueda (`q`, `document`, `name`, `phone`, `page`, `page_size`). El documento **no** va en la URL. |
+| POST | `/clients/check` | ¿Existe este `doc_type` + `document`? |
+| POST | `/clients` | Alta (`name`, `doc_type`, `document`, `phone`, `address`, `notes`, `collector_membership_id`). Sin `status`. |
+| GET/PATCH | `/clients/{id}` | Ficha. El PATCH tampoco acepta `status`. |
+| POST | `/clients/{id}/block` | Bloquear con `reason` |
+| POST | `/clients/{id}/unblock` | Desbloquear con `reason` (solo dueño) |
+| GET | `/clients/{id}/history` | Historial (`limit`, `before`, `events`, `next_cursor`) |
+| POST/GET | `/clients/{id}/contacts` | Referencias (`referencia`) y garantes (`garante`) |
+| PATCH/DELETE | `/clients/{id}/contacts/{contact_id}` | Editar o desactivar un contacto (dueño y cajero) |
+| GET/POST | `/users` | Equipo e invitaciones por email (solo dueño) |
+| PATCH | `/users/{id}` | Cambiar rol o `is_active` de una membresía (`id` de membresía) |
+| GET | `/invitations` | Invitaciones pendientes |
+| POST | `/invitations/accept` | Aceptar (`token`, `name`, `password`). No devuelve sesión. |
+| POST | `/invitations/{id}/revoke` | Revocar |
+
+Errores: **422** (`detail` string o lista `loc`/`msg`, sin `input`) y **409** (`ya existe un cliente con este documento`, `el cliente ya está bloqueado`, `el cliente no está bloqueado`) se pintan en el campo cuando aplica; **403** se avisa sin romper la pantalla; **401** `no autenticado` manda al login y `selecciona un negocio` al selector.
+
+## Desarrollo
+
+```bash
+pnpm install
+cp .env.example .env   # VITE_API_BASE_URL vacío usa el proxy de Vite
+pnpm dev               # solo localhost; VITE_DEV_HOST=1 para 0.0.0.0
+```
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
 ```
