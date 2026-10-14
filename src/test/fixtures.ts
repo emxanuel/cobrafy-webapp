@@ -1,125 +1,168 @@
-import type { Membership, SessionPayload, UserRead } from '@/features/auth/services/types'
-import type { ClientRead } from '@/features/clients/services/types'
-import type { Invitation, Member } from '@/features/members/services/types'
+import type {
+  AuthResponse,
+  BusinessSummary,
+  Membership,
+  Role,
+  UserRead,
+} from '@/features/auth/services/types'
+import type { ClientDetail } from '@/features/clients/services/types'
+import type { InvitationRead, MemberRead } from '@/features/members/services/types'
 
 export const users = {
   cashier: {
     id: 'user-cashier',
-    first_name: 'Carla',
-    last_name: 'Caja',
+    name: 'Carla Caja',
     email: 'cajero@negocio.com',
+    phone: null,
+    is_active: true,
   },
   owner: {
     id: 'user-owner',
-    first_name: 'Olivia',
-    last_name: 'Dueña',
+    name: 'Olivia Dueña',
     email: 'duena@negocio.com',
+    phone: null,
+    is_active: true,
   },
   collector: {
     id: 'user-collector',
-    first_name: 'Coco',
-    last_name: 'Ruta',
+    name: 'Coco Ruta',
     email: 'cobrador@negocio.com',
+    phone: null,
+    is_active: true,
   },
   multi: {
     id: 'user-multi',
-    first_name: 'Marta',
-    last_name: 'Varios',
+    name: 'Marta Varios',
     email: 'marta@negocios.com',
+    phone: null,
+    is_active: true,
+  },
+  pin: {
+    id: 'user-pin',
+    name: 'Pilar Pin',
+    email: 'pin@negocio.com',
+    phone: null,
+    is_active: true,
   },
 } satisfies Record<string, UserRead>
 
 export const businesses = {
-  norte: { id: 'biz-norte', name: 'Créditos Norte' },
-  sur: { id: 'biz-sur', name: 'Créditos Sur' },
-}
+  norte: {
+    id: 'biz-norte',
+    name: 'Créditos Norte',
+    phone: null,
+    currency: 'DOP',
+    timezone: 'America/Santo_Domingo',
+  },
+  sur: {
+    id: 'biz-sur',
+    name: 'Créditos Sur',
+    phone: null,
+    currency: 'DOP',
+    timezone: 'America/Santo_Domingo',
+  },
+} satisfies Record<string, BusinessSummary>
 
 export function membership(
   user: UserRead,
-  business: { id: string; name: string },
-  role: Membership['role'],
+  business: BusinessSummary,
+  role: Role,
+  hasPin = false,
 ): Membership {
   return {
     id: `mem-${user.id}-${business.id}`,
     business_id: business.id,
     business_name: business.name,
     role,
+    has_pin: hasPin,
   }
 }
 
-export function session(options: {
+export function authResponse(options: {
   user: UserRead
   memberships: Membership[]
-  pinConfigured?: boolean
   token?: string
-}): SessionPayload {
+  needsBusinessSelection?: boolean
+  activeBusinessId?: string | null
+}): AuthResponse {
+  const needs =
+    options.needsBusinessSelection ??
+    (options.activeBusinessId == null && options.memberships.length !== 1)
+  const activeId =
+    options.activeBusinessId ?? (needs ? null : (options.memberships[0]?.business_id ?? null))
+  const activeMembership =
+    activeId == null
+      ? null
+      : (options.memberships.find((item) => item.business_id === activeId) ?? null)
+  const biz = activeMembership
+    ? (Object.values(businesses).find((item) => item.id === activeMembership.business_id) ?? {
+        id: activeMembership.business_id,
+        name: activeMembership.business_name,
+        phone: null,
+        currency: 'DOP',
+        timezone: 'America/Santo_Domingo',
+      })
+    : null
   return {
     access_token: options.token ?? `token-${options.user.id}`,
     token_type: 'bearer',
+    expires_in: 3600,
+    needs_business_selection: needs || activeMembership == null,
     user: options.user,
+    active_business: biz,
+    active_role: activeMembership?.role ?? null,
     memberships: options.memberships,
-    pin_configured: options.pinConfigured ?? false,
   }
 }
 
-export const collectorMember: Member = {
-  id: 'mem-collector',
-  user_id: users.collector.id,
-  first_name: users.collector.first_name,
-  last_name: users.collector.last_name,
+export const collectorMember: MemberRead = {
+  id: membership(users.collector, businesses.norte, 'cobrador').id,
+  name: users.collector.name,
   email: users.collector.email,
-  role: 'collector',
-  status: 'active',
+  role: 'cobrador',
+  is_active: true,
 }
 
-export const ownerMember: Member = {
-  id: 'mem-owner',
-  user_id: users.owner.id,
-  first_name: users.owner.first_name,
-  last_name: users.owner.last_name,
+export const ownerMember: MemberRead = {
+  id: membership(users.owner, businesses.norte, 'dueño').id,
+  name: users.owner.name,
   email: users.owner.email,
-  role: 'owner',
-  status: 'active',
+  role: 'dueño',
+  is_active: true,
 }
 
-export const cashierMember: Member = {
-  id: 'mem-cashier',
-  user_id: users.cashier.id,
-  first_name: users.cashier.first_name,
-  last_name: users.cashier.last_name,
+export const cashierMember: MemberRead = {
+  id: membership(users.cashier, businesses.norte, 'cajero').id,
+  name: users.cashier.name,
   email: users.cashier.email,
-  role: 'cashier',
-  status: 'active',
+  role: 'cajero',
+  is_active: true,
 }
 
-export function clientFixture(overrides: Partial<ClientRead> = {}): ClientRead {
+export function clientFixture(overrides: Partial<ClientDetail> = {}): ClientDetail {
   return {
     id: 'cli-1',
-    first_name: 'Ana',
-    last_name: 'Pérez',
-    full_name: 'Ana Pérez',
-    document_type: 'cedula',
-    document_number: '001-1234567-8',
+    name: 'Ana Pérez',
+    doc_type: 'cedula',
+    document: '001-1234567-8',
+    document_available: true,
     phone: '8095551111',
-    email: null,
     address: 'Calle 1',
     notes: null,
-    collector_id: users.collector.id,
-    collector_name: 'Coco Ruta',
+    collector_membership_id: collectorMember.id,
     status: 'active',
+    is_blocked: false,
     blocked_reason: null,
-    references: [],
-    guarantors: [],
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
+    contacts: [],
     ...overrides,
   }
 }
 
-export const pendingInvite: Invitation = {
+export const pendingInvite: InvitationRead = {
   id: 'inv-1',
   email: 'nuevo@negocio.com',
-  role: 'cashier',
+  role: 'cajero',
   status: 'pending',
+  expires_at: '2026-01-05T00:00:00Z',
   created_at: '2026-01-02T00:00:00Z',
 }

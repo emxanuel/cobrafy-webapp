@@ -7,8 +7,13 @@ import {
   emptyClientForm,
   type ClientFormValues,
 } from '@/features/clients/schemas'
-import type { ClientRead, ClientWrite } from '@/features/clients/services/types'
-import type { Member } from '@/features/members/services/types'
+import { useCheckClientMutation } from '@/features/clients/hooks/use-clients-queries'
+import type {
+  ClientCreate,
+  ClientDetail,
+  ContactCreate,
+} from '@/features/clients/services/types'
+import type { MemberRead } from '@/features/members/services/types'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { Button } from '@/features/shared/components/ui/button'
 import {
@@ -23,35 +28,54 @@ import {
   isApiError,
 } from '@/features/shared/lib/api-error'
 
-function toWrite(values: ClientFormValues): ClientWrite {
+export type ClientFormSubmit = {
+  client: ClientCreate
+  contacts: ContactCreate[]
+}
+
+function toSubmit(values: ClientFormValues): ClientFormSubmit {
   return {
-    first_name: values.first_name,
-    last_name: values.last_name,
-    document_type: values.document_type,
-    document_number: values.document_number,
-    phone: values.phone,
-    email: values.email ? String(values.email) : null,
-    address: values.address || null,
-    notes: values.notes || null,
-    collector_id: values.collector_id || null,
-    references: values.references,
-    guarantors: values.guarantors,
+    client: {
+      name: values.name,
+      doc_type: values.doc_type,
+      document: values.document,
+      phone: values.phone,
+      address: values.address,
+      notes: values.notes || null,
+      collector_membership_id: values.collector_membership_id || null,
+    },
+    contacts: values.contacts.map((item) => ({
+      type: item.type,
+      name: item.name,
+      phone: item.phone,
+      relationship: item.relationship,
+      address: item.address || null,
+      doc_type: item.document ? item.doc_type || 'cedula' : null,
+      document: item.document || null,
+    })),
   }
 }
 
-function fromClient(client: ClientRead): ClientFormValues {
+function fromClient(client: ClientDetail): ClientFormValues {
   return {
-    first_name: client.first_name,
-    last_name: client.last_name,
-    document_type: client.document_type,
-    document_number: client.document_number,
+    name: client.name,
+    doc_type: client.doc_type,
+    document: client.document ?? '',
     phone: client.phone,
-    email: client.email ?? '',
-    address: client.address ?? '',
+    address: client.address,
     notes: client.notes ?? '',
-    collector_id: client.collector_id ?? '',
-    references: client.references,
-    guarantors: client.guarantors,
+    collector_membership_id: client.collector_membership_id ?? '',
+    contacts: client.contacts
+      .filter((item) => item.is_active)
+      .map((item) => ({
+        type: item.type,
+        name: item.name,
+        phone: item.phone,
+        relationship: item.relationship,
+        address: item.address ?? '',
+        doc_type: item.doc_type ?? 'cedula',
+        document: item.document ?? '',
+      })),
   }
 }
 
@@ -63,19 +87,19 @@ export function ClientForm({
   submitLabel,
   onSubmit,
 }: {
-  client?: ClientRead
-  collectors: Member[]
+  client?: ClientDetail
+  collectors: MemberRead[]
   pending: boolean
   error: unknown
   submitLabel: string
-  onSubmit: (payload: ClientWrite) => void
+  onSubmit: (payload: ClientFormSubmit) => void
 }) {
   const form = useForm<ClientFormValues>({
     resolver: zodResolver(clientFormSchema),
     defaultValues: client ? fromClient(client) : emptyClientForm(),
   })
-  const references = useFieldArray({ control: form.control, name: 'references' })
-  const guarantors = useFieldArray({ control: form.control, name: 'guarantors' })
+  const contacts = useFieldArray({ control: form.control, name: 'contacts' })
+  const check = useCheckClientMutation()
   const apiFields = error ? getFieldErrors(error) : {}
   const forbidden = isApiError(error) && error.status === 403
   const showBanner = Boolean(error) && (forbidden || Object.keys(apiFields).length === 0)
@@ -83,7 +107,7 @@ export function ClientForm({
   useEffect(() => {
     if (!error) return
     for (const [name, message] of Object.entries(getFieldErrors(error))) {
-      form.setError(name as 'document_number', { type: 'server', message })
+      form.setError(name as 'document', { type: 'server', message })
     }
   }, [error, form])
 
@@ -104,7 +128,7 @@ export function ClientForm({
   return (
     <form
       className="flex flex-col gap-6"
-      onSubmit={form.handleSubmit((values) => onSubmit(toWrite(values)))}
+      onSubmit={form.handleSubmit((values) => onSubmit(toSubmit(values)))}
       noValidate
     >
       {showBanner ? (
@@ -117,45 +141,43 @@ export function ClientForm({
 
       <section className="flex flex-col gap-4">
         <h2 className="m-0 text-xl">Datos de la persona</h2>
+        <Field id="name" label="Nombre" error={fieldError('name')}>
+          <TextInput
+            id="name"
+            autoComplete="name"
+            error={fieldError('name')}
+            {...form.register('name')}
+          />
+        </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="first_name" label="Nombre" error={fieldError('first_name')}>
-            <TextInput
-              id="first_name"
-              autoComplete="given-name"
-              error={fieldError('first_name')}
-              {...form.register('first_name')}
-            />
-          </Field>
-          <Field id="last_name" label="Apellido" error={fieldError('last_name')}>
-            <TextInput
-              id="last_name"
-              autoComplete="family-name"
-              error={fieldError('last_name')}
-              {...form.register('last_name')}
-            />
-          </Field>
-          <Field
-            id="document_type"
-            label="Tipo de documento"
-            error={fieldError('document_type')}
-          >
-            <SelectInput id="document_type" {...form.register('document_type')}>
+          <Field id="doc_type" label="Tipo de documento" error={fieldError('doc_type')}>
+            <SelectInput id="doc_type" {...form.register('doc_type')}>
               <option value="cedula">Cédula</option>
               <option value="pasaporte">Pasaporte</option>
             </SelectInput>
           </Field>
-          <Field
-            id="document_number"
-            label="Número de documento"
-            error={fieldError('document_number')}
-          >
+          <Field id="document" label="Número de documento" error={fieldError('document')}>
             <TextInput
-              id="document_number"
+              id="document"
               autoComplete="off"
-              error={fieldError('document_number')}
-              {...form.register('document_number')}
+              error={fieldError('document')}
+              {...form.register('document', {
+                onBlur: () => {
+                  const document = form.getValues('document').trim()
+                  const docType = form.getValues('doc_type')
+                  if (!document) return
+                  check.mutate({ doc_type: docType, document })
+                },
+              })}
             />
           </Field>
+          {check.data?.found ? (
+            <Alert>
+              {check.data.is_blocked
+                ? `Ese documento ya está en una ficha bloqueada${check.data.blocked_reason ? `: ${check.data.blocked_reason}` : '.'}`
+                : 'Ya hay un cliente con este documento.'}
+            </Alert>
+          ) : null}
           <Field id="phone" label="Teléfono" error={fieldError('phone')}>
             <TextInput
               id="phone"
@@ -165,32 +187,26 @@ export function ClientForm({
               {...form.register('phone')}
             />
           </Field>
-          <Field id="email" label="Correo (opcional)" error={fieldError('email')}>
-            <TextInput
-              id="email"
-              type="email"
-              autoComplete="email"
-              error={fieldError('email')}
-              {...form.register('email')}
-            />
+          <Field
+            id="collector_membership_id"
+            label="Cobrador asignado"
+            error={fieldError('collector_membership_id')}
+          >
+            <SelectInput
+              id="collector_membership_id"
+              {...form.register('collector_membership_id')}
+            >
+              <option value="">Sin asignar</option>
+              {collectors.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </SelectInput>
           </Field>
         </div>
-        <Field id="address" label="Dirección (opcional)" error={fieldError('address')}>
+        <Field id="address" label="Dirección" error={fieldError('address')}>
           <TextInput id="address" {...form.register('address')} />
-        </Field>
-        <Field
-          id="collector_id"
-          label="Cobrador asignado"
-          error={fieldError('collector_id')}
-        >
-          <SelectInput id="collector_id" {...form.register('collector_id')}>
-            <option value="">Sin asignar</option>
-            {collectors.map((member) => (
-              <option key={member.id} value={member.user_id}>
-                {member.first_name} {member.last_name}
-              </option>
-            ))}
-          </SelectInput>
         </Field>
         <Field id="notes" label="Notas (opcional)">
           <TextArea id="notes" {...form.register('notes')} />
@@ -198,154 +214,116 @@ export function ClientForm({
       </section>
 
       <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="m-0 text-xl">Referencias</h2>
-          <Button
-            variant="outline"
-            onClick={() =>
-              references.append({ name: '', phone: '', relationship: '' })
-            }
-          >
-            Agregar referencia
-          </Button>
-        </div>
-        {references.fields.map((field, index) => (
-          <fieldset
-            key={field.id}
-            className="border-border flex flex-col gap-3 rounded-md border p-3"
-          >
-            <legend className="px-1 text-sm">Referencia {index + 1}</legend>
-            <Field
-              id={`references.${index}.name`}
-              label="Nombre"
-              error={fieldError(`references.${index}.name`)}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="m-0 text-xl">Referencias y garantes</h2>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                contacts.append({
+                  type: 'referencia',
+                  name: '',
+                  phone: '',
+                  relationship: '',
+                  address: '',
+                  doc_type: 'cedula',
+                  document: '',
+                })
+              }
             >
-              <TextInput
-                id={`references.${index}.name`}
-                {...form.register(`references.${index}.name`)}
-              />
-            </Field>
-            <Field
-              id={`references.${index}.phone`}
-              label="Teléfono"
-              error={fieldError(`references.${index}.phone`)}
-            >
-              <TextInput
-                id={`references.${index}.phone`}
-                inputMode="tel"
-                {...form.register(`references.${index}.phone`)}
-              />
-            </Field>
-            <Field
-              id={`references.${index}.relationship`}
-              label="Relación"
-              error={fieldError(`references.${index}.relationship`)}
-            >
-              <TextInput
-                id={`references.${index}.relationship`}
-                {...form.register(`references.${index}.relationship`)}
-              />
-            </Field>
-            <Button variant="ghost" onClick={() => references.remove(index)}>
-              Quitar referencia
+              Agregar referencia
             </Button>
-          </fieldset>
-        ))}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="m-0 text-xl">Fiadores</h2>
-          <Button
-            variant="outline"
-            onClick={() =>
-              guarantors.append({
-                first_name: '',
-                last_name: '',
-                document_type: 'cedula',
-                document_number: '',
-                phone: '',
-                relationship: '',
-              })
-            }
-          >
-            Agregar fiador
-          </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                contacts.append({
+                  type: 'garante',
+                  name: '',
+                  phone: '',
+                  relationship: '',
+                  address: '',
+                  doc_type: 'cedula',
+                  document: '',
+                })
+              }
+            >
+              Agregar garante
+            </Button>
+          </div>
         </div>
-        {guarantors.fields.map((field, index) => (
-          <fieldset
-            key={field.id}
-            className="border-border flex flex-col gap-3 rounded-md border p-3"
-          >
-            <legend className="px-1 text-sm">Fiador {index + 1}</legend>
-            <Field
-              id={`guarantors.${index}.first_name`}
-              label="Nombre"
-              error={fieldError(`guarantors.${index}.first_name`)}
+        {contacts.fields.map((field, index) => {
+          const kind = form.watch(`contacts.${index}.type`)
+          return (
+            <fieldset
+              key={field.id}
+              className="border-border flex flex-col gap-3 rounded-md border p-3"
             >
-              <TextInput
-                id={`guarantors.${index}.first_name`}
-                {...form.register(`guarantors.${index}.first_name`)}
-              />
-            </Field>
-            <Field
-              id={`guarantors.${index}.last_name`}
-              label="Apellido"
-              error={fieldError(`guarantors.${index}.last_name`)}
-            >
-              <TextInput
-                id={`guarantors.${index}.last_name`}
-                {...form.register(`guarantors.${index}.last_name`)}
-              />
-            </Field>
-            <Field
-              id={`guarantors.${index}.document_type`}
-              label="Tipo de documento"
-            >
-              <SelectInput
-                id={`guarantors.${index}.document_type`}
-                {...form.register(`guarantors.${index}.document_type`)}
+              <legend className="px-1 text-sm">
+                {kind === 'garante' ? `Garante ${index + 1}` : `Referencia ${index + 1}`}
+              </legend>
+              <Field
+                id={`contacts.${index}.name`}
+                label="Nombre"
+                error={fieldError(`contacts.${index}.name`)}
               >
-                <option value="cedula">Cédula</option>
-                <option value="pasaporte">Pasaporte</option>
-              </SelectInput>
-            </Field>
-            <Field
-              id={`guarantors.${index}.document_number`}
-              label="Número de documento"
-              error={fieldError(`guarantors.${index}.document_number`)}
-            >
-              <TextInput
-                id={`guarantors.${index}.document_number`}
-                {...form.register(`guarantors.${index}.document_number`)}
-              />
-            </Field>
-            <Field
-              id={`guarantors.${index}.phone`}
-              label="Teléfono"
-              error={fieldError(`guarantors.${index}.phone`)}
-            >
-              <TextInput
-                id={`guarantors.${index}.phone`}
-                inputMode="tel"
-                {...form.register(`guarantors.${index}.phone`)}
-              />
-            </Field>
-            <Field
-              id={`guarantors.${index}.relationship`}
-              label="Relación"
-              error={fieldError(`guarantors.${index}.relationship`)}
-            >
-              <TextInput
-                id={`guarantors.${index}.relationship`}
-                {...form.register(`guarantors.${index}.relationship`)}
-              />
-            </Field>
-            <Button variant="ghost" onClick={() => guarantors.remove(index)}>
-              Quitar fiador
-            </Button>
-          </fieldset>
-        ))}
+                <TextInput
+                  id={`contacts.${index}.name`}
+                  {...form.register(`contacts.${index}.name`)}
+                />
+              </Field>
+              <Field
+                id={`contacts.${index}.phone`}
+                label="Teléfono"
+                error={fieldError(`contacts.${index}.phone`)}
+              >
+                <TextInput
+                  id={`contacts.${index}.phone`}
+                  inputMode="tel"
+                  {...form.register(`contacts.${index}.phone`)}
+                />
+              </Field>
+              <Field
+                id={`contacts.${index}.relationship`}
+                label="Relación"
+                error={fieldError(`contacts.${index}.relationship`)}
+              >
+                <TextInput
+                  id={`contacts.${index}.relationship`}
+                  {...form.register(`contacts.${index}.relationship`)}
+                />
+              </Field>
+              {kind === 'garante' ? (
+                <>
+                  <Field
+                    id={`contacts.${index}.doc_type`}
+                    label="Tipo de documento (opcional)"
+                  >
+                    <SelectInput
+                      id={`contacts.${index}.doc_type`}
+                      {...form.register(`contacts.${index}.doc_type`)}
+                    >
+                      <option value="cedula">Cédula</option>
+                      <option value="pasaporte">Pasaporte</option>
+                    </SelectInput>
+                  </Field>
+                  <Field
+                    id={`contacts.${index}.document`}
+                    label="Número de documento (opcional)"
+                    error={fieldError(`contacts.${index}.document`)}
+                  >
+                    <TextInput
+                      id={`contacts.${index}.document`}
+                      {...form.register(`contacts.${index}.document`)}
+                    />
+                  </Field>
+                </>
+              ) : null}
+              <Button variant="ghost" onClick={() => contacts.remove(index)}>
+                Quitar
+              </Button>
+            </fieldset>
+          )
+        })}
       </section>
 
       <div className="sticky bottom-0 -mx-4 bg-bg/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">

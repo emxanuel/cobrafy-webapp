@@ -1,24 +1,33 @@
 import type { Role } from '@/features/auth/services/types'
 
-export type Member = {
+export type MemberRead = {
   id: string
-  user_id: string
-  first_name: string
-  last_name: string
+  name: string
   email: string
   role: Role
-  status: 'active' | 'pending'
+  is_active: boolean
 }
 
-export type Invitation = {
+export type MemberInviteRead = {
+  email: string
+  role: Role
+}
+
+export type MemberCreate = {
+  email: string
+  role: Role
+}
+
+export type InvitationRead = {
   id: string
   email: string
   role: Role
-  status: 'pending' | 'accepted' | 'cancelled' | 'expired'
+  status: 'pending' | 'accepted' | 'revoked' | 'expired'
+  expires_at: string
   created_at: string
 }
 
-export type InviteMemberRequest = {
-  email: string
-  role: Exclude<Role, 'owner'> | Role
+export type InvitationRevokedRead = {
+  id: string
+  status: InvitationRead['status']
 }

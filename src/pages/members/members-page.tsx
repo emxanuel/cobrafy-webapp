@@ -2,10 +2,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 
 import {
-  useCancelInvitationMutation,
   useInvitationsQuery,
   useInviteMemberMutation,
   useMembersQuery,
+  useRevokeInvitationMutation,
 } from '@/features/members/hooks/use-members-queries'
 import { inviteSchema, type InviteFormValues } from '@/features/members/schemas'
 import { PageHeader } from '@/features/shared/components/page-header'
@@ -19,15 +19,13 @@ export function MembersPage() {
   const members = useMembersQuery(true)
   const invitations = useInvitationsQuery(true)
   const invite = useInviteMemberMutation()
-  const cancel = useCancelInvitationMutation()
+  const revoke = useRevokeInvitationMutation()
   const form = useForm<InviteFormValues>({
     resolver: zodResolver(inviteSchema),
-    defaultValues: { email: '', role: 'cashier' },
+    defaultValues: { email: '', role: 'cajero' },
   })
   const apiFields = invite.isError ? getFieldErrors(invite.error) : {}
-  const pendingInvites = (invitations.data?.items ?? []).filter(
-    (item) => item.status === 'pending',
-  )
+  const pendingInvites = (invitations.data ?? []).filter((item) => item.status === 'pending')
 
   return (
     <>
@@ -67,8 +65,8 @@ export function MembersPage() {
         </Field>
         <Field id="invite-role" label="Rol" error={form.formState.errors.role?.message}>
           <SelectInput id="invite-role" {...form.register('role')}>
-            <option value="cashier">Cajero</option>
-            <option value="collector">Cobrador</option>
+            <option value="cajero">Cajero</option>
+            <option value="cobrador">Cobrador</option>
           </SelectInput>
         </Field>
         <Button type="submit" disabled={invite.isPending}>
@@ -86,14 +84,10 @@ export function MembersPage() {
           </Alert>
         ) : null}
         <ul className="m-0 list-none p-0">
-          {(members.data?.items ?? []).map((member) => (
+          {(members.data ?? []).map((member) => (
             <li key={member.id} className="border-border border-b py-3">
-              <p className="text-heading m-0">
-                {member.first_name} {member.last_name}
-              </p>
-              <p className="m-0 text-sm">
-                {ROLE_LABEL[member.role]}
-              </p>
+              <p className="text-heading m-0">{member.name}</p>
+              <p className="m-0 text-sm">{ROLE_LABEL[member.role]}</p>
             </li>
           ))}
         </ul>
@@ -116,8 +110,8 @@ export function MembersPage() {
                 </div>
                 <Button
                   variant="ghost"
-                  onClick={() => cancel.mutate(item.id)}
-                  disabled={cancel.isPending}
+                  onClick={() => revoke.mutate(item.id)}
+                  disabled={revoke.isPending}
                 >
                   Cancelar
                 </Button>

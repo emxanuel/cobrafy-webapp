@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router'
 
 import { UNAUTHORIZED_EVENT } from '@/features/auth/stores/session-store'
+import { SELECT_BUSINESS_EVENT } from '@/features/shared/services/client'
 import { AppLayout } from '@/features/shared/components/app-layout'
 import { AcceptInvitePage } from '@/pages/auth/accept-invite-page'
 import { LoginPage } from '@/pages/auth/login-page'
@@ -15,14 +16,21 @@ import { ClientHistoryPage } from '@/pages/clients/client-history-page'
 import { ClientsListPage } from '@/pages/clients/clients-list-page'
 import { MembersPage } from '@/pages/members/members-page'
 
-function UnauthorizedListener() {
+function SessionListeners() {
   const navigate = useNavigate()
   useEffect(() => {
     function onUnauthorized() {
       navigate('/login', { replace: true })
     }
+    function onSelectBusiness() {
+      navigate('/negocios', { replace: true })
+    }
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
-    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+    window.addEventListener(SELECT_BUSINESS_EVENT, onSelectBusiness)
+    return () => {
+      window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+      window.removeEventListener(SELECT_BUSINESS_EVENT, onSelectBusiness)
+    }
   }, [navigate])
   return null
 }
@@ -30,7 +38,7 @@ function UnauthorizedListener() {
 export function Router() {
   return (
     <BrowserRouter>
-      <UnauthorizedListener />
+      <SessionListeners />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/invitar/:token" element={<AcceptInvitePage />} />

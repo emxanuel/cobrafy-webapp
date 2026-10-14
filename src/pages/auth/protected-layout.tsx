@@ -1,24 +1,20 @@
-import { useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router'
 
+import { useMeQuery } from '@/features/auth/hooks/use-auth'
 import { useSessionStore } from '@/features/auth/stores/session-store'
-import { useBusinessStore } from '@/features/business/stores/business-store'
 
 export function ProtectedLayout() {
   const location = useLocation()
   const hydrated = useSessionStore((s) => s.hydrated)
   const accessToken = useSessionStore((s) => s.accessToken)
+  useMeQuery(hydrated && Boolean(accessToken))
   const locked = useSessionStore((s) => s.locked)
-  const pinConfigured = useSessionStore((s) => s.pinConfigured)
+  const needsBusinessSelection = useSessionStore((s) => s.needsBusinessSelection)
   const memberships = useSessionStore((s) => s.memberships)
-  const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
-  const setActiveBusinessId = useBusinessStore((s) => s.setActiveBusinessId)
-
-  useEffect(() => {
-    if (memberships.length === 1 && !activeBusinessId) {
-      setActiveBusinessId(memberships[0].business_id)
-    }
-  }, [memberships, activeBusinessId, setActiveBusinessId])
+  const activeBusiness = useSessionStore((s) => s.activeBusiness)
+  const hasPin =
+    memberships.find((item) => item.business_id === activeBusiness?.id)?.has_pin ??
+    false
 
   if (!hydrated) {
     return (
@@ -36,11 +32,11 @@ export function ProtectedLayout() {
   const onSelector = location.pathname.startsWith('/negocios')
   const onPinSetup = location.pathname.startsWith('/clave-rapida')
 
-  if (pinConfigured && locked && !onPin) {
+  if (hasPin && locked && !onPin) {
     return <Navigate to="/desbloquear" replace />
   }
 
-  if (!locked && memberships.length > 1 && !activeBusinessId && !onSelector) {
+  if (needsBusinessSelection && !onSelector && !onPin) {
     return <Navigate to="/negocios" replace />
   }
 

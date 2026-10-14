@@ -32,9 +32,14 @@ export function ClientDetailPage() {
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
   const role = activeMembership(memberships, activeBusinessId)?.role ?? null
   const [blocking, setBlocking] = useState(false)
+  const [unblocking, setUnblocking] = useState(false)
   const block = useBlockClientMutation(clientId)
   const unblock = useUnblockClientMutation(clientId)
-  const form = useForm<BlockFormValues>({
+  const blockForm = useForm<BlockFormValues>({
+    resolver: zodResolver(blockSchema),
+    defaultValues: { reason: '' },
+  })
+  const unblockForm = useForm<BlockFormValues>({
     resolver: zodResolver(blockSchema),
     defaultValues: { reason: '' },
   })
@@ -52,12 +57,19 @@ export function ClientDetailPage() {
 
   const client = clientQuery.data
   const forbiddenUnblock = isApiError(unblock.error) && unblock.error.status === 403
+  const references = client.contacts.filter(
+    (item) => item.type === 'referencia' && item.is_active,
+  )
+  const guarantors = client.contacts.filter(
+    (item) => item.type === 'garante' && item.is_active,
+  )
+  const blocked = client.is_blocked || client.status === 'blocked'
 
   return (
     <>
       <PageHeader
-        title={client.full_name}
-        description={`${client.document_type === 'cedula' ? 'Cédula' : 'Pasaporte'} ${client.document_number}`}
+        title={client.name}
+        description={`${client.doc_type === 'cedula' ? 'Cédula' : 'Pasaporte'} ${client.document ?? '—'}`}
         action={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             {canEditClients(role) ? (
@@ -78,7 +90,7 @@ export function ClientDetailPage() {
         }
       />
 
-      {client.status === 'blocked' ? (
+      {blocked ? (
         <Alert>
           Bloqueado
           {client.blocked_reason ? `: ${client.blocked_reason}` : '.'}
@@ -96,7 +108,9 @@ export function ClientDetailPage() {
         </div>
         <div>
           <dt className="text-sm">Cobrador</dt>
-          <dd className="text-heading m-0">{client.collector_name ?? 'Sin asignar'}</dd>
+          <dd className="text-heading m-0">
+            {client.collector_membership_id ? 'Asignado' : 'Sin asignar'}
+          </dd>
         </div>
         {client.address ? (
           <div className="sm:col-span-2">
@@ -108,12 +122,12 @@ export function ClientDetailPage() {
 
       <section>
         <h2 className="mt-0 mb-2 text-xl">Referencias</h2>
-        {client.references.length === 0 ? (
+        {references.length === 0 ? (
           <p>Sin referencias.</p>
         ) : (
           <ul className="m-0 list-none p-0">
-            {client.references.map((item, index) => (
-              <li key={`${item.phone}-${index}`} className="py-1">
+            {references.map((item) => (
+              <li key={item.id} className="py-1">
                 {item.name} · {item.phone} · {item.relationship}
               </li>
             ))}
@@ -122,34 +136,35 @@ export function ClientDetailPage() {
       </section>
 
       <section>
-        <h2 className="mt-0 mb-2 text-xl">Fiadores</h2>
-        {client.guarantors.length === 0 ? (
-          <p>Sin fiadores.</p>
+        <h2 className="mt-0 mb-2 text-xl">Garantes</h2>
+        {guarantors.length === 0 ? (
+          <p>Sin garantes.</p>
         ) : (
           <ul className="m-0 list-none p-0">
-            {client.guarantors.map((item, index) => (
-              <li key={`${item.document_number}-${index}`} className="py-1">
-                {item.first_name} {item.last_name} · {item.document_number}
+            {guarantors.map((item) => (
+              <li key={item.id} className="py-1">
+                {item.name}
+                {item.document ? ` · ${item.document}` : ''}
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      {client.status === 'active' && canBlockClients(role) ? (
+      {!blocked && canBlockClients(role) ? (
         blocking ? (
           <form
             className="flex max-w-md flex-col gap-3"
-            onSubmit={form.handleSubmit((values) =>
+            onSubmit={blockForm.handleSubmit((values) =>
               block.mutate(values.reason, { onSuccess: () => setBlocking(false) }),
             )}
           >
             <Field
               id="reason"
               label="Motivo del bloqueo"
-              error={form.formState.errors.reason?.message}
+              error={blockForm.formState.errors.reason?.message}
             >
-              <TextArea id="reason" {...form.register('reason')} />
+              <TextArea id="reason" {...blockForm.register('reason')} />
             </Field>
             {block.isError ? <Alert>{getApiErrorMessage(block.error)}</Alert> : null}
             <div className="flex gap-2">
@@ -168,13 +183,36 @@ export function ClientDetailPage() {
         )
       ) : null}
 
-      {client.status === 'blocked' && canUnblockClients(role) ? (
-        <Button
-          onClick={() => unblock.mutate()}
-          disabled={unblock.isPending}
-        >
-          Desbloquear
-        </Button>
+      {blocked && canUnblockClients(role) ? (
+        unblocking ? (
+          <form
+            className="flex max-w-md flex-col gap-3"
+            onSubmit={unblockForm.handleSubmit((values) =>
+              unblock.mutate(values.reason, { onSuccess: () => setUnblocking(false) }),
+            )}
+          >
+            <Field
+              id="unblock-reason"
+              label="Motivo del desbloqueo"
+              error={unblockForm.formState.errors.reason?.message}
+            >
+              <TextArea id="unblock-reason" {...unblockForm.register('reason')} />
+            </Field>
+            {unblock.isError && !forbiddenUnblock ? (
+              <Alert>{getApiErrorMessage(unblock.error)}</Alert>
+            ) : null}
+            <div className="flex gap-2">
+              <Button type="submit" disabled={unblock.isPending}>
+                Confirmar desbloqueo
+              </Button>
+              <Button variant="ghost" onClick={() => setUnblocking(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <Button onClick={() => setUnblocking(true)}>Desbloquear</Button>
+        )
       ) : null}
     </>
   )

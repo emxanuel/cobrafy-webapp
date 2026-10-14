@@ -26,12 +26,12 @@ export function AppLayout() {
   const [open, setOpen] = useState(false)
   const user = useSessionStore((s) => s.user)
   const memberships = useSessionStore((s) => s.memberships)
-  const pinConfigured = useSessionStore((s) => s.pinConfigured)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
   const membership = activeMembership(memberships, activeBusinessId)
   const logout = useLogoutMutation()
   const navigate = useNavigate()
   const role = membership?.role ?? null
+  const hasPin = membership?.has_pin ?? false
 
   function close() {
     setOpen(false)
@@ -76,7 +76,7 @@ export function AppLayout() {
               </NavLink>
             ) : null}
             <NavLink to="/clave-rapida" className={navClass} onClick={close}>
-              {pinConfigured ? 'Cambiar clave rápida' : 'Configurar clave rápida'}
+              {hasPin ? 'Cambiar clave rápida' : 'Configurar clave rápida'}
             </NavLink>
             {memberships.length > 1 ? (
               <div className="border-border mt-2 border-t pt-2">
@@ -90,9 +90,10 @@ export function AppLayout() {
                       'w-full',
                     )}
                     onClick={() => {
-                      switchBusiness(queryClient, item.business_id)
-                      close()
-                      navigate('/clientes')
+                      void switchBusiness(queryClient, item.business_id).then(() => {
+                        close()
+                        navigate('/clientes')
+                      })
                     }}
                   >
                     {item.business_name}
@@ -105,12 +106,8 @@ export function AppLayout() {
             ) : null}
           </nav>
           <div className="border-border mt-auto border-t p-3">
-            <p className="text-heading m-0 truncate text-sm">
-              {user?.first_name} {user?.last_name}
-            </p>
-            {role ? (
-              <p className="m-0 text-sm">{ROLE_LABEL[role]}</p>
-            ) : null}
+            <p className="text-heading m-0 truncate text-sm">{user?.name}</p>
+            {role ? <p className="m-0 text-sm">{ROLE_LABEL[role]}</p> : null}
             <Button
               variant="ghost"
               className="mt-2 w-full justify-start"

@@ -1,5 +1,10 @@
 import { useNavigate, useParams } from 'react-router'
 
+import { useSessionStore } from '@/features/auth/stores/session-store'
+import {
+  activeMembership,
+  useBusinessStore,
+} from '@/features/business/stores/business-store'
 import {
   useClient,
   useCreateClientMutation,
@@ -9,6 +14,7 @@ import { ClientForm } from '@/features/clients/components/client-form'
 import { useMembersQuery } from '@/features/members/hooks/use-members-queries'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
+import { canManageMembers } from '@/features/shared/lib/roles'
 
 export function ClientFormPage() {
   const { clientId } = useParams()
@@ -17,9 +23,12 @@ export function ClientFormPage() {
   const existing = useClient(clientId)
   const create = useCreateClientMutation()
   const update = useUpdateClientMutation(clientId ?? '')
-  const members = useMembersQuery(true)
-  const collectors = (members.data?.items ?? []).filter(
-    (member) => member.role === 'collector' && member.status === 'active',
+  const memberships = useSessionStore((s) => s.memberships)
+  const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
+  const role = activeMembership(memberships, activeBusinessId)?.role ?? null
+  const members = useMembersQuery(canManageMembers(role))
+  const collectors = (members.data ?? []).filter(
+    (member) => member.role === 'cobrador' && member.is_active,
   )
   const pending = create.isPending || update.isPending
   const error = create.error ?? update.error
@@ -36,7 +45,7 @@ export function ClientFormPage() {
     <>
       <PageHeader
         title={isEdit ? 'Editar cliente' : 'Nuevo cliente'}
-        description="Completa la ficha. Puedes agregar varias referencias y fiadores."
+        description="Completa la ficha. Puedes agregar varias referencias y garantes."
       />
       <ClientForm
         client={existing.data}
@@ -46,7 +55,7 @@ export function ClientFormPage() {
         submitLabel={isEdit ? 'Guardar cambios' : 'Guardar cliente'}
         onSubmit={(payload) => {
           if (isEdit && clientId) {
-            update.mutate(payload, {
+            update.mutate(payload.client, {
               onSuccess: (saved) => navigate(`/clientes/${saved.id}`),
             })
             return

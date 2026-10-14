@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 
 import { useSetupPinMutation } from '@/features/auth/hooks/use-auth'
-import { pinSchema, type PinFormValues } from '@/features/auth/schemas'
+import { pinSetupSchema, type PinSetupFormValues } from '@/features/auth/schemas'
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -13,19 +13,23 @@ import { getApiErrorMessage, getFieldErrors } from '@/features/shared/lib/api-er
 
 export function PinSetupPage() {
   const navigate = useNavigate()
-  const pinConfigured = useSessionStore((s) => s.pinConfigured)
+  const memberships = useSessionStore((s) => s.memberships)
+  const activeBusiness = useSessionStore((s) => s.activeBusiness)
+  const hasPin =
+    memberships.find((item) => item.business_id === activeBusiness?.id)?.has_pin ??
+    false
   const setup = useSetupPinMutation()
-  const form = useForm<PinFormValues>({
-    resolver: zodResolver(pinSchema),
-    defaultValues: { pin: '' },
+  const form = useForm<PinSetupFormValues>({
+    resolver: zodResolver(pinSetupSchema),
+    defaultValues: { password: '', pin: '' },
   })
   const apiFields = setup.isError ? getFieldErrors(setup.error) : {}
 
   return (
     <>
       <PageHeader
-        title={pinConfigured ? 'Cambiar clave rápida' : 'Configurar clave rápida'}
-        description="La próxima vez podrás entrar con 4 a 6 números, sin escribir la contraseña larga."
+        title={hasPin ? 'Cambiar clave rápida' : 'Configurar clave rápida'}
+        description="Pide tu contraseña actual. La clave son 4 a 6 números, por negocio."
       />
       <form
         className="flex max-w-md flex-col gap-4"
@@ -37,6 +41,19 @@ export function PinSetupPage() {
         {setup.isError ? (
           <Alert>{getApiErrorMessage(setup.error)}</Alert>
         ) : null}
+        <Field
+          id="password"
+          label="Contraseña actual"
+          error={form.formState.errors.password?.message ?? apiFields.password}
+        >
+          <TextInput
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            error={form.formState.errors.password?.message}
+            {...form.register('password')}
+          />
+        </Field>
         <Field
           id="pin"
           label="Clave rápida"

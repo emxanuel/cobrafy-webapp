@@ -7,18 +7,22 @@ export const loginSchema = z.object({
 
 export type LoginFormValues = z.infer<typeof loginSchema>
 
-export const pinSchema = z.object({
-  pin: z
-    .string()
-    .regex(/^\d{4,6}$/, 'La clave rápida son 4 a 6 números.'),
+export const pinUnlockSchema = z.object({
+  pin: z.string().regex(/^\d{4,6}$/, 'La clave rápida son 4 a 6 números.'),
 })
 
-export type PinFormValues = z.infer<typeof pinSchema>
+export type PinUnlockFormValues = z.infer<typeof pinUnlockSchema>
+
+export const pinSetupSchema = z.object({
+  password: z.string().min(1, 'Escribe tu contraseña actual.'),
+  pin: z.string().regex(/^\d{4,6}$/, 'La clave rápida son 4 a 6 números.'),
+})
+
+export type PinSetupFormValues = z.infer<typeof pinSetupSchema>
 
 export const acceptInviteSchema = z
   .object({
-    first_name: z.string().min(1, 'Escribe tu nombre.'),
-    last_name: z.string().min(1, 'Escribe tu apellido.'),
+    name: z.string().min(1, 'Escribe tu nombre.'),
     password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres.'),
     confirm_password: z.string().min(1, 'Repite la contraseña.'),
   })

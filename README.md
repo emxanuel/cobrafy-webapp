@@ -13,28 +13,33 @@ Nunca se escribe correo, cédula, contraseña ni token en `console.*` (solo mét
 
 ## API
 
-El cliente habla con `cobrafy-backend` (commit de referencia `4ddab7d`) con `Authorization: Bearer` y `X-Business-Id` en cada pedido del negocio activo.
+El cliente habla con `cobrafy-backend` (commit de referencia `4ddab7d`) con `Authorization: Bearer`. El negocio activo va en el JWT después de `POST /auth/login` (un solo negocio) o `POST /auth/select-business`. No se manda `X-Business-Id`.
 
 Rutas usadas:
 
 | Método | Ruta | Uso |
 |--------|------|-----|
-| POST | `/auth/login` | Correo y contraseña |
+| POST | `/auth/login` | Correo y contraseña. Un negocio entra directo; varios responden `needs_business_selection`. |
+| POST | `/auth/select-business` | Elige el negocio y recibe un JWT nuevo. |
 | POST | `/auth/logout` | Salir |
-| GET | `/auth/me` | Sesión actual |
-| POST | `/auth/pin` | Configurar clave rápida |
-| POST | `/auth/pin/unlock` | Abrir con clave rápida |
-| POST | `/clients/search` | Lista y búsqueda (el documento **no** va en la URL) |
-| POST | `/clients` | Alta |
-| GET/PATCH | `/clients/{id}` | Ficha |
-| POST | `/clients/{id}/block` | Bloquear con motivo |
-| POST | `/clients/{id}/unblock` | Desbloquear (dueño) |
-| GET | `/clients/{id}/history` | Historial (`next_cursor`) |
-| GET | `/members` | Equipo y cobradores |
-| GET/POST/DELETE | `/members/invitations` | Invitaciones |
-| GET/POST | `/invitations/{token}` · `/invitations/{token}/accept` | Aceptar invitación |
+| GET | `/auth/me` | Usuario, negocio activo, rol y membresías |
+| POST | `/auth/pin` | Configurar o borrar PIN (`password` + `pin`). No sustituye el primer login. |
+| POST | `/auth/pin/unlock` | Abrir una sesión ya autenticada con PIN |
+| GET | `/clients` | Lista (`status`, `collector_membership_id`, `page`, `page_size`) |
+| POST | `/clients/search` | Búsqueda (`q`, `document`, `name`, `phone`, `page`, `page_size`). El documento **no** va en la URL. |
+| POST | `/clients/check` | ¿Existe este `doc_type` + `document`? |
+| POST | `/clients` | Alta (`name`, `doc_type`, `document`, `phone`, `address`, `notes`, `collector_membership_id`). Sin `status`. |
+| GET/PATCH | `/clients/{id}` | Ficha. El PATCH tampoco acepta `status`. |
+| POST | `/clients/{id}/block` | Bloquear con `reason` |
+| POST | `/clients/{id}/unblock` | Desbloquear con `reason` (solo dueño) |
+| GET | `/clients/{id}/history` | Historial (`limit`, `before`, `events`, `next_cursor`) |
+| POST/GET | `/clients/{id}/contacts` | Referencias (`referencia`) y garantes (`garante`) |
+| GET/POST | `/users` | Equipo e invitaciones por email (solo dueño) |
+| GET | `/invitations` | Invitaciones pendientes |
+| POST | `/invitations/accept` | Aceptar (`token`, `name`, `password`). No devuelve sesión. |
+| POST | `/invitations/{id}/revoke` | Revocar |
 
-Errores: **422** y **409** se pintan en el campo; **403** se avisa sin romper la pantalla; **401** manda al login.
+Errores: **422** (`detail` string o lista `loc`/`msg`, sin `input`) y **409** (`ya existe un cliente con este documento`, `el cliente ya está bloqueado`, `el cliente no está bloqueado`) se pintan en el campo cuando aplica; **403** se avisa sin romper la pantalla; **401** `no autenticado` manda al login y `selecciona un negocio` al selector.
 
 ## Desarrollo
 

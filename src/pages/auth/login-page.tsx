@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
+import { useLocation } from 'react-router'
 
 import { useLoginMutation } from '@/features/auth/hooks/use-auth'
 import { loginSchema, type LoginFormValues } from '@/features/auth/schemas'
@@ -10,6 +11,10 @@ import { Field, TextInput } from '@/features/shared/components/ui/field'
 import { getApiErrorMessage, getFieldErrors } from '@/features/shared/lib/api-error'
 
 export function LoginPage() {
+  const location = useLocation()
+  const invited = Boolean(
+    (location.state as { invited?: boolean } | null)?.invited,
+  )
   const login = useLoginMutation()
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -27,6 +32,11 @@ export function LoginPage() {
         onSubmit={form.handleSubmit((values) => login.mutate(values))}
         noValidate
       >
+        {invited ? (
+          <Alert tone="success">
+            Listo. Entra con tu correo y la contraseña que acabas de crear.
+          </Alert>
+        ) : null}
         {login.isError ? (
           <Alert>{getApiErrorMessage(login.error, 'No se pudo entrar.')}</Alert>
         ) : null}

@@ -26,9 +26,8 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/auth': { target: proxyTarget, changeOrigin: true },
         '/clients': { target: proxyTarget, changeOrigin: true },
-        '/members': { target: proxyTarget, changeOrigin: true },
+        '/users': { target: proxyTarget, changeOrigin: true },
         '/invitations': { target: proxyTarget, changeOrigin: true },
-        '/memberships': { target: proxyTarget, changeOrigin: true },
       },
     },
     test: {

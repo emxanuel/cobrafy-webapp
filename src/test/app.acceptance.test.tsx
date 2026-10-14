@@ -21,7 +21,7 @@ describe('CBF-110 aceptación', () => {
     window.history.pushState({}, '', '/')
   })
 
-  it('un cajero crea un cliente completo con fiador', async () => {
+  it('un cajero crea un cliente completo con garante', async () => {
     const user = userEvent.setup()
     renderApp()
 
@@ -31,19 +31,17 @@ describe('CBF-110 aceptación', () => {
     await user.click(screen.getByRole('link', { name: 'Nuevo cliente' }))
     expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText('Nombre'), 'Ana')
-    await user.type(screen.getByLabelText('Apellido'), 'Pérez')
+    await user.type(screen.getByLabelText('Nombre'), 'Ana Pérez')
     await user.type(screen.getByLabelText('Número de documento'), '001-1234567-8')
     await user.type(screen.getByLabelText('Teléfono'), '8095551111')
-    await user.selectOptions(screen.getByLabelText('Cobrador asignado'), users.collector.id)
+    await user.type(screen.getByLabelText('Dirección'), 'Calle 1')
 
-    await user.click(screen.getByRole('button', { name: 'Agregar fiador' }))
-    const fiador = screen.getByRole('group', { name: /Fiador 1/ })
-    await user.type(within(fiador).getByLabelText('Nombre'), 'Pedro')
-    await user.type(within(fiador).getByLabelText('Apellido'), 'Gómez')
-    await user.type(within(fiador).getByLabelText('Número de documento'), '001-7654321-0')
-    await user.type(within(fiador).getByLabelText('Teléfono'), '8095552222')
-    await user.type(within(fiador).getByLabelText('Relación'), 'Hermano')
+    await user.click(screen.getByRole('button', { name: 'Agregar garante' }))
+    const garante = screen.getByRole('group', { name: /Garante 1/ })
+    await user.type(within(garante).getByLabelText('Nombre'), 'Pedro Gómez')
+    await user.type(within(garante).getByLabelText('Teléfono'), '8095552222')
+    await user.type(within(garante).getByLabelText('Relación'), 'Hermano')
+    await user.type(within(garante).getByLabelText('Número de documento (opcional)'), '001-7654321-0')
 
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
 
@@ -112,10 +110,12 @@ describe('CBF-110 aceptación', () => {
 
     server.use(
       http.post('*/clients/:id/unblock', () =>
-        HttpResponse.json({ detail: 'No tienes permiso para desbloquear.' }, { status: 403 }),
+        HttpResponse.json({ detail: 'no autorizado' }, { status: 403 }),
       ),
     )
     await user.click(screen.getByRole('button', { name: 'Desbloquear' }))
+    await user.type(screen.getByLabelText('Motivo del desbloqueo'), 'pagó la deuda')
+    await user.click(screen.getByRole('button', { name: 'Confirmar desbloqueo' }))
     expect(await screen.findByText('No tienes permiso para desbloquear.')).toBeInTheDocument()
   })
 
@@ -125,10 +125,10 @@ describe('CBF-110 aceptación', () => {
     await loginAs(users.cashier.email)
     await user.click(await screen.findByRole('link', { name: 'Nuevo cliente' }))
 
-    await user.type(screen.getByLabelText('Nombre'), 'Ana')
-    await user.type(screen.getByLabelText('Apellido'), 'Pérez')
+    await user.type(screen.getByLabelText('Nombre'), 'Ana Pérez')
     await user.type(screen.getByLabelText('Número de documento'), 'malo')
     await user.type(screen.getByLabelText('Teléfono'), '8095551111')
+    await user.type(screen.getByLabelText('Dirección'), 'Calle 1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
     expect(
       await screen.findByText('El formato de la cédula no es válido.'),
@@ -137,7 +137,9 @@ describe('CBF-110 aceptación', () => {
     await user.clear(screen.getByLabelText('Número de documento'))
     await user.type(screen.getByLabelText('Número de documento'), 'duplicado')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    expect(await screen.findByText('Ya existe un cliente con este documento')).toBeInTheDocument()
+    expect(
+      await screen.findByText('ya existe un cliente con este documento'),
+    ).toBeInTheDocument()
   })
 
   it('una sesión 401 redirige al login', async () => {
@@ -146,8 +148,8 @@ describe('CBF-110 aceptación', () => {
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
 
     server.use(
-      http.post('*/clients/search', () =>
-        HttpResponse.json({ detail: 'Sesión caducada' }, { status: 401 }),
+      http.get('*/clients', () =>
+        HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
       ),
     )
     queryClient.clear()
@@ -178,6 +180,10 @@ describe('CBF-110 aceptación', () => {
     expect(window.location.pathname).toBe('/clientes')
     expect(window.location.search).not.toContain('001-1234567-8')
     expect(searchRequests.some((req) => req.url.includes('001-1234567-8'))).toBe(false)
+    expect(searchRequests.some((req) => {
+      const body = req.body as { q?: string; query?: string; document?: string }
+      return body.q === '001-1234567-8' && body.query === undefined
+    })).toBe(true)
   })
 
   it('un cobrador ve el documento enmascarado tal como lo manda la API', async () => {
@@ -196,18 +202,25 @@ describe('CBF-110 aceptación', () => {
     renderApp()
     expect(await screen.findByRole('heading', { name: 'Únete al negocio' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Contraseña del dueño')).not.toBeInTheDocument()
-    await user.type(screen.getByLabelText('Nombre'), 'Nora')
-    await user.type(screen.getByLabelText('Apellido'), 'Nueva')
+    await user.type(screen.getByLabelText('Nombre'), 'Nora Nueva')
     await user.type(screen.getByLabelText('Tu contraseña'), 'clavesegura')
     await user.type(screen.getByLabelText('Repite la contraseña'), 'clavesegura')
-    await user.click(screen.getByRole('button', { name: 'Aceptar e entrar' }))
-    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Aceptar invitación' }))
+    expect(await screen.findByRole('heading', { name: 'Entra a tu negocio' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Listo. Entra con tu correo y la contraseña que acabas de crear.'),
+    ).toBeInTheDocument()
   })
 
-  it('pide la clave rápida si ya está configurada', async () => {
+  it('el PIN no sustituye el primer login; al reabrir pide la clave rápida', async () => {
     const user = userEvent.setup()
     renderApp()
-    await loginAs('pin@negocio.com')
+    await loginAs(users.pin.email)
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+
+    cleanup()
+    window.history.pushState({}, '', '/clientes')
+    renderApp()
     expect(await screen.findByRole('heading', { name: 'Clave rápida' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Clave rápida'), '1234')
     await user.click(screen.getByRole('button', { name: 'Continuar' }))

@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 
 import { useLogoutMutation, useUnlockPinMutation } from '@/features/auth/hooks/use-auth'
-import { pinSchema, type PinFormValues } from '@/features/auth/schemas'
+import { pinUnlockSchema, type PinUnlockFormValues } from '@/features/auth/schemas'
 import { AuthShell } from '@/features/shared/components/auth-shell'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { Button } from '@/features/shared/components/ui/button'
@@ -12,8 +12,8 @@ import { getApiErrorMessage, getFieldErrors } from '@/features/shared/lib/api-er
 export function PinUnlockPage() {
   const unlock = useUnlockPinMutation()
   const logout = useLogoutMutation()
-  const form = useForm<PinFormValues>({
-    resolver: zodResolver(pinSchema),
+  const form = useForm<PinUnlockFormValues>({
+    resolver: zodResolver(pinUnlockSchema),
     defaultValues: { pin: '' },
   })
   const apiFields = unlock.isError ? getFieldErrors(unlock.error) : {}
@@ -21,7 +21,7 @@ export function PinUnlockPage() {
   return (
     <AuthShell
       title="Clave rápida"
-      description="Escribe tu clave de 4 a 6 números para seguir."
+      description="Escribe tu clave de 4 a 6 números para seguir. No sustituye el primer login."
     >
       <form
         className="flex flex-col gap-4"

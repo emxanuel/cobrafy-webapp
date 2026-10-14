@@ -1,33 +1,56 @@
 import { api } from '@/features/shared/services/client'
 import type {
-  BlockClientRequest,
-  ClientHistoryEvent,
+  ClientCheckRead,
+  ClientCheckRequest,
+  ClientCreate,
+  ClientDetail,
+  ClientHistory,
+  ClientPage,
   ClientRead,
+  ClientReason,
   ClientSearchRequest,
-  ClientWrite,
-  CursorPage,
+  ClientUpdate,
+  ContactCreate,
+  ContactRead,
 } from './types'
+
+export async function listClients(params?: {
+  status?: 'active' | 'blocked'
+  collector_membership_id?: string
+  page?: number
+  page_size?: number
+}): Promise<ClientPage> {
+  const { data } = await api.get<ClientPage>('/clients', { params })
+  return data
+}
 
 export async function searchClients(
   payload: ClientSearchRequest,
-): Promise<CursorPage<ClientRead>> {
-  const { data } = await api.post<CursorPage<ClientRead>>('/clients/search', payload)
+): Promise<ClientPage> {
+  const { data } = await api.post<ClientPage>('/clients/search', payload)
   return data
 }
 
-export async function getClient(clientId: string): Promise<ClientRead> {
-  const { data } = await api.get<ClientRead>(`/clients/${clientId}`)
+export async function checkClient(
+  payload: ClientCheckRequest,
+): Promise<ClientCheckRead> {
+  const { data } = await api.post<ClientCheckRead>('/clients/check', payload)
   return data
 }
 
-export async function createClient(payload: ClientWrite): Promise<ClientRead> {
+export async function getClient(clientId: string): Promise<ClientDetail> {
+  const { data } = await api.get<ClientDetail>(`/clients/${clientId}`)
+  return data
+}
+
+export async function createClient(payload: ClientCreate): Promise<ClientRead> {
   const { data } = await api.post<ClientRead>('/clients', payload)
   return data
 }
 
 export async function updateClient(
   clientId: string,
-  payload: ClientWrite,
+  payload: ClientUpdate,
 ): Promise<ClientRead> {
   const { data } = await api.patch<ClientRead>(`/clients/${clientId}`, payload)
   return data
@@ -35,24 +58,67 @@ export async function updateClient(
 
 export async function blockClient(
   clientId: string,
-  payload: BlockClientRequest,
+  payload: ClientReason,
 ): Promise<ClientRead> {
   const { data } = await api.post<ClientRead>(`/clients/${clientId}/block`, payload)
   return data
 }
 
-export async function unblockClient(clientId: string): Promise<ClientRead> {
-  const { data } = await api.post<ClientRead>(`/clients/${clientId}/unblock`)
+export async function unblockClient(
+  clientId: string,
+  payload: ClientReason,
+): Promise<ClientRead> {
+  const { data } = await api.post<ClientRead>(`/clients/${clientId}/unblock`, payload)
   return data
 }
 
 export async function getClientHistory(
   clientId: string,
-  cursor?: string | null,
-): Promise<CursorPage<ClientHistoryEvent>> {
-  const { data } = await api.get<CursorPage<ClientHistoryEvent>>(
-    `/clients/${clientId}/history`,
-    { params: cursor ? { cursor } : undefined },
+  options?: { limit?: number; before?: string | null },
+): Promise<ClientHistory> {
+  const { data } = await api.get<ClientHistory>(`/clients/${clientId}/history`, {
+    params: {
+      ...(options?.limit ? { limit: options.limit } : {}),
+      ...(options?.before ? { before: options.before } : {}),
+    },
+  })
+  return data
+}
+
+export async function createContact(
+  clientId: string,
+  payload: ContactCreate,
+): Promise<ContactRead> {
+  const { data } = await api.post<ContactRead>(
+    `/clients/${clientId}/contacts`,
+    payload,
   )
   return data
+}
+
+export async function listContacts(
+  clientId: string,
+): Promise<{ items: ContactRead[] }> {
+  const { data } = await api.get<{ items: ContactRead[] }>(
+    `/clients/${clientId}/contacts`,
+  )
+  return data
+}
+
+export async function deleteContact(
+  clientId: string,
+  contactId: string,
+): Promise<void> {
+  await api.delete(`/clients/${clientId}/contacts/${contactId}`)
+}
+
+export async function createClientWithContacts(
+  payload: ClientCreate,
+  contacts: ContactCreate[],
+): Promise<ClientDetail> {
+  const created = await createClient(payload)
+  for (const contact of contacts) {
+    await createContact(created.id, contact)
+  }
+  return getClient(created.id)
 }

@@ -123,13 +123,12 @@ function parseFieldErrors(body: ErrorBody, status: number): Record<string, strin
     const text =
       (typeof body.detail === 'string' ? body.detail : '') +
       ' ' +
-      (typeof body.message === 'string' ? body.message : '') +
-      ' ' +
-      (typeof body.code === 'string' ? body.code : '')
-    if (/document|cédula|cedula|pasaporte/i.test(text)) {
-      errors.document_number = typeof body.detail === 'string'
-        ? body.detail
-        : 'Ya hay un cliente con este documento.'
+      (typeof body.message === 'string' ? body.message : '')
+    if (/documento|document|cédula|cedula|pasaporte/i.test(text)) {
+      errors.document =
+        typeof body.detail === 'string'
+          ? body.detail
+          : 'ya existe un cliente con este documento'
     }
   }
 

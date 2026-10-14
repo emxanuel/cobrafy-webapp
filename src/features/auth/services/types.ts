@@ -1,11 +1,12 @@
-export const ROLES = ['owner', 'cashier', 'collector'] as const
+export const ROLES = ['dueño', 'cajero', 'cobrador'] as const
 export type Role = (typeof ROLES)[number]
 
 export type UserRead = {
   id: string
-  first_name: string
-  last_name: string
+  name: string
   email: string
+  phone: string | null
+  is_active: boolean
 }
 
 export type Membership = {
@@ -13,6 +14,15 @@ export type Membership = {
   business_id: string
   business_name: string
   role: Role
+  has_pin: boolean
+}
+
+export type BusinessSummary = {
+  id: string
+  name: string
+  phone: string | null
+  currency: string
+  timezone: string
 }
 
 export type LoginRequest = {
@@ -20,28 +30,46 @@ export type LoginRequest = {
   password: string
 }
 
-export type SessionPayload = {
+export type AuthResponse = {
   access_token: string
-  token_type: 'bearer'
+  token_type: 'bearer' | string
+  expires_in: number
+  needs_business_selection: boolean
   user: UserRead
+  active_business: BusinessSummary | null
+  active_role: Role | null
   memberships: Membership[]
-  pin_configured: boolean
 }
 
-export type PinRequest = {
+export type MeResponse = {
+  user: UserRead
+  active_business: BusinessSummary | null
+  active_role: Role | null
+  memberships: Membership[]
+}
+
+export type SelectBusinessRequest = {
+  business_id: string
+}
+
+export type PinUpdateRequest = {
+  password: string
+  pin: string | null
+}
+
+export type PinUnlockRequest = {
   pin: string
 }
 
 export type AcceptInvitationRequest = {
-  first_name: string
-  last_name: string
-  password: string
+  token: string
+  name?: string | null
+  password?: string | null
 }
 
-export type InvitationPreview = {
-  token: string
-  email: string
-  business_name: string
+export type InvitationAcceptRead = {
+  business_id: string
   role: Role
-  status: 'pending' | 'accepted' | 'cancelled' | 'expired'
+  email: string
+  role_unchanged: boolean
 }

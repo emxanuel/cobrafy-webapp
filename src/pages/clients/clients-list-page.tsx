@@ -7,9 +7,10 @@ import {
   useBusinessStore,
 } from '@/features/business/stores/business-store'
 import { useClientSearch } from '@/features/clients/hooks/use-clients-queries'
+import type { ClientStatus } from '@/features/clients/services/types'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { buttonVariants } from '@/features/shared/components/ui/button'
-import { TextInput } from '@/features/shared/components/ui/field'
+import { SelectInput, TextInput } from '@/features/shared/components/ui/field'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { cn } from '@/features/shared/lib/cn'
 import { canCreateClients } from '@/features/shared/lib/roles'
@@ -19,12 +20,13 @@ const EMPTY_COPY = 'Aún no tienes clientes…'
 
 export function ClientsListPage() {
   const [query, setQuery] = useState('')
-  const search = useClientSearch(query.trim())
+  const [status, setStatus] = useState<ClientStatus | ''>('')
+  const search = useClientSearch(query.trim(), status)
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
   const role = activeMembership(memberships, activeBusinessId)?.role ?? null
   const items = search.data?.items ?? []
-  const isEmpty = !search.isPending && items.length === 0 && !query.trim()
+  const isEmpty = !search.isPending && items.length === 0 && !query.trim() && !status
 
   return (
     <>
@@ -56,6 +58,18 @@ export function ClientsListPage() {
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Nombre o documento"
         />
+        <label htmlFor="client-status" className="sr-only">
+          Estado
+        </label>
+        <SelectInput
+          id="client-status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value as ClientStatus | '')}
+        >
+          <option value="">Todos</option>
+          <option value="active">Activos</option>
+          <option value="blocked">Bloqueados</option>
+        </SelectInput>
       </form>
 
       {search.isError ? (
@@ -78,14 +92,12 @@ export function ClientsListPage() {
                 to={`/clientes/${client.id}`}
                 className="border-border hover:border-accent-border block rounded-md border px-4 py-3 text-left no-underline"
               >
-                <span className="text-heading block font-medium">
-                  {client.full_name}
-                </span>
+                <span className="text-heading block font-medium">{client.name}</span>
                 <span className="text-text block text-sm">
-                  {client.document_type === 'cedula' ? 'Cédula' : 'Pasaporte'}{' '}
-                  {client.document_number}
+                  {client.doc_type === 'cedula' ? 'Cédula' : 'Pasaporte'}{' '}
+                  {client.document ?? (client.document_available ? '' : '—')}
                 </span>
-                {client.status === 'blocked' ? (
+                {client.is_blocked || client.status === 'blocked' ? (
                   <span className="text-danger text-sm">Bloqueado</span>
                 ) : null}
               </Link>

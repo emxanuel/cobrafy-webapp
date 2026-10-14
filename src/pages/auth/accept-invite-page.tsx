@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { useParams } from 'react-router'
 
@@ -8,65 +7,36 @@ import {
   acceptInviteSchema,
   type AcceptInviteFormValues,
 } from '@/features/auth/schemas'
-import { getInvitation } from '@/features/auth/services/requests'
 import { AuthShell } from '@/features/shared/components/auth-shell'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { Button } from '@/features/shared/components/ui/button'
 import { Field, TextInput } from '@/features/shared/components/ui/field'
 import { getApiErrorMessage, getFieldErrors } from '@/features/shared/lib/api-error'
-import { ROLE_LABEL } from '@/features/shared/lib/roles'
 
 export function AcceptInvitePage() {
   const { token = '' } = useParams()
-  const preview = useQuery({
-    queryKey: ['invitation', token],
-    queryFn: () => getInvitation(token),
-    enabled: Boolean(token),
-  })
   const accept = useAcceptInvitationMutation()
   const form = useForm<AcceptInviteFormValues>({
     resolver: zodResolver(acceptInviteSchema),
     defaultValues: {
-      first_name: '',
-      last_name: '',
+      name: '',
       password: '',
       confirm_password: '',
     },
   })
   const apiFields = accept.isError ? getFieldErrors(accept.error) : {}
 
-  if (preview.isPending) {
-    return (
-      <AuthShell title="Invitación">
-        <p>Cargando…</p>
-      </AuthShell>
-    )
-  }
-
-  if (preview.isError || !preview.data || preview.data.status !== 'pending') {
-    return (
-      <AuthShell title="Invitación">
-        <Alert>
-          Esta invitación ya no sirve. Pídele al dueño que te envíe otra.
-        </Alert>
-      </AuthShell>
-    )
-  }
-
-  const invite = preview.data
-
   return (
     <AuthShell
       title="Únete al negocio"
-      description={`${invite.business_name} te invita como ${ROLE_LABEL[invite.role].toLowerCase()}. Tú eliges tu contraseña.`}
+      description="Si es tu primera vez, escribe tu nombre y elige tu contraseña. El dueño no la pone por ti."
     >
       <form
         className="flex flex-col gap-4"
         onSubmit={form.handleSubmit((values) =>
           accept.mutate({
             token,
-            first_name: values.first_name,
-            last_name: values.last_name,
+            name: values.name,
             password: values.password,
           }),
         )}
@@ -75,31 +45,16 @@ export function AcceptInvitePage() {
         {accept.isError ? (
           <Alert>{getApiErrorMessage(accept.error)}</Alert>
         ) : null}
-        <Field id="invite-email" label="Correo">
-          <TextInput id="invite-email" value={invite.email} readOnly />
-        </Field>
         <Field
-          id="first_name"
+          id="name"
           label="Nombre"
-          error={form.formState.errors.first_name?.message ?? apiFields.first_name}
+          error={form.formState.errors.name?.message ?? apiFields.name}
         >
           <TextInput
-            id="first_name"
-            autoComplete="given-name"
-            error={form.formState.errors.first_name?.message}
-            {...form.register('first_name')}
-          />
-        </Field>
-        <Field
-          id="last_name"
-          label="Apellido"
-          error={form.formState.errors.last_name?.message ?? apiFields.last_name}
-        >
-          <TextInput
-            id="last_name"
-            autoComplete="family-name"
-            error={form.formState.errors.last_name?.message}
-            {...form.register('last_name')}
+            id="name"
+            autoComplete="name"
+            error={form.formState.errors.name?.message}
+            {...form.register('name')}
           />
         </Field>
         <Field
@@ -129,7 +84,7 @@ export function AcceptInvitePage() {
           />
         </Field>
         <Button type="submit" className="w-full" disabled={accept.isPending}>
-          {accept.isPending ? 'Entrando…' : 'Aceptar e entrar'}
+          {accept.isPending ? 'Guardando…' : 'Aceptar invitación'}
         </Button>
       </form>
     </AuthShell>
