@@ -14,9 +14,9 @@ import { switchBusiness } from '@/features/business/lib/switch-business'
 import { queryClient } from '@/query-client'
 
 export function destinationAfterAuth(options: {
-  needsBusinessSelection: boolean
+  needs_business_selection: boolean
 }) {
-  if (options.needsBusinessSelection) return '/negocios'
+  if (options.needs_business_selection) return '/negocios'
   return '/clientes'
 }
 

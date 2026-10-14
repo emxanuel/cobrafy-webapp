@@ -90,7 +90,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const memberships = current.memberships.map((item) =>
       item.business_id === businessId ? { ...item, has_pin: hasPin } : item,
     )
-    persist({ ...current, memberships, accessToken: current.accessToken ?? '' })
+    if (current.accessToken && current.user) {
+      persist({
+        accessToken: current.accessToken,
+        user: current.user,
+        memberships,
+        activeBusiness: current.activeBusiness,
+        activeRole: current.activeRole,
+        needsBusinessSelection: current.needsBusinessSelection,
+      })
+    }
     set({ memberships })
   },
   hydrate: () => {

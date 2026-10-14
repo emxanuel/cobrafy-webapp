@@ -252,7 +252,7 @@ export function ClientForm({
           </div>
         </div>
         {contacts.fields.map((field, index) => {
-          const kind = form.watch(`contacts.${index}.type`)
+          const kind = field.type
           return (
             <fieldset
               key={field.id}

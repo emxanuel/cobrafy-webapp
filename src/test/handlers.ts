@@ -444,7 +444,7 @@ export const handlers = [
   http.patch('*/clients/:id', async ({ request, params }) => {
     const denied = requireAuth(request)
     if (denied) return denied
-    const payload = (await request.json()) as ClientUpdate & { status?: unknown }
+    const payload = (await request.json()) as ClientUpdate & { status?: string }
     if ('status' in payload) {
       return HttpResponse.json(
         {
@@ -457,7 +457,19 @@ export const handlers = [
     }
     const id = String(params.id)
     const current = clients.get(id) ?? clientFixture({ id })
-    const saved = { ...current, ...payload }
+    const saved: ClientDetail = {
+      ...current,
+      name: payload.name ?? current.name,
+      doc_type: payload.doc_type ?? current.doc_type,
+      document: payload.document ?? current.document,
+      phone: payload.phone ?? current.phone,
+      address: payload.address ?? current.address,
+      notes: payload.notes === undefined ? current.notes : payload.notes,
+      collector_membership_id:
+        payload.collector_membership_id === undefined
+          ? current.collector_membership_id
+          : payload.collector_membership_id,
+    }
     clients.set(id, saved)
     return HttpResponse.json(saved)
   }),
