@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useParams } from 'react-router'
 
@@ -15,7 +15,10 @@ import {
 } from '@/features/clients/hooks/use-clients-queries'
 import { ContactCard } from '@/features/clients/components/contact-card'
 import { ContactComposer } from '@/features/clients/components/contact-composer'
-import { failedContactsNotice } from '@/features/clients/lib/failed-contacts-notice'
+import {
+  failedContactsNotice,
+  parseFailedContacts,
+} from '@/features/clients/lib/failed-contacts-notice'
 import { blockSchema, type BlockFormValues } from '@/features/clients/schemas'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -31,20 +34,13 @@ import {
 
 export function ClientDetailPage() {
   const { clientId = '' } = useParams()
-  const [failedContactNames] = useState(() => {
-    const raw = sessionStorage.getItem(FAILED_CONTACTS_KEY)
+  const [failedContacts] = useState(() =>
+    parseFailedContacts(sessionStorage.getItem(FAILED_CONTACTS_KEY)),
+  )
+  useEffect(() => {
     sessionStorage.removeItem(FAILED_CONTACTS_KEY)
-    if (!raw) return [] as string[]
-    try {
-      const parsed = JSON.parse(raw) as unknown
-      return Array.isArray(parsed)
-        ? parsed.filter((item): item is string => typeof item === 'string')
-        : []
-    } catch {
-      return []
-    }
-  })
-  const failedNotice = failedContactsNotice(failedContactNames)
+  }, [])
+  const failedNotice = failedContactsNotice(failedContacts)
   const clientQuery = useClient(clientId)
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)

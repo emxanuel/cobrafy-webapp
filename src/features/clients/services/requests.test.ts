@@ -97,7 +97,46 @@ describe('client requests', () => {
     expect(result.client.id).toMatch(/^cli-new-/)
     expect(result.failedContacts).toBe(1)
     expect(result.failedContactNames).toEqual(['Pedro Gómez'])
+    expect(result.failed).toEqual([{ name: 'Pedro Gómez', op: 'add' }])
     expect(result.client.name).toBe('Ana Pérez')
+  })
+
+  it('al editar solo el teléfono el PATCH no manda document, address ni doc_type', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    const saved = await createContact(created.id, {
+      type: 'referencia',
+      name: 'Ref Uno',
+      phone: '8095550001',
+      relationship: 'Prima',
+      address: 'Calle 9',
+      doc_type: 'cedula',
+      document: '001-9999999-9',
+    })
+    contactWrites.length = 0
+    const failed = await saveContactsDiff(created.id, [saved], [
+      {
+        id: saved.id,
+        type: saved.type,
+        name: saved.name,
+        phone: '8095559999',
+        relationship: saved.relationship,
+        address: saved.address,
+        doc_type: saved.doc_type,
+        document: saved.document,
+      },
+    ])
+    expect(failed).toEqual([])
+    const patch = contactWrites.find((item) => item.method === 'PATCH')
+    expect(patch?.body).toEqual({ phone: '8095559999' })
+    expect(patch?.body).not.toHaveProperty('document')
+    expect(patch?.body).not.toHaveProperty('address')
+    expect(patch?.body).not.toHaveProperty('doc_type')
   })
 
   it('el diff de contactos manda POST, PATCH y DELETE', async () => {
@@ -142,6 +181,9 @@ describe('client requests', () => {
     ])
 
     expect(failed).toEqual([])
+    const methods = contactWrites.map((item) => item.method)
+    expect(methods.indexOf('DELETE')).toBeLessThan(methods.indexOf('PATCH'))
+    expect(methods.indexOf('PATCH')).toBeLessThan(methods.indexOf('POST'))
     expect(
       contactWrites.some(
         (item) => item.method === 'PATCH' && (item.body as { name?: string }).name === 'Ref Nueva',
@@ -153,6 +195,102 @@ describe('client requests', () => {
           item.method === 'POST' && (item.body as { name?: string }).name === 'Garante Nuevo',
       ),
     ).toBe(true)
-    expect(contactWrites.some((item) => item.method === 'DELETE')).toBe(true)
+  })
+
+  it('con 50 contactos reemplaza uno haciendo DELETE antes del POST', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    const previous = []
+    for (let index = 0; index < 50; index += 1) {
+      previous.push(
+        await createContact(created.id, {
+          type: 'referencia',
+          name: `Contacto ${index}`,
+          phone: '8095550001',
+          relationship: 'Prima',
+        }),
+      )
+    }
+    contactWrites.length = 0
+    const kept = previous.slice(0, 49).map((item) => ({
+      id: item.id,
+      type: item.type,
+      name: item.name,
+      phone: item.phone,
+      relationship: item.relationship,
+    }))
+    const failed = await saveContactsDiff(created.id, previous, [
+      ...kept,
+      {
+        type: 'garante',
+        name: 'Nuevo',
+        phone: '8095557777',
+        relationship: 'Hermano',
+      },
+    ])
+    expect(failed).toEqual([])
+    const methods = contactWrites.map((item) => item.method)
+    expect(methods[0]).toBe('DELETE')
+    expect(methods.at(-1)).toBe('POST')
+    expect(methods.filter((method) => method === 'POST')).toHaveLength(1)
+    expect(methods.filter((method) => method === 'DELETE')).toHaveLength(1)
+  })
+
+  it('un id que ya no está activo no crea un duplicado', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    contactWrites.length = 0
+    const failed = await saveContactsDiff(created.id, [], [
+      {
+        id: 'ct-desaparecido',
+        type: 'referencia',
+        name: 'Fantasma',
+        phone: '8095550001',
+        relationship: 'Prima',
+      },
+    ])
+    expect(failed).toEqual([{ name: 'Fantasma', op: 'edit' }])
+    expect(contactWrites.some((item) => item.method === 'POST')).toBe(false)
+  })
+
+  it('un 401 corta el resto del diff', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    const first = await createContact(created.id, {
+      type: 'referencia',
+      name: 'Uno',
+      phone: '8095550001',
+      relationship: 'Prima',
+    })
+    const second = await createContact(created.id, {
+      type: 'referencia',
+      name: 'Dos',
+      phone: '8095550002',
+      relationship: 'Prima',
+    })
+    server.use(
+      http.delete('*/clients/:id/contacts/:contactId', () =>
+        HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
+      ),
+    )
+    contactWrites.length = 0
+    const failed = await saveContactsDiff(created.id, [first, second], [])
+    expect(failed[0]).toEqual({ name: 'Uno', op: 'remove' })
+    expect(failed).toHaveLength(1)
   })
 })

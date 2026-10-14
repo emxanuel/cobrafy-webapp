@@ -13,9 +13,18 @@ const TAIL_DIRECTIVES = [
   "frame-ancestors 'none'",
 ] as const
 
+export class InvalidApiBaseUrlError extends Error {
+  constructor(value: string) {
+    super(
+      `VITE_API_BASE_URL inválida: "${value}". Usa una URL http(s) absoluta o una ruta que empiece con /.`,
+    )
+    this.name = 'InvalidApiBaseUrlError'
+  }
+}
+
 export function resolveApiOrigin(apiBaseUrl: string | undefined): string | null {
   const raw = apiBaseUrl?.trim() ?? ''
-  if (!raw) return null
+  if (!raw || raw.startsWith('/')) return null
   try {
     const url = new URL(raw)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
@@ -25,10 +34,17 @@ export function resolveApiOrigin(apiBaseUrl: string | undefined): string | null 
   }
 }
 
+export function assertApiBaseUrl(apiBaseUrl: string | undefined): void {
+  const raw = apiBaseUrl?.trim() ?? ''
+  if (!raw || raw.startsWith('/')) return
+  if (!resolveApiOrigin(raw)) throw new InvalidApiBaseUrlError(raw)
+}
+
 export function buildContentSecurityPolicy(options: {
   apiBaseUrl?: string
   production?: boolean
 }): string {
+  assertApiBaseUrl(options.apiBaseUrl)
   const origin = resolveApiOrigin(options.apiBaseUrl)
   const connectSrc = origin ? `'self' ${origin}` : "'self'"
   const directives: string[] = [

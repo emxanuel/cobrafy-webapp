@@ -1,13 +1,39 @@
-export function failedContactsNotice(names: string[]): string {
-  const unique = names.map((name) => name.trim()).filter(Boolean)
-  if (unique.length === 0) return ''
-  if (unique.length === 1) {
-    return `No se pudo guardar el contacto ${unique[0]}. Agrégalo aquí para no volver a crear la ficha.`
+export type FailedContactOp = 'add' | 'edit' | 'remove'
+
+export type FailedContact = {
+  name: string
+  op: FailedContactOp
+}
+
+function who(item: FailedContact) {
+  return item.name.trim() || 'contacto'
+}
+
+function phrase(item: FailedContact) {
+  if (item.op === 'remove') return `No se pudo quitar a ${who(item)}`
+  if (item.op === 'edit') return `No se pudo guardar el cambio de ${who(item)}`
+  return `No se pudo agregar a ${who(item)}`
+}
+
+export function failedContactsNotice(failed: FailedContact[]): string {
+  if (failed.length === 0) return ''
+  const sentences = failed.map((item) => `${phrase(item)}.`)
+  return `${sentences.join(' ')} Revísalo aquí.`
+}
+
+export function parseFailedContacts(raw: string | null): FailedContact[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const row = item as { name?: unknown; op?: unknown }
+      if (typeof row.name !== 'string') return []
+      if (row.op !== 'add' && row.op !== 'edit' && row.op !== 'remove') return []
+      return [{ name: row.name, op: row.op }]
+    })
+  } catch {
+    return []
   }
-  if (unique.length === 2) {
-    return `No se pudieron guardar los contactos ${unique[0]} y ${unique[1]}. Agrégalos aquí para no volver a crear la ficha.`
-  }
-  const head = unique.slice(0, -1).join(', ')
-  const last = unique.at(-1)
-  return `No se pudieron guardar los contactos ${head} y ${last}. Agrégalos aquí para no volver a crear la ficha.`
 }

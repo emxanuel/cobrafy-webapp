@@ -5,7 +5,10 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import path from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 
-import { buildContentSecurityPolicy } from './src/features/shared/lib/csp.ts'
+import {
+  assertApiBaseUrl,
+  buildContentSecurityPolicy,
+} from './src/features/shared/lib/csp.ts'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -21,10 +24,11 @@ export default defineConfig(({ mode }) => {
       {
         name: 'csp-meta',
         transformIndexHtml(html, ctx) {
+          assertApiBaseUrl(env.VITE_API_BASE_URL)
           if (ctx.server) return html
           const csp = buildContentSecurityPolicy({
             apiBaseUrl: env.VITE_API_BASE_URL,
-            production: true,
+            production: mode === 'production',
           })
           return html.replace(
             '<meta name="referrer" content="no-referrer" />',

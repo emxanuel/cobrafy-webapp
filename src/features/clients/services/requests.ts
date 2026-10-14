@@ -1,3 +1,10 @@
+import {
+  contactUnchanged,
+  toContactCreate,
+  toContactPatch,
+} from '@/features/clients/lib/contact-patch'
+import type { FailedContact } from '@/features/clients/lib/failed-contacts-notice'
+import { isApiError } from '@/features/shared/lib/api-error'
 import { api } from '@/features/shared/services/client'
 import type {
   ClientCheckRead,
@@ -130,68 +137,72 @@ export type CreateClientWithContactsResult = {
   client: ClientDetail
   failedContacts: number
   failedContactNames: string[]
+  failed: FailedContact[]
 }
 
-function toContactCreate(item: ContactDraft): ContactCreate {
-  return {
-    type: item.type,
-    name: item.name,
-    phone: item.phone,
-    relationship: item.relationship,
-    address: item.address ?? null,
-    doc_type: item.doc_type ?? null,
-    document: item.document ?? null,
-  }
-}
-
-function contactUnchanged(previous: ContactRead, next: ContactDraft): boolean {
-  return (
-    previous.type === next.type &&
-    previous.name === next.name &&
-    previous.phone === next.phone &&
-    previous.relationship === next.relationship &&
-    (previous.address ?? '') === (next.address ?? '') &&
-    (previous.doc_type ?? null) === (next.doc_type ?? null) &&
-    (previous.document ?? '') === (next.document ?? '')
-  )
+function isUnauthorized(error: unknown) {
+  return isApiError(error) && error.status === 401
 }
 
 export async function saveContactsDiff(
   clientId: string,
   previous: ContactRead[],
   next: ContactDraft[],
-): Promise<string[]> {
+): Promise<FailedContact[]> {
   const prevActive = previous.filter((item) => item.is_active)
   const prevById = new Map(prevActive.map((item) => [item.id, item]))
   const keptIds = new Set(next.map((item) => item.id).filter((id): id is string => Boolean(id)))
-  const failedNames: string[] = []
+  const failed: FailedContact[] = []
 
-  for (const item of next) {
-    const label = item.name.trim() || 'contacto'
+  async function run(op: () => Promise<void>, fail: FailedContact): Promise<'stop' | 'continue'> {
     try {
-      const existing = item.id ? prevById.get(item.id) : undefined
-      if (!existing) {
-        await createContact(clientId, toContactCreate(item))
-        continue
-      }
-      if (!contactUnchanged(existing, item)) {
-        await updateContact(clientId, existing.id, toContactCreate(item))
-      }
-    } catch {
-      failedNames.push(label)
+      await op()
+      return 'continue'
+    } catch (error) {
+      failed.push(fail)
+      return isUnauthorized(error) ? 'stop' : 'continue'
     }
   }
 
   for (const item of prevActive) {
     if (keptIds.has(item.id)) continue
-    try {
-      await deleteContact(clientId, item.id)
-    } catch {
-      failedNames.push(item.name)
-    }
+    const outcome = await run(
+      () => deleteContact(clientId, item.id),
+      { name: item.name, op: 'remove' },
+    )
+    if (outcome === 'stop') return failed
   }
 
-  return failedNames
+  const toCreate: ContactDraft[] = []
+  for (const item of next) {
+    const label = item.name.trim() || 'contacto'
+    if (item.id && !prevById.has(item.id)) {
+      failed.push({ name: label, op: 'edit' })
+      continue
+    }
+    const existing = item.id ? prevById.get(item.id) : undefined
+    if (!existing) {
+      toCreate.push(item)
+      continue
+    }
+    if (contactUnchanged(existing, item)) continue
+    const outcome = await run(
+      () => updateContact(clientId, existing.id, toContactPatch(existing, item)),
+      { name: label, op: 'edit' },
+    )
+    if (outcome === 'stop') return failed
+  }
+
+  for (const item of toCreate) {
+    const label = item.name.trim() || 'contacto'
+    const outcome = await run(
+      () => createContact(clientId, toContactCreate(item)),
+      { name: label, op: 'add' },
+    )
+    if (outcome === 'stop') return failed
+  }
+
+  return failed
 }
 
 async function reloadClient(created: ClientRead): Promise<ClientDetail> {
@@ -207,12 +218,13 @@ export async function createClientWithContacts(
   contacts: ContactCreate[],
 ): Promise<CreateClientWithContactsResult> {
   const created = await createClient(payload)
-  const failedContactNames = await saveContactsDiff(created.id, [], contacts)
+  const failed = await saveContactsDiff(created.id, [], contacts)
   const client = await reloadClient(created)
   return {
     client,
-    failedContacts: failedContactNames.length,
-    failedContactNames,
+    failedContacts: failed.length,
+    failedContactNames: failed.map((item) => item.name),
+    failed,
   }
 }
 
@@ -223,11 +235,12 @@ export async function updateClientWithContacts(
   contacts: ContactDraft[],
 ): Promise<CreateClientWithContactsResult> {
   const saved = await updateClient(clientId, payload)
-  const failedContactNames = await saveContactsDiff(clientId, previousContacts, contacts)
+  const failed = await saveContactsDiff(clientId, previousContacts, contacts)
   const client = await reloadClient(saved)
   return {
     client,
-    failedContacts: failedContactNames.length,
-    failedContactNames,
+    failedContacts: failed.length,
+    failedContactNames: failed.map((item) => item.name),
+    failed,
   }
 }

@@ -14,7 +14,7 @@ import { Button } from '@/features/shared/components/ui/button'
 import { Ticks } from '@/features/shared/components/ticks'
 import { cn } from '@/features/shared/lib/cn'
 import { canManageMembers, ROLE_LABEL } from '@/features/shared/lib/roles'
-import { queryClient } from '@/query-client'
+import { queryClient, resetQueryCache } from '@/query-client'
 
 function navClass({ isActive }: { isActive: boolean }) {
   return cn(
@@ -95,8 +95,9 @@ export function AppLayout() {
                       flushSync(() => {
                         navigate('/clientes', { replace: true })
                       })
-                      void queryClient.cancelQueries()
-                      void switchBusiness(queryClient, item.business_id)
+                      void resetQueryCache().then(() =>
+                        switchBusiness(queryClient, item.business_id),
+                      )
                     }}
                   >
                     {item.business_name}

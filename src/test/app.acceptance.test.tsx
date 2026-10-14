@@ -381,6 +381,27 @@ describe('CBF-110 aceptación', () => {
     })
   })
 
+  it('el aviso de contactos fallidos se quita del sessionStorage al leerlo', async () => {
+    renderApp()
+    await loginAs(users.cashier.email)
+    cleanup()
+    sessionStorage.setItem(
+      'cobrafy.failedContacts',
+      JSON.stringify([{ name: 'Pedro Gómez', op: 'add' }]),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1')
+    renderApp()
+    expect(await screen.findByText(/No se pudo agregar a Pedro Gómez/)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(sessionStorage.getItem('cobrafy.failedContacts')).toBeNull()
+    })
+    cleanup()
+    window.history.pushState({}, '', '/clientes/cli-1')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    expect(screen.queryByText(/No se pudo agregar a Pedro Gómez/)).not.toBeInTheDocument()
+  })
+
   it('en editar, un garante nuevo se manda por POST /contacts', async () => {
     const user = userEvent.setup()
     renderApp()

@@ -424,8 +424,16 @@ export const handlers = [
     }
     const payload = (await request.json()) as ContactCreate
     contactWrites.push({ method: request.method, url: request.url, body: payload })
-    contactCount += 1
     const id = String(params.id)
+    const current = clients.get(id) ?? clientFixture({ id })
+    const activeCount = current.contacts.filter((item) => item.is_active).length
+    if (activeCount >= 50) {
+      return HttpResponse.json(
+        { detail: 'el cliente ya tiene el máximo de 50 contactos' },
+        { status: 422 },
+      )
+    }
+    contactCount += 1
     const contact = {
       id: `ct-${contactCount}`,
       client_id: id,
@@ -440,7 +448,6 @@ export const handlers = [
       document_available: true,
       is_active: true,
     }
-    const current = clients.get(id) ?? clientFixture({ id })
     current.contacts = [...current.contacts, contact]
     clients.set(id, current)
     return HttpResponse.json(contact, { status: 201 })

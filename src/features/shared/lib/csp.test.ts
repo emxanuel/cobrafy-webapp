@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildContentSecurityPolicy, resolveApiOrigin } from './csp'
+import {
+  assertApiBaseUrl,
+  buildContentSecurityPolicy,
+  InvalidApiBaseUrlError,
+  resolveApiOrigin,
+} from './csp'
 
 describe('buildContentSecurityPolicy', () => {
   it('deja connect-src en self si la URL es relativa o vacía', () => {
@@ -36,5 +41,16 @@ describe('buildContentSecurityPolicy', () => {
       production: false,
     })
     expect(csp).not.toContain('upgrade-insecure-requests')
+  })
+
+  it('lanza si VITE_API_BASE_URL no es http(s) ni una ruta relativa', () => {
+    expect(() => assertApiBaseUrl('api.cobrafy.com')).toThrow(InvalidApiBaseUrlError)
+    expect(() => assertApiBaseUrl('ftp://x')).toThrow(InvalidApiBaseUrlError)
+    expect(() => buildContentSecurityPolicy({ apiBaseUrl: 'api.cobrafy.com' })).toThrow(
+      InvalidApiBaseUrlError,
+    )
+    expect(() => assertApiBaseUrl('')).not.toThrow()
+    expect(() => assertApiBaseUrl('/api')).not.toThrow()
+    expect(() => assertApiBaseUrl('https://api.cobrafy.com')).not.toThrow()
   })
 })

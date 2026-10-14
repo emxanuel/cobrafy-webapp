@@ -6,6 +6,7 @@ import {
   useDeleteContactMutation,
   useUpdateContactMutation,
 } from '@/features/clients/hooks/use-clients-queries'
+import { toContactPatch } from '@/features/clients/lib/contact-patch'
 import { contactEditSchema, type ContactEditValues } from '@/features/clients/schemas'
 import type { ContactRead } from '@/features/clients/services/types'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -67,22 +68,25 @@ export function ContactCard({
     <li className="border-border my-2 rounded-md border p-3">
       <form
         className="flex flex-col gap-3"
-        onSubmit={form.handleSubmit((values) =>
+        onSubmit={form.handleSubmit((values) => {
+          const payload = toContactPatch(contact, {
+            type: contact.type,
+            name: values.name,
+            phone: values.phone,
+            relationship: values.relationship,
+            address: values.address,
+            doc_type: values.doc_type,
+            document: values.document,
+          })
+          if (Object.keys(payload).length === 0) {
+            setEditing(false)
+            return
+          }
           update.mutate(
-            {
-              contactId: contact.id,
-              payload: {
-                name: values.name,
-                phone: values.phone,
-                relationship: values.relationship,
-                address: values.address || null,
-                doc_type: values.document ? values.doc_type || 'cedula' : null,
-                document: values.document || null,
-              },
-            },
+            { contactId: contact.id, payload },
             { onSuccess: () => setEditing(false) },
-          ),
-        )}
+          )
+        })}
       >
         {update.isError ? <Alert>{getApiErrorMessage(update.error)}</Alert> : null}
         <Field
@@ -109,24 +113,28 @@ export function ContactCard({
         <Field id={`${contact.id}-address`} label="Dirección (opcional)">
           <TextInput id={`${contact.id}-address`} {...form.register('address')} />
         </Field>
-        <Field id={`${contact.id}-doc-type`} label="Tipo de documento (opcional)">
-          <SelectInput id={`${contact.id}-doc-type`} {...form.register('doc_type')}>
-            <option value="cedula">Cédula</option>
-            <option value="pasaporte">Pasaporte</option>
-          </SelectInput>
-        </Field>
-        <Field
-          id={`${contact.id}-document`}
-          label="Documento (opcional)"
-          error={apiFields.document}
-        >
-          <TextInput id={`${contact.id}-document`} {...form.register('document')} />
-        </Field>
+        {contact.document_available !== false ? (
+          <>
+            <Field id={`${contact.id}-doc-type`} label="Tipo de documento (opcional)">
+              <SelectInput id={`${contact.id}-doc-type`} {...form.register('doc_type')}>
+                <option value="cedula">Cédula</option>
+                <option value="pasaporte">Pasaporte</option>
+              </SelectInput>
+            </Field>
+            <Field
+              id={`${contact.id}-document`}
+              label="Documento (opcional)"
+              error={apiFields.document}
+            >
+              <TextInput id={`${contact.id}-document`} {...form.register('document')} />
+            </Field>
+          </>
+        ) : null}
         <div className="flex gap-2">
           <Button type="submit" disabled={update.isPending}>
             {update.isPending ? 'Guardando…' : 'Guardar contacto'}
           </Button>
-          <Button variant="ghost" onClick={() => setEditing(false)}>
+          <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
             Cancelar
           </Button>
         </div>
