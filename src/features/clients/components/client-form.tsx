@@ -11,7 +11,7 @@ import { useCheckClientMutation } from '@/features/clients/hooks/use-clients-que
 import type {
   ClientCreate,
   ClientDetail,
-  ContactCreate,
+  ContactDraft,
 } from '@/features/clients/services/types'
 import type { MemberRead } from '@/features/members/services/types'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -30,7 +30,7 @@ import {
 
 export type ClientFormSubmit = {
   client: ClientCreate
-  contacts: ContactCreate[]
+  contacts: ContactDraft[]
 }
 
 function toSubmit(values: ClientFormValues): ClientFormSubmit {
@@ -45,6 +45,7 @@ function toSubmit(values: ClientFormValues): ClientFormSubmit {
       collector_membership_id: values.collector_membership_id || null,
     },
     contacts: values.contacts.map((item) => ({
+      id: item.contact_id,
       type: item.type,
       name: item.name,
       phone: item.phone,
@@ -68,6 +69,7 @@ function fromClient(client: ClientDetail): ClientFormValues {
     contacts: client.contacts
       .filter((item) => item.is_active)
       .map((item) => ({
+        contact_id: item.id,
         type: item.type,
         name: item.name,
         phone: item.phone,

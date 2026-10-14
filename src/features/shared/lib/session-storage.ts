@@ -10,6 +10,7 @@
 export const SESSION_KEY = 'cobrafy.session'
 export const BUSINESS_KEY = 'cobrafy.business'
 export const LOGIN_NOTICE_KEY = 'cobrafy.loginNotice'
+export const FAILED_CONTACTS_KEY = 'cobrafy.failedContacts'
 
 export function readJson<T>(key: string): T | null {
   try {

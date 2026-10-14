@@ -9,9 +9,11 @@ import {
   getClient,
   getClientHistory,
   listClients,
+  createContact,
+  deleteContact,
   searchClients,
   unblockClient,
-  updateClient,
+  updateClientWithContacts,
   updateContact,
 } from '@/features/clients/services/requests'
 import type {
@@ -20,6 +22,8 @@ import type {
   ClientHistory,
   ClientUpdate,
   ContactCreate,
+  ContactDraft,
+  ContactRead,
   ContactUpdate,
 } from '@/features/clients/services/types'
 
@@ -83,7 +87,15 @@ export function useCreateClientMutation() {
 export function useUpdateClientMutation(clientId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (payload: ClientUpdate) => updateClient(clientId, payload),
+    mutationFn: ({
+      client,
+      contacts,
+      previousContacts,
+    }: {
+      client: ClientUpdate
+      contacts: ContactDraft[]
+      previousContacts: ContactRead[]
+    }) => updateClientWithContacts(clientId, client, previousContacts, contacts),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: clientKeys.all })
     },
@@ -113,6 +125,26 @@ export function useUnblockClientMutation(clientId: string) {
 export function useCheckClientMutation() {
   return useMutation({
     mutationFn: (payload: ClientCheckRequest) => checkClient(payload),
+  })
+}
+
+export function useCreateContactMutation(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: ContactCreate) => createContact(clientId, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: clientKeys.all })
+    },
+  })
+}
+
+export function useDeleteContactMutation(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (contactId: string) => deleteContact(clientId, contactId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: clientKeys.all })
+    },
   })
 }
 

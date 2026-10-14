@@ -13,14 +13,14 @@ Nunca se escribe correo, cédula, contraseña ni token en `console.*` (solo mét
 
 ## Cabeceras al publicar
 
-El HTML de producción lleva `Referrer-Policy: no-referrer` y un meta CSP estricto. El hosting debe mandar las mismas cabeceras (el meta no cubre `frame-ancestors` en todos los navegadores):
+El HTML de producción lleva `Referrer-Policy: no-referrer` y un meta CSP estricto. **`frame-ancestors` solo funciona como cabecera HTTP del hosting; el meta del HTML no la aplica.** El resto de directivas sí van en el meta, y el hosting debe repetirlas como cabeceras:
 
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' <origen-del-api-si-es-absoluto>; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 Referrer-Policy: no-referrer
 ```
 
-Si el API no está en el mismo origen, añade su URL a `connect-src`.
+Si `VITE_API_BASE_URL` es una URL absoluta, el origen entra en `connect-src`. `upgrade-insecure-requests` solo se emite en el build de producción cuando el API no es `http://` (si el API es HTTP, esa directiva bloquearía las llamadas).
 
 ## API
 

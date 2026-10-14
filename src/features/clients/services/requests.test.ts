@@ -89,6 +89,7 @@ describe('client requests', () => {
     )
     expect(result.client.id).toMatch(/^cli-new-/)
     expect(result.failedContacts).toBe(1)
+    expect(result.failedContactNames).toEqual(['Pedro Gómez'])
     expect(result.client.name).toBe('Ana Pérez')
   })
 })

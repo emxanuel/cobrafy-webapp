@@ -6,9 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clientKeys } from '@/features/clients/query-keys'
 import { queryClient } from '@/query-client'
 import { renderApp } from './render'
-import { clientDetailRequests, logoutRequests, searchRequests } from './handlers'
+import { clientDetailRequests, contactWrites, logoutRequests, searchRequests } from './handlers'
 import { server } from './server'
-import { businesses, users } from './fixtures'
+import { businesses, cashierMember, users } from './fixtures'
 
 async function loginAs(email: string, password = 'secreto123') {
   const user = userEvent.setup()
@@ -379,5 +379,75 @@ describe('CBF-110 aceptación', () => {
     await waitFor(() => {
       expect(roleSelect).toHaveValue('cobrador')
     })
+  })
+
+  it('en editar, un garante nuevo se manda por POST /contacts', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await loginAs(users.cashier.email)
+    cleanup()
+    window.history.pushState({}, '', '/clientes/cli-1/editar')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Agregar garante' }))
+    const garante = screen.getByRole('group', { name: /Garante / })
+    await user.type(within(garante).getByLabelText('Nombre'), 'Pedro Gómez')
+    await user.type(within(garante).getByLabelText('Teléfono'), '8095552222')
+    await user.type(within(garante).getByLabelText('Relación'), 'Hermano')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    expect(
+      contactWrites.some((item) => {
+        const body = item.body as { type?: string; name?: string } | null
+        return item.method === 'POST' && body?.type === 'garante' && body.name === 'Pedro Gómez'
+      }),
+    ).toBe(true)
+  })
+
+  it('después de un 401, un login en otro negocio no reusa la ficha anterior', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await loginAs(users.cashier.email)
+    cleanup()
+    window.history.pushState({}, '', '/clientes/cli-1')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+
+    server.use(
+      http.get('*/auth/me', () =>
+        HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
+      ),
+      http.get('*/clients/:id', () =>
+        HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
+      ),
+      http.get('*/clients', () =>
+        HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
+      ),
+    )
+    await queryClient.invalidateQueries()
+    expect(await screen.findByRole('heading', { name: 'Entra a tu negocio' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    })
+
+    server.resetHandlers()
+    await loginAs(users.multi.email)
+    await user.click(await screen.findByRole('button', { name: /Créditos Sur/ }))
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    expect(
+      queryClient.getQueryData(clientKeys.detail(businesses.norte.id, 'cli-1')),
+    ).toBeUndefined()
+    expect(screen.queryByRole('heading', { name: 'Ana Pérez' })).not.toBeInTheDocument()
+  })
+
+  it('el dueño ve el nombre de quien actuó en el historial, no el id', async () => {
+    renderApp()
+    await loginAs(users.owner.email)
+    cleanup()
+    window.history.pushState({}, '', '/clientes/cli-1/historial')
+    renderApp()
+    expect(await screen.findByText('Bloqueo')).toBeInTheDocument()
+    expect(await screen.findByText(/Carla Caja/)).toBeInTheDocument()
+    expect(screen.queryByText(cashierMember.id)).not.toBeInTheDocument()
   })
 })

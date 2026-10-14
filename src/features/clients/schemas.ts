@@ -3,6 +3,7 @@ import { z } from 'zod'
 const docType = z.enum(['cedula', 'pasaporte'])
 
 export const contactFormSchema = z.object({
+  contact_id: z.string().optional(),
   type: z.enum(['referencia', 'garante']),
   name: z.string().min(1, 'Escribe el nombre.'),
   phone: z.string().min(1, 'Escribe el teléfono.'),

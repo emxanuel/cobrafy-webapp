@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useLocation, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import {
@@ -14,12 +14,15 @@ import {
   useUnblockClientMutation,
 } from '@/features/clients/hooks/use-clients-queries'
 import { ContactCard } from '@/features/clients/components/contact-card'
+import { ContactComposer } from '@/features/clients/components/contact-composer'
+import { failedContactsNotice } from '@/features/clients/lib/failed-contacts-notice'
 import { blockSchema, type BlockFormValues } from '@/features/clients/schemas'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { Button, buttonVariants } from '@/features/shared/components/ui/button'
 import { Field, TextArea } from '@/features/shared/components/ui/field'
 import { getApiErrorMessage, isApiError } from '@/features/shared/lib/api-error'
+import { FAILED_CONTACTS_KEY } from '@/features/shared/lib/session-storage'
 import {
   canBlockClients,
   canEditClients,
@@ -28,10 +31,20 @@ import {
 
 export function ClientDetailPage() {
   const { clientId = '' } = useParams()
-  const location = useLocation()
-  const contactsFailed = Number(
-    (location.state as { contactsFailed?: number } | null)?.contactsFailed ?? 0,
-  )
+  const [failedContactNames] = useState(() => {
+    const raw = sessionStorage.getItem(FAILED_CONTACTS_KEY)
+    sessionStorage.removeItem(FAILED_CONTACTS_KEY)
+    if (!raw) return [] as string[]
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      return Array.isArray(parsed)
+        ? parsed.filter((item): item is string => typeof item === 'string')
+        : []
+    } catch {
+      return []
+    }
+  })
+  const failedNotice = failedContactsNotice(failedContactNames)
   const clientQuery = useClient(clientId)
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
@@ -95,12 +108,7 @@ export function ClientDetailPage() {
         }
       />
 
-      {contactsFailed > 0 ? (
-        <Alert>
-          El cliente se guardó, pero {contactsFailed === 1 ? 'un contacto no' : `${contactsFailed} contactos no`}
-          {' '}se pudieron guardar. Agrégalos aquí para no volver a crear la ficha.
-        </Alert>
-      ) : null}
+      {failedNotice ? <Alert>{failedNotice}</Alert> : null}
 
       {blocked ? (
         <Alert>
@@ -166,6 +174,7 @@ export function ClientDetailPage() {
             ))}
           </ul>
         )}
+        {canEditClients(role) ? <ContactComposer clientId={client.id} /> : null}
       </section>
 
       {!blocked && canBlockClients(role) ? (

@@ -17,4 +17,11 @@ describe('safeInternalPath', () => {
     expect(safeInternalPath('/login')).toBeUndefined()
     expect(safeInternalPath('clientes')).toBeUndefined()
   })
+
+  it('rechaza encodings y caracteres de control que saltan el origen', () => {
+    expect(safeInternalPath('/%2F%2Fevil.example')).toBeUndefined()
+    expect(safeInternalPath('/%5Cevil.example')).toBeUndefined()
+    expect(safeInternalPath('/clientes\t')).toBeUndefined()
+    expect(safeInternalPath('/clientes\n')).toBeUndefined()
+  })
 })

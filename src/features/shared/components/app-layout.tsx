@@ -1,5 +1,6 @@
 import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
+import { flushSync } from 'react-dom'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 
 import { useLogoutMutation } from '@/features/auth/hooks/use-auth'
@@ -91,7 +92,9 @@ export function AppLayout() {
                     )}
                     onClick={() => {
                       close()
-                      navigate('/clientes', { replace: true })
+                      flushSync(() => {
+                        navigate('/clientes', { replace: true })
+                      })
                       void switchBusiness(queryClient, item.business_id)
                     }}
                   >

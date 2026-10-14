@@ -11,6 +11,7 @@ import type {
   ClientSearchRequest,
   ClientUpdate,
   ContactCreate,
+  ContactDraft,
   ContactRead,
   ContactUpdate,
 } from './types'
@@ -128,6 +129,77 @@ export async function deleteContact(
 export type CreateClientWithContactsResult = {
   client: ClientDetail
   failedContacts: number
+  failedContactNames: string[]
+}
+
+function toContactCreate(item: ContactDraft): ContactCreate {
+  return {
+    type: item.type,
+    name: item.name,
+    phone: item.phone,
+    relationship: item.relationship,
+    address: item.address ?? null,
+    doc_type: item.doc_type ?? null,
+    document: item.document ?? null,
+  }
+}
+
+function contactUnchanged(previous: ContactRead, next: ContactDraft): boolean {
+  return (
+    previous.type === next.type &&
+    previous.name === next.name &&
+    previous.phone === next.phone &&
+    previous.relationship === next.relationship &&
+    (previous.address ?? '') === (next.address ?? '') &&
+    (previous.doc_type ?? null) === (next.doc_type ?? null) &&
+    (previous.document ?? '') === (next.document ?? '')
+  )
+}
+
+export async function saveContactsDiff(
+  clientId: string,
+  previous: ContactRead[],
+  next: ContactDraft[],
+): Promise<string[]> {
+  const prevActive = previous.filter((item) => item.is_active)
+  const prevById = new Map(prevActive.map((item) => [item.id, item]))
+  const keptIds = new Set(next.map((item) => item.id).filter((id): id is string => Boolean(id)))
+  const failedNames: string[] = []
+
+  for (const item of next) {
+    const label = item.name.trim() || 'contacto'
+    try {
+      const existing = item.id ? prevById.get(item.id) : undefined
+      if (!existing) {
+        await createContact(clientId, toContactCreate(item))
+        continue
+      }
+      if (!contactUnchanged(existing, item)) {
+        await updateContact(clientId, existing.id, toContactCreate(item))
+      }
+    } catch {
+      failedNames.push(label)
+    }
+  }
+
+  for (const item of prevActive) {
+    if (keptIds.has(item.id)) continue
+    try {
+      await deleteContact(clientId, item.id)
+    } catch {
+      failedNames.push(item.name)
+    }
+  }
+
+  return failedNames
+}
+
+async function reloadClient(created: ClientRead): Promise<ClientDetail> {
+  try {
+    return await getClient(created.id)
+  } catch {
+    return { ...created, contacts: [] }
+  }
 }
 
 export async function createClientWithContacts(
@@ -135,19 +207,27 @@ export async function createClientWithContacts(
   contacts: ContactCreate[],
 ): Promise<CreateClientWithContactsResult> {
   const created = await createClient(payload)
-  let failedContacts = 0
-  for (const contact of contacts) {
-    try {
-      await createContact(created.id, contact)
-    } catch {
-      failedContacts += 1
-    }
+  const failedContactNames = await saveContactsDiff(created.id, [], contacts)
+  const client = await reloadClient(created)
+  return {
+    client,
+    failedContacts: failedContactNames.length,
+    failedContactNames,
   }
-  let client: ClientDetail
-  try {
-    client = await getClient(created.id)
-  } catch {
-    client = { ...created, contacts: [] }
+}
+
+export async function updateClientWithContacts(
+  clientId: string,
+  payload: ClientUpdate,
+  previousContacts: ContactRead[],
+  contacts: ContactDraft[],
+): Promise<CreateClientWithContactsResult> {
+  const saved = await updateClient(clientId, payload)
+  const failedContactNames = await saveContactsDiff(clientId, previousContacts, contacts)
+  const client = await reloadClient(saved)
+  return {
+    client,
+    failedContacts: failedContactNames.length,
+    failedContactNames,
   }
-  return { client, failedContacts }
 }

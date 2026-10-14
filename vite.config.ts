@@ -5,6 +5,8 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import path from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 
+import { buildContentSecurityPolicy } from './src/features/shared/lib/csp.ts'
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const proxyTarget = env.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:8000'
@@ -20,19 +22,10 @@ export default defineConfig(({ mode }) => {
         name: 'csp-meta',
         transformIndexHtml(html, ctx) {
           if (ctx.server) return html
-          const csp = [
-            "default-src 'self'",
-            "script-src 'self'",
-            "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data:",
-            "font-src 'self'",
-            "connect-src 'self'",
-            "object-src 'none'",
-            "base-uri 'self'",
-            "form-action 'self'",
-            "frame-ancestors 'none'",
-            'upgrade-insecure-requests',
-          ].join('; ')
+          const csp = buildContentSecurityPolicy({
+            apiBaseUrl: env.VITE_API_BASE_URL,
+            production: true,
+          })
           return html.replace(
             '<meta name="referrer" content="no-referrer" />',
             `<meta name="referrer" content="no-referrer" />\n    <meta http-equiv="Content-Security-Policy" content="${csp}" />`,

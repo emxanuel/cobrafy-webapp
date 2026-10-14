@@ -33,6 +33,7 @@ export const listRequests: Array<{ method: string; url: string }> = []
 export const checkRequests: Array<{ method: string; url: string; body: unknown }> = []
 export const clientDetailRequests: Array<{ id: string; token: string }> = []
 export const logoutRequests: Array<{ token: string | null }> = []
+export const contactWrites: Array<{ method: string; url: string; body: unknown }> = []
 
 const MAX_PIN_ATTEMPTS = 5
 const PIN_LOCKED = 'demasiados intentos; entra con contraseña'
@@ -58,6 +59,7 @@ export function resetData() {
   checkRequests.length = 0
   clientDetailRequests.length = 0
   logoutRequests.length = 0
+  contactWrites.length = 0
 }
 
 function bearer(request: Request) {
@@ -421,6 +423,7 @@ export const handlers = [
       return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
     }
     const payload = (await request.json()) as ContactCreate
+    contactWrites.push({ method: request.method, url: request.url, body: payload })
     contactCount += 1
     const id = String(params.id)
     const contact = {
@@ -443,6 +446,25 @@ export const handlers = [
     return HttpResponse.json(contact, { status: 201 })
   }),
 
+  http.delete('*/clients/:id/contacts/:contactId', ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    if (roleFromToken(bearer(request)) === 'cobrador') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    contactWrites.push({ method: request.method, url: request.url, body: null })
+    const clientId = String(params.id)
+    const contactId = String(params.contactId)
+    const current = clients.get(clientId)
+    if (current) {
+      current.contacts = current.contacts.map((item) =>
+        item.id === contactId ? { ...item, is_active: false } : item,
+      )
+      clients.set(clientId, current)
+    }
+    return new HttpResponse(null, { status: 204 })
+  }),
+
   http.patch('*/clients/:id/contacts/:contactId', async ({ request, params }) => {
     const denied = requireAuth(request)
     if (denied) return denied
@@ -450,6 +472,7 @@ export const handlers = [
       return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
     }
     const payload = (await request.json()) as ContactUpdate
+    contactWrites.push({ method: request.method, url: request.url, body: payload })
     const clientId = String(params.id)
     const contactId = String(params.contactId)
     const current = clients.get(clientId) ?? clientFixture({ id: clientId })

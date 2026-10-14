@@ -2,7 +2,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 
-import { useUpdateContactMutation } from '@/features/clients/hooks/use-clients-queries'
+import {
+  useDeleteContactMutation,
+  useUpdateContactMutation,
+} from '@/features/clients/hooks/use-clients-queries'
 import { contactEditSchema, type ContactEditValues } from '@/features/clients/schemas'
 import type { ContactRead } from '@/features/clients/services/types'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -21,6 +24,7 @@ export function ContactCard({
 }) {
   const [editing, setEditing] = useState(false)
   const update = useUpdateContactMutation(clientId)
+  const remove = useDeleteContactMutation(clientId)
   const form = useForm<ContactEditValues>({
     resolver: zodResolver(contactEditSchema),
     defaultValues: {
@@ -42,9 +46,18 @@ export function ContactCard({
           {contact.document ? ` · ${contact.document}` : ''}
         </span>
         {canEdit ? (
-          <Button variant="ghost" className="self-start sm:self-auto" onClick={() => setEditing(true)}>
-            Editar
-          </Button>
+          <div className="flex gap-2 self-start sm:self-auto">
+            <Button variant="ghost" onClick={() => setEditing(true)}>
+              Editar
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={remove.isPending}
+              onClick={() => remove.mutate(contact.id)}
+            >
+              Quitar
+            </Button>
+          </div>
         ) : null}
       </li>
     )

@@ -26,6 +26,7 @@ describe('historial del cliente', () => {
     renderApp()
     expect(await screen.findByText('Bloqueo')).toBeInTheDocument()
     expect(screen.getByText('mora reiterada')).toBeInTheDocument()
+    expect(screen.getByText(/Alguien del negocio/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Ver más' }))
     expect(await screen.findByText('Se asignó cobrador')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ver más' })).not.toBeInTheDocument()

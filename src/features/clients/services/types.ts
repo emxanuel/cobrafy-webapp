@@ -50,6 +50,8 @@ export type ContactUpdate = {
   document?: string | null
 }
 
+export type ContactDraft = ContactCreate & { id?: string }
+
 export type ClientRead = {
   id: string
   name: string
