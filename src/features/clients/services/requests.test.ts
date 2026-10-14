@@ -6,7 +6,7 @@ import { getFieldErrors, isApiError } from '@/features/shared/lib/api-error'
 import { http, HttpResponse } from 'msw'
 
 import { authResponse, businesses, membership, users } from '@/test/fixtures'
-import { contactWrites, searchRequests } from '@/test/handlers'
+import { clientWrites, contactWrites, searchRequests } from '@/test/handlers'
 import { server } from '@/test/server'
 import {
   createClient,
@@ -15,6 +15,7 @@ import {
   getClient,
   saveContactsDiff,
   searchClients,
+  updateClientWithContacts,
 } from './requests'
 
 describe('client requests', () => {
@@ -119,7 +120,7 @@ describe('client requests', () => {
       document: '001-9999999-9',
     })
     contactWrites.length = 0
-    const failed = await saveContactsDiff(created.id, [saved], [
+    const notice = await saveContactsDiff(created.id, [saved], [
       {
         id: saved.id,
         type: saved.type,
@@ -131,7 +132,7 @@ describe('client requests', () => {
         document: saved.document,
       },
     ])
-    expect(failed).toEqual([])
+    expect(notice.failed).toEqual([])
     const patch = contactWrites.find((item) => item.method === 'PATCH')
     expect(patch?.body).toEqual({ phone: '8095559999' })
     expect(patch?.body).not.toHaveProperty('document')
@@ -164,7 +165,7 @@ describe('client requests', () => {
     expect(referencia).toBeTruthy()
     contactWrites.length = 0
 
-    const failed = await saveContactsDiff(created.id, client.contacts, [
+    const notice = await saveContactsDiff(created.id, client.contacts, [
       {
         id: referencia!.id,
         type: 'referencia',
@@ -180,7 +181,7 @@ describe('client requests', () => {
       },
     ])
 
-    expect(failed).toEqual([])
+    expect(notice.failed).toEqual([])
     const methods = contactWrites.map((item) => item.method)
     expect(methods.indexOf('DELETE')).toBeLessThan(methods.indexOf('PATCH'))
     expect(methods.indexOf('PATCH')).toBeLessThan(methods.indexOf('POST'))
@@ -224,7 +225,7 @@ describe('client requests', () => {
       phone: item.phone,
       relationship: item.relationship,
     }))
-    const failed = await saveContactsDiff(created.id, previous, [
+    const notice = await saveContactsDiff(created.id, previous, [
       ...kept,
       {
         type: 'garante',
@@ -233,7 +234,7 @@ describe('client requests', () => {
         relationship: 'Hermano',
       },
     ])
-    expect(failed).toEqual([])
+    expect(notice.failed).toEqual([])
     const methods = contactWrites.map((item) => item.method)
     expect(methods[0]).toBe('DELETE')
     expect(methods.at(-1)).toBe('POST')
@@ -250,7 +251,7 @@ describe('client requests', () => {
       address: 'Calle 1',
     })
     contactWrites.length = 0
-    const failed = await saveContactsDiff(created.id, [], [
+    const notice = await saveContactsDiff(created.id, [], [
       {
         id: 'ct-desaparecido',
         type: 'referencia',
@@ -259,7 +260,7 @@ describe('client requests', () => {
         relationship: 'Prima',
       },
     ])
-    expect(failed).toEqual([{ name: 'Fantasma', op: 'edit' }])
+    expect(notice.failed).toEqual([{ name: 'Fantasma', op: 'edit' }])
     expect(contactWrites.some((item) => item.method === 'POST')).toBe(false)
   })
 
@@ -289,8 +290,150 @@ describe('client requests', () => {
       ),
     )
     contactWrites.length = 0
-    const failed = await saveContactsDiff(created.id, [first, second], [])
-    expect(failed[0]).toEqual({ name: 'Uno', op: 'remove' })
-    expect(failed).toHaveLength(1)
+    const notice = await saveContactsDiff(created.id, [first, second], [])
+    expect(notice.failed[0]).toEqual({ name: 'Uno', op: 'remove' })
+    expect(notice.failed).toHaveLength(1)
+    expect(notice.stoppedOnUnauthorized).toBe(true)
+  })
+
+  it('un 401 a mitad dice qué operaciones ya se aplicaron', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    const first = await createContact(created.id, {
+      type: 'referencia',
+      name: 'Uno',
+      phone: '8095550001',
+      relationship: 'Prima',
+    })
+    const second = await createContact(created.id, {
+      type: 'referencia',
+      name: 'Dos',
+      phone: '8095550002',
+      relationship: 'Prima',
+    })
+    let deletes = 0
+    server.use(
+      http.delete('*/clients/:id/contacts/:contactId', () => {
+        deletes += 1
+        if (deletes >= 2) {
+          return HttpResponse.json({ detail: 'no autenticado' }, { status: 401 })
+        }
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const notice = await saveContactsDiff(created.id, [first, second], [])
+    expect(notice.applied).toEqual([{ name: 'Uno', op: 'remove' }])
+    expect(notice.failed).toEqual([{ name: 'Dos', op: 'remove' }])
+    expect(notice.stoppedOnUnauthorized).toBe(true)
+  })
+
+  it('no manda PATCH de un contacto que no cambió', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    const first = await createContact(created.id, {
+      type: 'referencia',
+      name: 'Uno',
+      phone: '8095550001',
+      relationship: 'Prima',
+    })
+    const second = await createContact(created.id, {
+      type: 'referencia',
+      name: 'Dos',
+      phone: '8095550002',
+      relationship: 'Prima',
+    })
+    contactWrites.length = 0
+    await saveContactsDiff(created.id, [first, second], [
+      {
+        id: first.id,
+        type: first.type,
+        name: first.name,
+        phone: first.phone,
+        relationship: first.relationship,
+      },
+      {
+        id: second.id,
+        type: second.type,
+        name: 'Dos editado',
+        phone: second.phone,
+        relationship: second.relationship,
+      },
+    ])
+    const patches = contactWrites.filter((item) => item.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    expect(patches[0]?.body).toEqual({ name: 'Dos editado' })
+  })
+
+  it('al borrar address y document el PATCH del contacto manda null', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    const saved = await createContact(created.id, {
+      type: 'referencia',
+      name: 'Ref Uno',
+      phone: '8095550001',
+      relationship: 'Prima',
+      address: 'Calle 9',
+      doc_type: 'cedula',
+      document: '001-9999999-9',
+    })
+    contactWrites.length = 0
+    await saveContactsDiff(created.id, [saved], [
+      {
+        id: saved.id,
+        type: saved.type,
+        name: saved.name,
+        phone: saved.phone,
+        relationship: saved.relationship,
+        address: '',
+        doc_type: saved.doc_type,
+        document: '',
+      },
+    ])
+    const patch = contactWrites.find((item) => item.method === 'PATCH')
+    expect(patch?.body).toEqual({ address: null, document: null })
+  })
+
+  it('al editar solo el teléfono del cliente el PATCH no manda document', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    clientWrites.length = 0
+    await updateClientWithContacts(
+      created.id,
+      {
+        name: 'Ana Pérez',
+        doc_type: 'cedula',
+        document: '001-1234567-8',
+        phone: '8095559999',
+        address: 'Calle 1',
+      },
+      [],
+      [],
+      created,
+    )
+    expect(clientWrites).toHaveLength(1)
+    expect(clientWrites[0]?.body).toEqual({ phone: '8095559999' })
+    expect(clientWrites[0]?.body).not.toHaveProperty('document')
+    expect(clientWrites[0]?.body).not.toHaveProperty('address')
+    expect(clientWrites[0]?.body).not.toHaveProperty('doc_type')
   })
 })

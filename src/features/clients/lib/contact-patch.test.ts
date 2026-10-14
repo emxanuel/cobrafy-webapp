@@ -39,6 +39,20 @@ describe('toContactPatch', () => {
     expect(patch).not.toHaveProperty('doc_type')
   })
 
+  it('al borrar address y document el PATCH manda null', () => {
+    const previous = contact()
+    const patch = toContactPatch(previous, {
+      type: previous.type,
+      name: previous.name,
+      phone: previous.phone,
+      relationship: previous.relationship,
+      address: '',
+      doc_type: previous.doc_type,
+      document: '',
+    })
+    expect(patch).toEqual({ address: null, document: null })
+  })
+
   it('no manda document si la API lo ocultó', () => {
     const previous = contact({
       document: '001-*****1234',

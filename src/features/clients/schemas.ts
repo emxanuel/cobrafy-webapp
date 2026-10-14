@@ -9,7 +9,7 @@ export const contactFormSchema = z.object({
   phone: z.string().min(1, 'Escribe el teléfono.'),
   relationship: z.string().min(1, '¿Quién es para el cliente?'),
   address: z.string().optional(),
-  doc_type: z.enum(['cedula', 'pasaporte']).optional(),
+  doc_type: z.union([z.enum(['cedula', 'pasaporte']), z.literal('')]).optional(),
   document: z.string().optional(),
 })
 

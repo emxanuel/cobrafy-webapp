@@ -1,20 +1,19 @@
 import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
-import { flushSync } from 'react-dom'
-import { NavLink, Outlet, useNavigate } from 'react-router'
+import { NavLink, Outlet } from 'react-router'
 
-import { useLogoutMutation } from '@/features/auth/hooks/use-auth'
+import { useLogoutMutation, useSelectBusinessMutation } from '@/features/auth/hooks/use-auth'
 import { useSessionStore } from '@/features/auth/stores/session-store'
-import { switchBusiness } from '@/features/business/lib/switch-business'
 import {
   activeMembership,
   useBusinessStore,
 } from '@/features/business/stores/business-store'
+import { Alert } from '@/features/shared/components/ui/alert'
 import { Button } from '@/features/shared/components/ui/button'
 import { Ticks } from '@/features/shared/components/ticks'
 import { cn } from '@/features/shared/lib/cn'
+import { getApiErrorMessage } from '@/features/shared/lib/api-error'
 import { canManageMembers, ROLE_LABEL } from '@/features/shared/lib/roles'
-import { queryClient, resetQueryCache } from '@/query-client'
 
 function navClass({ isActive }: { isActive: boolean }) {
   return cn(
@@ -30,7 +29,7 @@ export function AppLayout() {
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
   const membership = activeMembership(memberships, activeBusinessId)
   const logout = useLogoutMutation()
-  const navigate = useNavigate()
+  const selectBusiness = useSelectBusinessMutation()
   const role = membership?.role ?? null
   const hasPin = membership?.has_pin ?? false
 
@@ -90,14 +89,11 @@ export function AppLayout() {
                       navClass({ isActive: item.business_id === activeBusinessId }),
                       'w-full',
                     )}
+                    disabled={selectBusiness.isPending}
                     onClick={() => {
+                      if (item.business_id === activeBusinessId) return
                       close()
-                      flushSync(() => {
-                        navigate('/clientes', { replace: true })
-                      })
-                      void resetQueryCache().then(() =>
-                        switchBusiness(queryClient, item.business_id),
-                      )
+                      selectBusiness.mutate(item.business_id)
                     }}
                   >
                     {item.business_name}
@@ -125,6 +121,11 @@ export function AppLayout() {
 
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
+            {selectBusiness.isError ? (
+              <Alert>
+                {getApiErrorMessage(selectBusiness.error, 'No se pudo cambiar de negocio.')}
+              </Alert>
+            ) : null}
             <Outlet />
           </div>
           <Ticks />

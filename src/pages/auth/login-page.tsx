@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useLocation } from 'react-router'
 
@@ -9,8 +9,12 @@ import { AuthShell } from '@/features/shared/components/auth-shell'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { Button } from '@/features/shared/components/ui/button'
 import { Field, TextInput } from '@/features/shared/components/ui/field'
+import {
+  failedContactsNotice,
+  parseContactsSaveNotice,
+} from '@/features/clients/lib/failed-contacts-notice'
 import { getApiErrorMessage, getFieldErrors } from '@/features/shared/lib/api-error'
-import { LOGIN_NOTICE_KEY } from '@/features/shared/lib/session-storage'
+import { FAILED_CONTACTS_KEY, LOGIN_NOTICE_KEY } from '@/features/shared/lib/session-storage'
 
 export function LoginPage() {
   const location = useLocation()
@@ -21,8 +25,16 @@ export function LoginPage() {
     Boolean((location.state as { pinLocked?: boolean } | null)?.pinLocked) ||
     sessionStorage.getItem(LOGIN_NOTICE_KEY) === 'pin-locked'
 
+  const [contactsNotice] = useState(() =>
+    parseContactsSaveNotice(sessionStorage.getItem(FAILED_CONTACTS_KEY)),
+  )
+  const contactsSaveNotice = failedContactsNotice(contactsNotice.failed, {
+    applied: contactsNotice.applied,
+    stoppedOnUnauthorized: contactsNotice.stoppedOnUnauthorized,
+  })
   useEffect(() => {
     if (pinLocked) sessionStorage.removeItem(LOGIN_NOTICE_KEY)
+    sessionStorage.removeItem(FAILED_CONTACTS_KEY)
   }, [pinLocked])
   const login = useLoginMutation()
   const form = useForm<LoginFormValues>({
@@ -51,6 +63,7 @@ export function LoginPage() {
             Demasiados intentos con la clave rápida. Entra con tu correo y contraseña.
           </Alert>
         ) : null}
+        {contactsSaveNotice ? <Alert>{contactsSaveNotice}</Alert> : null}
         {login.isError ? (
           <Alert>{getApiErrorMessage(login.error, 'No se pudo entrar.')}</Alert>
         ) : null}

@@ -13,7 +13,11 @@ Nunca se escribe correo, cédula, contraseña ni token en `console.*` (solo mét
 
 ## Cabeceras al publicar
 
-El HTML de producción lleva `Referrer-Policy: no-referrer` y un meta CSP estricto. **`frame-ancestors` solo funciona como cabecera HTTP del hosting; el meta del HTML no la aplica.** El resto de directivas sí van en el meta, y el hosting debe repetirlas como cabeceras:
+El HTML de producción lleva `Referrer-Policy: no-referrer` y un meta CSP estricto.
+
+**`frame-ancestors` hay que ponerla como cabecera HTTP en el host.** El navegador ignora esa directiva si llega en un `<meta http-equiv>`: el meta del build no bloquea iframes. El hosting (nginx, Cloudflare, Vercel headers, etc.) debe enviar `Content-Security-Policy` con `frame-ancestors 'none'`.
+
+El resto de directivas sí aplican desde el meta. El hosting debe repetirlas como cabeceras:
 
 ```
 Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' <origen-del-api-si-es-absoluto>; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

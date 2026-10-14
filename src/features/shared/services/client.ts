@@ -43,7 +43,12 @@ api.interceptors.response.use(
     if (apiError.status === 401 && apiError.message === 'selecciona un negocio') {
       window.dispatchEvent(new Event(SELECT_BUSINESS_EVENT))
     } else if (apiError.status === 401 && !isAuthAttempt) {
-      notifyUnauthorized()
+      const header = error.config?.headers?.Authorization
+      const sent = typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7) : null
+      const current = useSessionStore.getState().accessToken
+      if (!(sent && current && sent !== current)) {
+        queueMicrotask(() => notifyUnauthorized())
+      }
     }
 
     return Promise.reject(apiError)

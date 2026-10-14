@@ -12,7 +12,7 @@ export function toContactCreate(item: ContactDraft): ContactCreate {
     phone: item.phone,
     relationship: item.relationship,
     address: item.address ?? null,
-    doc_type: item.doc_type ?? null,
+    doc_type: item.doc_type || null,
     document: item.document ?? null,
   }
 }
@@ -28,18 +28,20 @@ export function toContactPatch(previous: ContactRead, next: ContactDraft): Conta
   if (next.name !== previous.name) patch.name = next.name
   if (next.phone !== previous.phone) patch.phone = next.phone
   if (next.relationship !== previous.relationship) patch.relationship = next.relationship
-  if (!sameText(next.address, previous.address)) {
+  if (next.address !== undefined && !sameText(next.address, previous.address)) {
     patch.address = next.address?.trim() ? next.address : null
   }
 
   const canSeeDocument = previous.document_available !== false
   if (canSeeDocument) {
-    if (!sameText(next.document, previous.document)) {
+    if (next.document !== undefined && !sameText(next.document, previous.document)) {
       patch.document = next.document?.trim() ? next.document : null
     }
-    const nextType = next.doc_type ?? null
-    const prevType = previous.doc_type ?? null
-    if (nextType !== prevType) patch.doc_type = nextType
+    if (next.doc_type !== undefined) {
+      const nextType = next.doc_type || null
+      const prevType = previous.doc_type ?? null
+      if (nextType !== prevType) patch.doc_type = nextType
+    }
   }
 
   return patch

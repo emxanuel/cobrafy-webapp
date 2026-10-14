@@ -33,7 +33,7 @@ export function ContactCard({
       phone: contact.phone,
       relationship: contact.relationship,
       address: contact.address ?? '',
-      doc_type: contact.doc_type ?? 'cedula',
+      doc_type: contact.doc_type ?? '',
       document: contact.document ?? '',
     },
   })
@@ -54,7 +54,10 @@ export function ContactCard({
             <Button
               variant="ghost"
               disabled={remove.isPending}
-              onClick={() => remove.mutate(contact.id)}
+              onClick={() => {
+                if (!window.confirm(`¿Quitar a ${contact.name} de esta ficha?`)) return
+                remove.mutate(contact.id)
+              }}
             >
               Quitar
             </Button>
@@ -75,7 +78,7 @@ export function ContactCard({
             phone: values.phone,
             relationship: values.relationship,
             address: values.address,
-            doc_type: values.doc_type,
+            doc_type: values.doc_type || null,
             document: values.document,
           })
           if (Object.keys(payload).length === 0) {
@@ -117,6 +120,7 @@ export function ContactCard({
           <>
             <Field id={`${contact.id}-doc-type`} label="Tipo de documento (opcional)">
               <SelectInput id={`${contact.id}-doc-type`} {...form.register('doc_type')}>
+                <option value="">Sin documento</option>
                 <option value="cedula">Cédula</option>
                 <option value="pasaporte">Pasaporte</option>
               </SelectInput>

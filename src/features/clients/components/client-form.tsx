@@ -51,7 +51,7 @@ function toSubmit(values: ClientFormValues): ClientFormSubmit {
       phone: item.phone,
       relationship: item.relationship,
       address: item.address || null,
-      doc_type: item.document ? item.doc_type || 'cedula' : null,
+      doc_type: item.doc_type === 'cedula' || item.doc_type === 'pasaporte' ? item.doc_type : null,
       document: item.document || null,
     })),
   }
@@ -75,7 +75,7 @@ function fromClient(client: ClientDetail): ClientFormValues {
         phone: item.phone,
         relationship: item.relationship,
         address: item.address ?? '',
-        doc_type: item.doc_type ?? 'cedula',
+        doc_type: item.doc_type ?? '',
         document: item.document ?? '',
       })),
   }
@@ -228,7 +228,7 @@ export function ClientForm({
                   phone: '',
                   relationship: '',
                   address: '',
-                  doc_type: 'cedula',
+                  doc_type: '',
                   document: '',
                 })
               }
@@ -244,7 +244,7 @@ export function ClientForm({
                   phone: '',
                   relationship: '',
                   address: '',
-                  doc_type: 'cedula',
+                  doc_type: '',
                   document: '',
                 })
               }
@@ -304,6 +304,7 @@ export function ClientForm({
                       id={`contacts.${index}.doc_type`}
                       {...form.register(`contacts.${index}.doc_type`)}
                     >
+                      <option value="">Sin documento</option>
                       <option value="cedula">Cédula</option>
                       <option value="pasaporte">Pasaporte</option>
                     </SelectInput>
@@ -320,7 +321,21 @@ export function ClientForm({
                   </Field>
                 </>
               ) : null}
-              <Button variant="ghost" onClick={() => contacts.remove(index)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  const name = form.getValues(`contacts.${index}.name`)
+                  if (
+                    !window.confirm(
+                      `¿Quitar a ${name.trim() || 'este contacto'} de esta ficha?`,
+                    )
+                  ) {
+                    return
+                  }
+                  contacts.remove(index)
+                }}
+              >
                 Quitar
               </Button>
             </fieldset>

@@ -1,9 +1,14 @@
+import { toClientPatch } from '@/features/clients/lib/client-patch'
 import {
   contactUnchanged,
   toContactCreate,
   toContactPatch,
 } from '@/features/clients/lib/contact-patch'
-import type { FailedContact } from '@/features/clients/lib/failed-contacts-notice'
+import {
+  persistContactsSaveNotice,
+  type ContactsSaveNotice,
+  type FailedContact,
+} from '@/features/clients/lib/failed-contacts-notice'
 import { isApiError } from '@/features/shared/lib/api-error'
 import { api } from '@/features/shared/services/client'
 import type {
@@ -138,6 +143,20 @@ export type CreateClientWithContactsResult = {
   failedContacts: number
   failedContactNames: string[]
   failed: FailedContact[]
+  applied: FailedContact[]
+  stoppedOnUnauthorized: boolean
+}
+
+function toCreateResult(client: ClientDetail, notice: ContactsSaveNotice): CreateClientWithContactsResult {
+  persistContactsSaveNotice(notice)
+  return {
+    client,
+    failedContacts: notice.failed.length,
+    failedContactNames: notice.failed.map((item) => item.name),
+    failed: notice.failed,
+    applied: notice.applied,
+    stoppedOnUnauthorized: notice.stoppedOnUnauthorized,
+  }
 }
 
 function isUnauthorized(error: unknown) {
@@ -148,19 +167,27 @@ export async function saveContactsDiff(
   clientId: string,
   previous: ContactRead[],
   next: ContactDraft[],
-): Promise<FailedContact[]> {
+): Promise<ContactsSaveNotice> {
   const prevActive = previous.filter((item) => item.is_active)
   const prevById = new Map(prevActive.map((item) => [item.id, item]))
   const keptIds = new Set(next.map((item) => item.id).filter((id): id is string => Boolean(id)))
   const failed: FailedContact[] = []
+  const applied: FailedContact[] = []
+  let stoppedOnUnauthorized = false
 
-  async function run(op: () => Promise<unknown>, fail: FailedContact): Promise<'stop' | 'continue'> {
+  async function run(op: () => Promise<unknown>, row: FailedContact): Promise<'stop' | 'continue'> {
     try {
       await op()
+      applied.push(row)
       return 'continue'
     } catch (error) {
-      failed.push(fail)
-      return isUnauthorized(error) ? 'stop' : 'continue'
+      failed.push(row)
+      if (isUnauthorized(error)) {
+        stoppedOnUnauthorized = true
+        persistContactsSaveNotice({ failed, applied, stoppedOnUnauthorized })
+        return 'stop'
+      }
+      return 'continue'
     }
   }
 
@@ -170,7 +197,7 @@ export async function saveContactsDiff(
       () => deleteContact(clientId, item.id),
       { name: item.name, op: 'remove' },
     )
-    if (outcome === 'stop') return failed
+    if (outcome === 'stop') return { failed, applied, stoppedOnUnauthorized }
   }
 
   const toCreate: ContactDraft[] = []
@@ -190,7 +217,7 @@ export async function saveContactsDiff(
       () => updateContact(clientId, existing.id, toContactPatch(existing, item)),
       { name: label, op: 'edit' },
     )
-    if (outcome === 'stop') return failed
+    if (outcome === 'stop') return { failed, applied, stoppedOnUnauthorized }
   }
 
   for (const item of toCreate) {
@@ -199,10 +226,10 @@ export async function saveContactsDiff(
       () => createContact(clientId, toContactCreate(item)),
       { name: label, op: 'add' },
     )
-    if (outcome === 'stop') return failed
+    if (outcome === 'stop') return { failed, applied, stoppedOnUnauthorized }
   }
 
-  return failed
+  return { failed, applied, stoppedOnUnauthorized }
 }
 
 async function reloadClient(created: ClientRead): Promise<ClientDetail> {
@@ -218,29 +245,24 @@ export async function createClientWithContacts(
   contacts: ContactCreate[],
 ): Promise<CreateClientWithContactsResult> {
   const created = await createClient(payload)
-  const failed = await saveContactsDiff(created.id, [], contacts)
+  const notice = await saveContactsDiff(created.id, [], contacts)
   const client = await reloadClient(created)
-  return {
-    client,
-    failedContacts: failed.length,
-    failedContactNames: failed.map((item) => item.name),
-    failed,
-  }
+  return toCreateResult(client, notice)
 }
 
 export async function updateClientWithContacts(
   clientId: string,
-  payload: ClientUpdate,
+  payload: ClientCreate,
   previousContacts: ContactRead[],
   contacts: ContactDraft[],
+  previousClient: ClientRead,
 ): Promise<CreateClientWithContactsResult> {
-  const saved = await updateClient(clientId, payload)
-  const failed = await saveContactsDiff(clientId, previousContacts, contacts)
+  const patch = toClientPatch(previousClient, payload)
+  const saved =
+    Object.keys(patch).length > 0
+      ? await updateClient(clientId, patch)
+      : previousClient
+  const notice = await saveContactsDiff(clientId, previousContacts, contacts)
   const client = await reloadClient(saved)
-  return {
-    client,
-    failedContacts: failed.length,
-    failedContactNames: failed.map((item) => item.name),
-    failed,
-  }
+  return toCreateResult(client, notice)
 }

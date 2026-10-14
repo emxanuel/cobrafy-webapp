@@ -54,6 +54,19 @@ describe('toApiError', () => {
     expect(isPinLockedError(new ApiError(PIN_LOCKED_DETAIL, 403))).toBe(false)
   })
 
+  it('aclara el 502 invite_email_failed', () => {
+    const error = toApiError(
+      axiosError(502, {
+        code: 'invite_email_failed',
+        detail: 'smtp timeout',
+      }),
+    )
+    expect(error.code).toBe('invite_email_failed')
+    expect(error.message).toBe(
+      'No se pudo enviar el correo de invitación; puedes reenviarla.',
+    )
+  })
+
   it('deja los 409 de bloqueo como mensaje, no como campo', () => {
     const blocked = toApiError(axiosError(409, { detail: 'el cliente ya está bloqueado' }))
     expect(blocked.fieldErrors).toEqual({})

@@ -34,6 +34,8 @@ export const checkRequests: Array<{ method: string; url: string; body: unknown }
 export const clientDetailRequests: Array<{ id: string; token: string }> = []
 export const logoutRequests: Array<{ token: string | null }> = []
 export const contactWrites: Array<{ method: string; url: string; body: unknown }> = []
+export const clientWrites: Array<{ method: string; url: string; body: unknown }> = []
+const revokedTokens = new Set<string>()
 
 const MAX_PIN_ATTEMPTS = 5
 const PIN_LOCKED = 'demasiados intentos; entra con contraseña'
@@ -60,18 +62,26 @@ export function resetData() {
   clientDetailRequests.length = 0
   logoutRequests.length = 0
   contactWrites.length = 0
+  clientWrites.length = 0
+  revokedTokens.clear()
 }
 
 function bearer(request: Request) {
   return request.headers.get('Authorization')
 }
 
+function tokenValue(request: Request) {
+  const header = bearer(request)
+  if (!header?.startsWith('Bearer ')) return null
+  return header.slice('Bearer '.length)
+}
+
 function requireAuth(request: Request) {
-  const token = bearer(request)
-  if (!token?.startsWith('Bearer ')) {
+  const token = tokenValue(request)
+  if (!token) {
     return HttpResponse.json({ detail: 'no autenticado' }, { status: 401 })
   }
-  if (token.includes('revoked') || token.includes('expired')) {
+  if (revokedTokens.has(token) || token.includes('revoked') || token.includes('expired')) {
     return HttpResponse.json({ detail: 'no autenticado' }, { status: 401 })
   }
   return null
@@ -194,6 +204,8 @@ export const handlers = [
   http.post('*/auth/select-business', async ({ request }) => {
     const denied = requireAuth(request)
     if (denied) return denied
+    const previous = tokenValue(request)
+    if (previous) revokedTokens.add(previous)
     const body = (await request.json()) as { business_id?: string }
     const biz =
       body.business_id === businesses.sur.id ? businesses.sur : businesses.norte
@@ -547,6 +559,7 @@ export const handlers = [
       )
     }
     const id = String(params.id)
+    clientWrites.push({ method: request.method, url: request.url, body: payload })
     const current = clients.get(id) ?? clientFixture({ id })
     const saved: ClientDetail = {
       ...current,

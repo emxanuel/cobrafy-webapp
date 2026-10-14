@@ -70,11 +70,25 @@ export function toApiError(error: unknown): ApiError {
   const body = (error.response?.data ?? {}) as ErrorBody
   const fieldErrors = parseFieldErrors(body, status)
   const message = parseMessage(body, status)
-  const code = typeof body.code === 'string' ? body.code : undefined
+  const code = errorCode(body)
   return new ApiError(message, status, fieldErrors, code)
 }
 
+const INVITE_EMAIL_FAILED = 'No se pudo enviar el correo de invitación; puedes reenviarla.'
+
+function errorCode(body: ErrorBody): string | undefined {
+  if (typeof body.code === 'string') return body.code
+  if (body.detail && typeof body.detail === 'object' && !Array.isArray(body.detail)) {
+    const nested = body.detail as { code?: unknown }
+    if (typeof nested.code === 'string') return nested.code
+  }
+  return undefined
+}
+
 function parseMessage(body: ErrorBody, status: number): string {
+  if (errorCode(body) === 'invite_email_failed') {
+    return INVITE_EMAIL_FAILED
+  }
   if (typeof body.message === 'string' && body.message.trim()) {
     return body.message
   }

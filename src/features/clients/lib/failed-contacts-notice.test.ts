@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { failedContactsNotice, parseFailedContacts } from './failed-contacts-notice'
+import { failedContactsNotice, parseContactsSaveNotice } from './failed-contacts-notice'
 
 describe('failedContactsNotice', () => {
   it('distingue quitar, editar y agregar', () => {
@@ -15,17 +15,52 @@ describe('failedContactsNotice', () => {
     )
   })
 
-  it('parsea solo contactos con operación conocida', () => {
+  it('en un 401 nombra lo que ya se aplicó', () => {
+    const message = failedContactsNotice([{ name: 'Ana', op: 'remove' }], {
+      applied: [{ name: 'Luis', op: 'remove' }],
+      stoppedOnUnauthorized: true,
+    })
+    expect(message).toContain('Se quitó a Luis')
+    expect(message).toContain('No se pudo quitar a Ana')
+    expect(message).toContain('Tu sesión caducó')
+  })
+
+  it('parsea avisos con applied y el formato viejo', () => {
     expect(
-      parseFailedContacts(
+      parseContactsSaveNotice(
+        JSON.stringify({
+          failed: [{ name: 'Ana', op: 'edit' }],
+          applied: [{ name: 'Luis', op: 'remove' }],
+          stoppedOnUnauthorized: true,
+        }),
+      ),
+    ).toEqual({
+      failed: [{ name: 'Ana', op: 'edit' }],
+      applied: [{ name: 'Luis', op: 'remove' }],
+      stoppedOnUnauthorized: true,
+    })
+    expect(
+      parseContactsSaveNotice(
         JSON.stringify([
           { name: 'Pedro Gómez', op: 'add' },
           { name: 'sin-op' },
           'Pedro Gómez',
         ]),
       ),
-    ).toEqual([{ name: 'Pedro Gómez', op: 'add' }])
-    expect(parseFailedContacts('no-json')).toEqual([])
-    expect(parseFailedContacts(null)).toEqual([])
+    ).toEqual({
+      failed: [{ name: 'Pedro Gómez', op: 'add' }],
+      applied: [],
+      stoppedOnUnauthorized: false,
+    })
+    expect(parseContactsSaveNotice('no-json')).toEqual({
+      failed: [],
+      applied: [],
+      stoppedOnUnauthorized: false,
+    })
+    expect(parseContactsSaveNotice(null)).toEqual({
+      failed: [],
+      applied: [],
+      stoppedOnUnauthorized: false,
+    })
   })
 })

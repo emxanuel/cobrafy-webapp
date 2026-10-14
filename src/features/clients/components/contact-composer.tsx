@@ -16,7 +16,7 @@ type ComposerValues = {
   phone: string
   relationship: string
   address?: string
-  doc_type?: 'cedula' | 'pasaporte'
+  doc_type?: 'cedula' | 'pasaporte' | ''
   document?: string
 }
 
@@ -32,7 +32,7 @@ export function ContactComposer({ clientId }: { clientId: string }) {
       phone: '',
       relationship: '',
       address: '',
-      doc_type: 'cedula',
+      doc_type: '',
       document: '',
     },
   })
@@ -51,7 +51,7 @@ export function ContactComposer({ clientId }: { clientId: string }) {
               phone: '',
               relationship: '',
               address: '',
-              doc_type: 'cedula',
+              doc_type: '',
               document: '',
             })
             setOpen(true)
@@ -69,7 +69,7 @@ export function ContactComposer({ clientId }: { clientId: string }) {
               phone: '',
               relationship: '',
               address: '',
-              doc_type: 'cedula',
+              doc_type: '',
               document: '',
             })
             setOpen(true)
@@ -92,7 +92,7 @@ export function ContactComposer({ clientId }: { clientId: string }) {
             phone: values.phone,
             relationship: values.relationship,
             address: values.address || null,
-            doc_type: values.document ? values.doc_type || 'cedula' : null,
+            doc_type: values.doc_type === 'cedula' || values.doc_type === 'pasaporte' ? values.doc_type : null,
             document: values.document || null,
           },
           { onSuccess: () => setOpen(false) },
@@ -117,6 +117,7 @@ export function ContactComposer({ clientId }: { clientId: string }) {
         <>
           <Field id="new-contact-doc-type" label="Tipo de documento (opcional)">
             <SelectInput id="new-contact-doc-type" {...form.register('doc_type')}>
+              <option value="">Sin documento</option>
               <option value="cedula">Cédula</option>
               <option value="pasaporte">Pasaporte</option>
             </SelectInput>
@@ -130,7 +131,7 @@ export function ContactComposer({ clientId }: { clientId: string }) {
         <Button type="submit" disabled={create.isPending}>
           {create.isPending ? 'Guardando…' : 'Guardar contacto'}
         </Button>
-        <Button variant="ghost" onClick={() => setOpen(false)}>
+        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
           Cancelar
         </Button>
       </div>

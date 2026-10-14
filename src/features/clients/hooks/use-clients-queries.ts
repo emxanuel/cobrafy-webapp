@@ -20,7 +20,7 @@ import type {
   ClientCheckRequest,
   ClientCreate,
   ClientHistory,
-  ClientUpdate,
+  ClientRead,
   ContactCreate,
   ContactDraft,
   ContactRead,
@@ -91,11 +91,20 @@ export function useUpdateClientMutation(clientId: string) {
       client,
       contacts,
       previousContacts,
+      previousClient,
     }: {
-      client: ClientUpdate
+      client: ClientCreate
       contacts: ContactDraft[]
       previousContacts: ContactRead[]
-    }) => updateClientWithContacts(clientId, client, previousContacts, contacts),
+      previousClient: ClientRead
+    }) =>
+      updateClientWithContacts(
+        clientId,
+        client,
+        previousContacts,
+        contacts,
+        previousClient,
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: clientKeys.all })
     },

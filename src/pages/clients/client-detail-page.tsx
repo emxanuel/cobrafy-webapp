@@ -17,7 +17,7 @@ import { ContactCard } from '@/features/clients/components/contact-card'
 import { ContactComposer } from '@/features/clients/components/contact-composer'
 import {
   failedContactsNotice,
-  parseFailedContacts,
+  parseContactsSaveNotice,
 } from '@/features/clients/lib/failed-contacts-notice'
 import { blockSchema, type BlockFormValues } from '@/features/clients/schemas'
 import { PageHeader } from '@/features/shared/components/page-header'
@@ -34,13 +34,16 @@ import {
 
 export function ClientDetailPage() {
   const { clientId = '' } = useParams()
-  const [failedContacts] = useState(() =>
-    parseFailedContacts(sessionStorage.getItem(FAILED_CONTACTS_KEY)),
+  const [contactsNotice] = useState(() =>
+    parseContactsSaveNotice(sessionStorage.getItem(FAILED_CONTACTS_KEY)),
   )
   useEffect(() => {
     sessionStorage.removeItem(FAILED_CONTACTS_KEY)
   }, [])
-  const failedNotice = failedContactsNotice(failedContacts)
+  const failedNotice = failedContactsNotice(contactsNotice.failed, {
+    applied: contactsNotice.applied,
+    stoppedOnUnauthorized: contactsNotice.stoppedOnUnauthorized,
+  })
   const clientQuery = useClient(clientId)
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)

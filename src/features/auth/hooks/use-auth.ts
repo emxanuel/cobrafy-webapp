@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { flushSync } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router'
 
 import {
@@ -47,10 +48,12 @@ export function useLoginMutation() {
 export function useSelectBusinessMutation() {
   const navigate = useNavigate()
   return useMutation({
-    mutationFn: (businessId: string) => switchBusiness(queryClient, businessId),
-    onSuccess: () => {
-      navigate('/clientes', { replace: true })
-    },
+    mutationFn: (businessId: string) =>
+      switchBusiness(queryClient, businessId, () => {
+        flushSync(() => {
+          navigate('/clientes', { replace: true })
+        })
+      }),
   })
 }
 

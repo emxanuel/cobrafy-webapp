@@ -14,8 +14,6 @@ import { ClientForm } from '@/features/clients/components/client-form'
 import { useMembersQuery } from '@/features/members/hooks/use-members-queries'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
-import type { FailedContact } from '@/features/clients/lib/failed-contacts-notice'
-import { FAILED_CONTACTS_KEY } from '@/features/shared/lib/session-storage'
 import { canManageMembers } from '@/features/shared/lib/roles'
 
 export function ClientFormPage() {
@@ -56,29 +54,23 @@ export function ClientFormPage() {
         error={error}
         submitLabel={isEdit ? 'Guardar cambios' : 'Guardar cliente'}
         onSubmit={(payload) => {
-          function goToClient(savedId: string, failed: FailedContact[]) {
-            if (failed.length > 0) {
-              sessionStorage.setItem(FAILED_CONTACTS_KEY, JSON.stringify(failed))
-            } else {
-              sessionStorage.removeItem(FAILED_CONTACTS_KEY)
-            }
-            navigate(`/clientes/${savedId}`)
-          }
           if (isEdit && clientId) {
+            if (!existing.data) return
             update.mutate(
               {
                 client: payload.client,
                 contacts: payload.contacts,
-                previousContacts: existing.data?.contacts ?? [],
+                previousContacts: existing.data.contacts,
+                previousClient: existing.data,
               },
               {
-                onSuccess: (result) => goToClient(result.client.id, result.failed),
+                onSuccess: (result) => navigate(`/clientes/${result.client.id}`),
               },
             )
             return
           }
           create.mutate(payload, {
-            onSuccess: (result) => goToClient(result.client.id, result.failed),
+            onSuccess: (result) => navigate(`/clientes/${result.client.id}`),
           })
         }}
       />

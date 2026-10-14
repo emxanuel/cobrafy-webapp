@@ -81,6 +81,27 @@ describe('CBF-110 aceptación', () => {
     await user.click(screen.getByRole('button', { name: /Créditos Sur/ }))
     expect(clear).toHaveBeenCalled()
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Entra a tu negocio' })).not.toBeInTheDocument()
+  })
+
+  it('cambiar de negocio desde el menú no cierra la sesión aunque el token viejo ya no sirva', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await loginAs(users.multi.email)
+    await user.click(await screen.findByRole('button', { name: /Créditos Norte/ }))
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    cleanup()
+    window.history.pushState({}, '', '/clientes/cli-1')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Menú' }))
+    await user.click(screen.getByRole('button', { name: /Créditos Sur/ }))
+
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Entra a tu negocio' })).not.toBeInTheDocument()
+    expect(window.location.pathname).toBe('/clientes')
+    expect(screen.getByText('Créditos Sur')).toBeInTheDocument()
   })
 
   it('el menú oculta opciones que el rol no puede usar y un 403 se muestra con calma', async () => {
