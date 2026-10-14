@@ -6,6 +6,7 @@ import {
   canCreateClients,
   canEditClients,
   canManageMembers,
+  canViewAudit,
 } from '@/features/shared/lib/roles'
 import { AppLayout } from '@/features/shared/components/app-layout'
 import { SELECT_BUSINESS_EVENT } from '@/features/shared/services/client'
@@ -54,6 +55,18 @@ const MembersPage = lazy(async () => {
   const mod = await import('@/pages/members/members-page')
   return { default: mod.MembersPage }
 })
+const AuditPage = lazy(async () => {
+  const mod = await import('@/pages/audit/audit-page')
+  return { default: mod.AuditPage }
+})
+const CheckPage = lazy(async () => {
+  const mod = await import('@/pages/clients/check-page')
+  return { default: mod.CheckPage }
+})
+const AuditUnauthorized = lazy(async () => {
+  const mod = await import('@/pages/audit/audit-unauthorized')
+  return { default: mod.AuditUnauthorized }
+})
 
 function SessionListeners() {
   const navigate = useNavigate()
@@ -91,6 +104,7 @@ export function Router() {
             <Route path="/negocios" element={<BusinessSelectorPage />} />
             <Route element={<AppLayout />}>
               <Route path="/clientes" element={<ClientsListPage />} />
+              <Route path="/verificar" element={<CheckPage />} />
               <Route element={<RoleGuard allow={canCreateClients} />}>
                 <Route path="/clientes/nuevo" element={<ClientFormPage />} />
               </Route>
@@ -101,6 +115,11 @@ export function Router() {
               <Route path="/clientes/:clientId/historial" element={<ClientHistoryPage />} />
               <Route element={<RoleGuard allow={canManageMembers} />}>
                 <Route path="/equipo" element={<MembersPage />} />
+              </Route>
+              <Route
+                element={<RoleGuard allow={canViewAudit} unauthorized={<AuditUnauthorized />} />}
+              >
+                <Route path="/auditoria" element={<AuditPage />} />
               </Route>
               <Route path="/clave-rapida" element={<PinSetupPage />} />
             </Route>

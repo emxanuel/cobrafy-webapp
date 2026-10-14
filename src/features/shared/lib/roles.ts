@@ -29,3 +29,7 @@ export function canCreateClients(role: Role | null): boolean {
 export function canSeeHistoryActor(role: Role | null): boolean {
   return role === 'dueño' || role === 'cajero'
 }
+
+export function canViewAudit(role: Role | null): boolean {
+  return role === 'dueño'
+}

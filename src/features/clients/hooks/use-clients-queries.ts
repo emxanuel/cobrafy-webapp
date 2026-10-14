@@ -137,6 +137,28 @@ export function useCheckClientMutation() {
   })
 }
 
+export function useVerifyClientMutation() {
+  return useMutation({
+    mutationFn: async (payload: ClientCheckRequest) => {
+      const check = await checkClient(payload)
+      if (!check.found || !check.client_id) {
+        return { check, client: null, blockedAt: null as string | null }
+      }
+      const client = await getClient(check.client_id)
+      let blockedAt: string | null = null
+      if (check.is_blocked) {
+        try {
+          const page = await getClientHistory(check.client_id, { limit: 20 })
+          blockedAt = page.events.find((event) => event.type === 'blocked')?.occurred_at ?? null
+        } catch {
+          blockedAt = null
+        }
+      }
+      return { check, client, blockedAt }
+    },
+  })
+}
+
 export function useCreateContactMutation(clientId: string) {
   const queryClient = useQueryClient()
   return useMutation({

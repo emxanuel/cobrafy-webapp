@@ -13,7 +13,7 @@ import { Button } from '@/features/shared/components/ui/button'
 import { Ticks } from '@/features/shared/components/ticks'
 import { cn } from '@/features/shared/lib/cn'
 import { getApiErrorMessage } from '@/features/shared/lib/api-error'
-import { canManageMembers, ROLE_LABEL } from '@/features/shared/lib/roles'
+import { canManageMembers, canViewAudit, ROLE_LABEL } from '@/features/shared/lib/roles'
 
 function navClass({ isActive }: { isActive: boolean }) {
   return cn(
@@ -70,9 +70,17 @@ export function AppLayout() {
             <NavLink to="/clientes" className={navClass} onClick={close}>
               Clientes
             </NavLink>
+            <NavLink to="/verificar" className={navClass} onClick={close}>
+              Verificar bloqueo
+            </NavLink>
             {canManageMembers(role) ? (
               <NavLink to="/equipo" className={navClass} onClick={close}>
                 Equipo
+              </NavLink>
+            ) : null}
+            {canViewAudit(role) ? (
+              <NavLink to="/auditoria" className={navClass} onClick={close}>
+                Bitácora
               </NavLink>
             ) : null}
             <NavLink to="/clave-rapida" className={navClass} onClick={close}>

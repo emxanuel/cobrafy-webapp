@@ -34,14 +34,22 @@ export function ClientsListPage() {
         title="Clientes"
         description="Busca por nombre o documento. El documento nunca va en la dirección de la página."
         action={
-          canCreateClients(role) ? (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Link
-              to="/clientes/nuevo"
-              className={cn(buttonVariants({ variant: 'primary' }), 'w-full no-underline sm:w-auto')}
+              to="/verificar"
+              className={cn(buttonVariants({ variant: 'outline' }), 'w-full no-underline sm:w-auto')}
             >
-              Nuevo cliente
+              Verificar bloqueo
             </Link>
-          ) : null
+            {canCreateClients(role) ? (
+              <Link
+                to="/clientes/nuevo"
+                className={cn(buttonVariants({ variant: 'primary' }), 'w-full no-underline sm:w-auto')}
+              >
+                Nuevo cliente
+              </Link>
+            ) : null}
+          </div>
         }
       />
 

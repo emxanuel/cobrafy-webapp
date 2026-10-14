@@ -6,6 +6,7 @@ export type MemberRead = {
   email: string
   role: Role
   is_active: boolean
+  user_id?: string
 }
 
 export type MemberInviteRead = {

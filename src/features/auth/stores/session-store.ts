@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 
+import { setSwitchingFromToken } from '@/features/auth/lib/switching-token'
 import type {
   AuthResponse,
   BusinessSummary,
@@ -66,6 +67,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   locked: false,
   hydrated: false,
   applyAuth: (payload, options) => {
+    setSwitchingFromToken(null)
     const activeId = payload.active_business?.id ?? null
     const hasPin = activeHasPin(payload.memberships, activeId)
     const next = {
@@ -127,6 +129,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     })
   },
   clearSession: () => {
+    setSwitchingFromToken(null)
     removeKey(SESSION_KEY)
     useBusinessStore.getState().clear()
     set({

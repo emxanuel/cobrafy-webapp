@@ -50,6 +50,7 @@ export default defineConfig(({ mode }) => {
         '/clients': { target: proxyTarget, changeOrigin: true },
         '/users': { target: proxyTarget, changeOrigin: true },
         '/invitations': { target: proxyTarget, changeOrigin: true },
+        '/audit': { target: proxyTarget, changeOrigin: true },
       },
     },
     test: {

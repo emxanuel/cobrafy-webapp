@@ -36,6 +36,7 @@ export const logoutRequests: Array<{ token: string | null }> = []
 export const contactWrites: Array<{ method: string; url: string; body: unknown }> = []
 export const clientWrites: Array<{ method: string; url: string; body: unknown }> = []
 export const memberWrites: Array<{ method: string; url: string; body: unknown }> = []
+export const auditRequests: Array<{ method: string; url: string }> = []
 const revokedTokens = new Set<string>()
 
 const MAX_PIN_ATTEMPTS = 5
@@ -73,6 +74,7 @@ export function resetData() {
   contactWrites.length = 0
   clientWrites.length = 0
   memberWrites.length = 0
+  auditRequests.length = 0
   revokedTokens.clear()
 }
 
@@ -151,6 +153,104 @@ function sessionForToken(token: string) {
     memberships: [membership(users.cashier, businesses.norte, 'cajero')],
     token,
   })
+}
+
+function buildAuditEvents() {
+  const base = {
+    business_id: businesses.norte.id,
+    ip: '127.0.0.1',
+    user_agent: 'vitest',
+  }
+  const events: Array<{
+    id: string
+    business_id: string
+    user_id: string
+    membership_id: string
+    action: string
+    entity: string
+    entity_id: string
+    before: Record<string, unknown> | null
+    after: Record<string, unknown> | null
+    ip: string
+    user_agent: string
+    created_at: string
+  }> = [
+    {
+      ...base,
+      id: 'aud-1',
+      user_id: users.owner.id,
+      membership_id: ownerMember.id,
+      action: 'block',
+      entity: 'client',
+      entity_id: 'cli-1',
+      before: { status: 'active', blocked_reason: null },
+      after: { status: 'blocked', blocked_reason: 'Atraso de 3 cuotas' },
+      created_at: '2026-10-14T12:41:00.000Z',
+    },
+    {
+      ...base,
+      id: 'aud-2',
+      user_id: users.cashier.id,
+      membership_id: cashierMember.id,
+      action: 'update',
+      entity: 'client',
+      entity_id: 'cli-1',
+      before: { document: '001-1234567-8', phone: '809-555-0101' },
+      after: { document: '001-7654321-0', phone: '809-555-0199' },
+      created_at: '2026-10-13T20:10:00.000Z',
+    },
+    {
+      ...base,
+      id: 'aud-3',
+      user_id: users.owner.id,
+      membership_id: ownerMember.id,
+      action: 'update',
+      entity: 'client',
+      entity_id: 'cli-1',
+      before: { collector_membership_id: collectorMember.id },
+      after: { collector_membership_id: 'mem-rosa' },
+      created_at: '2026-10-12T13:02:00.000Z',
+    },
+    {
+      ...base,
+      id: 'aud-4',
+      user_id: users.owner.id,
+      membership_id: ownerMember.id,
+      action: 'create',
+      entity: 'contact',
+      entity_id: 'ct-1',
+      before: null,
+      after: { name: 'Pedro Gómez', phone: '8095552222' },
+      created_at: '2026-10-11T15:00:00.000Z',
+    },
+    {
+      ...base,
+      id: 'aud-5',
+      user_id: users.owner.id,
+      membership_id: ownerMember.id,
+      action: 'update',
+      entity: 'business',
+      entity_id: businesses.norte.id,
+      before: { phone: null },
+      after: { phone: '8095550000' },
+      created_at: '2026-10-10T15:00:00.000Z',
+    },
+  ]
+  for (let index = 6; index <= 25; index += 1) {
+    events.push({
+      ...base,
+      id: `aud-${index}`,
+      user_id: users.cashier.id,
+      membership_id: cashierMember.id,
+      action: 'update',
+      entity: 'client',
+      entity_id: 'cli-1',
+      before: { notes: `antes ${index}` },
+      after: { notes: `después ${index}` },
+      created_at: `2026-09-${String(Math.max(1, 30 - index)).padStart(2, '0')}T12:00:00.000Z`,
+    })
+  }
+  return events
 }
 
 function visibleForBusiness(item: ClientDetail, biz: string) {
@@ -367,24 +467,46 @@ export const handlers = [
     if (denied) return denied
     const body = (await request.json()) as ClientCheckRequest
     checkRequests.push({ method: request.method, url: request.url, body })
-    const found = [...clients.values()].some(
-      (item) => item.document === body.document && item.doc_type === body.doc_type,
-    )
+    const normalized = body.document.replace(/[\s-]/g, '')
+    const found = [...clients.values()].find((item) => {
+      const itemDoc = (item.document ?? '').replace(/[\s-]/g, '')
+      return itemDoc === normalized && item.doc_type === body.doc_type
+    })
+    if (normalized === '00188888888' && body.doc_type === 'cedula') {
+      return HttpResponse.json({
+        found: true,
+        is_blocked: true,
+        blocked_reason: 'Atraso de 3 cuotas',
+        client_id: 'cli-blocked',
+      })
+    }
+    if (normalized === '00112345678' && body.doc_type === 'cedula') {
+      return HttpResponse.json({
+        found: true,
+        is_blocked: false,
+        blocked_reason: null,
+        client_id: 'cli-1',
+      })
+    }
     const duplicate = body.document === 'duplicado' || body.document === '001-0000000-0'
     return HttpResponse.json({
-      found: found || duplicate,
-      is_blocked: false,
-      blocked_reason: null,
-      client_id: found || duplicate ? 'cli-dup' : null,
+      found: Boolean(found) || duplicate,
+      is_blocked: found?.is_blocked ?? false,
+      blocked_reason: found?.blocked_reason ?? null,
+      client_id: found?.id ?? (duplicate ? 'cli-dup' : null),
     })
   }),
 
-  http.get('*/clients/:id/history', ({ request }) => {
+  http.get('*/clients/:id/history', ({ request, params }) => {
     const denied = requireAuth(request)
     if (denied) return denied
     const url = new URL(request.url)
     if (![...url.searchParams.keys()].every((key) => key === 'limit' || key === 'before')) {
       return HttpResponse.json({ detail: 'parámetro de consulta no permitido' }, { status: 422 })
+    }
+    const id = String(params.id)
+    if (id === 'cli-missing') {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
     }
     const before = url.searchParams.get('before')
     const empty = {
@@ -392,6 +514,9 @@ export const handlers = [
       payments: [],
       overdue: [],
       follow_ups: [],
+    }
+    if (id === 'cli-empty-history') {
+      return HttpResponse.json({ ...empty, events: [], next_cursor: null })
     }
     if (!before) {
       return HttpResponse.json({
@@ -532,11 +657,15 @@ export const handlers = [
     if (denied) return denied
     const id = String(params.id)
     clientDetailRequests.push({ id, token: bearer(request) ?? '' })
+    if (id === 'cli-missing') {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
     if (id === 'cli-blocked') {
       return HttpResponse.json(
         clientFixture({
           id,
           name: 'Luis Bloqueado',
+          document: '001-8888888-8',
           status: 'blocked',
           is_blocked: true,
           blocked_reason: 'No paga',
@@ -723,6 +852,36 @@ export const handlers = [
       total: items.length,
       page: Number(url.searchParams.get('page') ?? 1),
       page_size: Number(url.searchParams.get('page_size') ?? 50),
+    })
+  }),
+
+  http.get('*/audit', ({ request }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    if (roleFromToken(bearer(request)) !== 'dueño') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    auditRequests.push({ method: request.method, url: request.url })
+    const url = new URL(request.url)
+    const entity = url.searchParams.get('entity')
+    const userId = url.searchParams.get('user_id')
+    const since = url.searchParams.get('from')
+    const until = url.searchParams.get('to')
+    const page = Number(url.searchParams.get('page') ?? 1)
+    const pageSize = Number(url.searchParams.get('page_size') ?? 20)
+    const items = buildAuditEvents().filter((item) => {
+      if (entity && item.entity !== entity) return false
+      if (userId && item.user_id !== userId && item.membership_id !== userId) return false
+      if (since && item.created_at < since) return false
+      if (until && item.created_at > until) return false
+      return true
+    })
+    const start = (page - 1) * pageSize
+    return HttpResponse.json({
+      items: items.slice(start, start + pageSize),
+      total: items.length,
+      page,
+      page_size: pageSize,
     })
   }),
 

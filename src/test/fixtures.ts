@@ -121,6 +121,7 @@ export const collectorMember: MemberRead = {
   email: users.collector.email,
   role: 'cobrador',
   is_active: true,
+  user_id: users.collector.id,
 }
 
 export const ownerMember: MemberRead = {
@@ -129,6 +130,7 @@ export const ownerMember: MemberRead = {
   email: users.owner.email,
   role: 'dueño',
   is_active: true,
+  user_id: users.owner.id,
 }
 
 export const cashierMember: MemberRead = {
@@ -137,6 +139,7 @@ export const cashierMember: MemberRead = {
   email: users.cashier.email,
   role: 'cajero',
   is_active: true,
+  user_id: users.cashier.id,
 }
 
 export function clientFixture(overrides: Partial<ClientDetail> = {}): ClientDetail {
