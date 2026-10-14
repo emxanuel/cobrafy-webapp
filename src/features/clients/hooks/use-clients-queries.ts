@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 
 import { useSwitchingFromToken } from '@/features/auth/lib/switching-token'
 import { useBusinessStore } from '@/features/business/stores/business-store'
@@ -54,20 +55,30 @@ export function useClientSearch(query: string, status: 'active' | 'blocked' | ''
 export function useClient(clientId: string | undefined) {
   const businessId = useBusinessStore((s) => s.activeBusinessId)
   const switchingFrom = useSwitchingFromToken()
+  const [openedForBusiness] = useState(businessId)
   return useQuery({
     queryKey: clientKeys.detail(businessId, clientId ?? ''),
     queryFn: () => getClient(clientId!),
-    enabled: Boolean(clientId) && Boolean(businessId) && !switchingFrom,
+    enabled:
+      Boolean(clientId) &&
+      Boolean(businessId) &&
+      !switchingFrom &&
+      openedForBusiness === businessId,
   })
 }
 
 export function useClientHistory(clientId: string | undefined) {
   const businessId = useBusinessStore((s) => s.activeBusinessId)
   const switchingFrom = useSwitchingFromToken()
+  const [openedForBusiness] = useState(businessId)
   return useQuery({
     queryKey: clientKeys.history(businessId, clientId ?? ''),
     queryFn: () => getClientHistory(clientId!, { limit: 20 }),
-    enabled: Boolean(clientId) && Boolean(businessId) && !switchingFrom,
+    enabled:
+      Boolean(clientId) &&
+      Boolean(businessId) &&
+      !switchingFrom &&
+      openedForBusiness === businessId,
   })
 }
 

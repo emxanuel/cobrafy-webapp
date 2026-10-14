@@ -67,7 +67,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   locked: false,
   hydrated: false,
   applyAuth: (payload, options) => {
-    setSwitchingFromToken(null)
     const activeId = payload.active_business?.id ?? null
     const hasPin = activeHasPin(payload.memberships, activeId)
     const next = {
