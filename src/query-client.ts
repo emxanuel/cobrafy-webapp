@@ -22,3 +22,8 @@ export function createAppQueryClient() {
 }
 
 export const queryClient = createAppQueryClient()
+
+export async function resetQueryCache(client: QueryClient = queryClient) {
+  await client.cancelQueries()
+  client.clear()
+}

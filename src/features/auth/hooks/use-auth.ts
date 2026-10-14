@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 
 import {
   acceptInvitation,
@@ -9,6 +9,7 @@ import {
   setupPin,
   unlockPin,
 } from '@/features/auth/services/requests'
+import { safeInternalPath } from '@/features/auth/lib/safe-internal-path'
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import { switchBusiness } from '@/features/business/lib/switch-business'
 import { queryClient } from '@/query-client'
@@ -23,12 +24,20 @@ export function destinationAfterAuth(options: {
 export function useLoginMutation() {
   const applyAuth = useSessionStore((s) => s.applyAuth)
   const navigate = useNavigate()
+  const location = useLocation()
 
   return useMutation({
     mutationFn: login,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      await queryClient.cancelQueries()
+      queryClient.clear()
       applyAuth(data)
-      navigate(destinationAfterAuth(data), { replace: true })
+      const from = data.needs_business_selection
+        ? undefined
+        : safeInternalPath(
+            (location.state as { from?: unknown } | null)?.from,
+          )
+      navigate(from ?? destinationAfterAuth(data), { replace: true })
     },
   })
 }
@@ -55,7 +64,8 @@ export function useLogoutMutation() {
         // Cerrar en el teléfono aunque el servidor ya no reconozca la sesión.
       }
     },
-    onSettled: () => {
+    onSettled: async () => {
+      await queryClient.cancelQueries()
       queryClient.clear()
       clearSession()
       navigate('/login', { replace: true })

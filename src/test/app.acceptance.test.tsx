@@ -3,11 +3,12 @@ import { http, HttpResponse } from 'msw'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { clientKeys } from '@/features/clients/query-keys'
 import { queryClient } from '@/query-client'
 import { renderApp } from './render'
 import { searchRequests } from './handlers'
 import { server } from './server'
-import { users } from './fixtures'
+import { businesses, users } from './fixtures'
 
 async function loginAs(email: string, password = 'secreto123') {
   const user = userEvent.setup()
@@ -210,6 +211,56 @@ describe('CBF-110 aceptación', () => {
     expect(
       screen.getByText('Listo. Entra con tu correo y la contraseña que acabas de crear.'),
     ).toBeInTheDocument()
+  })
+
+  it('un 401 y un login nuevo no dejan ver los datos del usuario anterior', async () => {
+    renderApp()
+    await loginAs(users.cashier.email)
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+
+    cleanup()
+    window.history.pushState({}, '', '/clientes/cli-1')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    expect(
+      queryClient.getQueryData(clientKeys.detail(businesses.norte.id, 'cli-1')),
+    ).toBeTruthy()
+
+    server.use(
+      http.get('*/auth/me', () =>
+        HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
+      ),
+      http.get('*/clients/:id', () =>
+        HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
+      ),
+      http.get('*/clients', () =>
+        HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
+      ),
+    )
+    await queryClient.invalidateQueries()
+    expect(await screen.findByRole('heading', { name: 'Entra a tu negocio' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    })
+
+    server.resetHandlers()
+    await loginAs(users.owner.email)
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    expect(
+      queryClient.getQueryData(clientKeys.detail(businesses.norte.id, 'cli-1')),
+    ).toBeUndefined()
+    expect(screen.queryByRole('heading', { name: 'Ana Pérez' })).not.toBeInTheDocument()
+    expect(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .every((entry) => {
+          const data = entry.state.data as { name?: string; items?: Array<{ name?: string }> } | undefined
+          if (!data) return true
+          if (data.name === 'Ana Pérez') return false
+          return !data.items?.some((item) => item.name === 'Ana Pérez')
+        }),
+    ).toBe(true)
   })
 
   it('el PIN no sustituye el primer login; al reabrir pide la clave rápida', async () => {

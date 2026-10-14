@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-route
 
 import { UNAUTHORIZED_EVENT } from '@/features/auth/stores/session-store'
 import { SELECT_BUSINESS_EVENT } from '@/features/shared/services/client'
+import { queryClient } from '@/query-client'
 import { AppLayout } from '@/features/shared/components/app-layout'
 import { AcceptInvitePage } from '@/pages/auth/accept-invite-page'
 import { LoginPage } from '@/pages/auth/login-page'
@@ -20,7 +21,10 @@ function SessionListeners() {
   const navigate = useNavigate()
   useEffect(() => {
     function onUnauthorized() {
-      navigate('/login', { replace: true })
+      void queryClient.cancelQueries().then(() => {
+        queryClient.clear()
+        navigate('/login', { replace: true })
+      })
     }
     function onSelectBusiness() {
       navigate('/negocios', { replace: true })

@@ -112,13 +112,29 @@ export async function deleteContact(
   await api.delete(`/clients/${clientId}/contacts/${contactId}`)
 }
 
+export type CreateClientWithContactsResult = {
+  client: ClientDetail
+  failedContacts: number
+}
+
 export async function createClientWithContacts(
   payload: ClientCreate,
   contacts: ContactCreate[],
-): Promise<ClientDetail> {
+): Promise<CreateClientWithContactsResult> {
   const created = await createClient(payload)
+  let failedContacts = 0
   for (const contact of contacts) {
-    await createContact(created.id, contact)
+    try {
+      await createContact(created.id, contact)
+    } catch {
+      failedContacts += 1
+    }
   }
-  return getClient(created.id)
+  let client: ClientDetail
+  try {
+    client = await getClient(created.id)
+  } catch {
+    client = { ...created, contacts: [] }
+  }
+  return { client, failedContacts }
 }

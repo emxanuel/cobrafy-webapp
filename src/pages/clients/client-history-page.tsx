@@ -15,6 +15,7 @@ import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { Button } from '@/features/shared/components/ui/button'
 import { getApiErrorMessage } from '@/features/shared/lib/api-error'
+import { formatDateTime } from '@/features/shared/lib/format-date'
 import { canSeeHistoryActor } from '@/features/shared/lib/roles'
 
 const EVENT_LABEL: Record<HistoryEventType, string> = {
@@ -51,7 +52,7 @@ export function ClientHistoryPage() {
               {showActor && event.actor.membership_id
                 ? `${event.actor.membership_id} · `
                 : ''}
-              {new Date(event.occurred_at).toLocaleString()}
+              {formatDateTime(event.occurred_at)}
             </p>
           </li>
         ))}

@@ -8,15 +8,17 @@ export function logHttpError(meta: {
   status?: number
 }) {
   if (import.meta.env.MODE === 'test') return
-  const path = sanitizePath(meta.path)
   console.error('Error de red', {
     method: meta.method,
-    path,
+    path: redactPath(meta.path),
     status: meta.status,
   })
 }
 
-function sanitizePath(path: string | undefined): string | undefined {
+export function redactPath(path: string | undefined): string | undefined {
   if (!path) return path
-  return path.replace(/[?#].*$/, '')
+  return path
+    .replace(/[?#].*$/, '')
+    .replace(/\/invitar\/[^/]+/gi, '/invitar/:token')
+    .replace(/([?&]token=)[^&]*/gi, '$1:token')
 }

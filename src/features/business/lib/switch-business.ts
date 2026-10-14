@@ -5,7 +5,8 @@ import { useSessionStore } from '@/features/auth/stores/session-store'
 
 export async function switchBusiness(queryClient: QueryClient, businessId: string) {
   const result = await selectBusiness({ business_id: businessId })
-  useSessionStore.getState().applyAuth(result)
+  await queryClient.cancelQueries()
   queryClient.clear()
+  useSessionStore.getState().applyAuth(result)
   return result
 }

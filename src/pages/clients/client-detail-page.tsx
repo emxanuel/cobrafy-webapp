@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useParams } from 'react-router'
+import { Link, useLocation, useParams } from 'react-router'
 
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import {
@@ -27,6 +27,10 @@ import {
 
 export function ClientDetailPage() {
   const { clientId = '' } = useParams()
+  const location = useLocation()
+  const contactsFailed = Number(
+    (location.state as { contactsFailed?: number } | null)?.contactsFailed ?? 0,
+  )
   const clientQuery = useClient(clientId)
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
@@ -89,6 +93,13 @@ export function ClientDetailPage() {
           </div>
         }
       />
+
+      {contactsFailed > 0 ? (
+        <Alert>
+          El cliente se guardó, pero {contactsFailed === 1 ? 'un contacto no' : `${contactsFailed} contactos no`}
+          {' '}se pudieron guardar. Agrégalos aquí para no volver a crear la ficha.
+        </Alert>
+      ) : null}
 
       {blocked ? (
         <Alert>

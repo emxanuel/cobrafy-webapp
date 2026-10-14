@@ -9,7 +9,18 @@ El token **no** va a `localStorage`. Vive en **`sessionStorage`** (`cobrafy.sess
 - No basta la memoria: en el celular un refresco a mitad de un alta no puede pedir el correo otra vez.
 - No usamos `localStorage`: el token no debe quedar en el disco después de cerrar la pestaña.
 
-Nunca se escribe correo, cédula, contraseña ni token en `console.*` (solo método, ruta y código de error).
+Nunca se escribe correo, cédula, contraseña ni token en `console.*` (solo método, ruta y código de error). Las rutas `/invitar/:token` se redactan.
+
+## Cabeceras al publicar
+
+El HTML de producción lleva `Referrer-Policy: no-referrer` y un meta CSP estricto. El hosting debe mandar las mismas cabeceras (el meta no cubre `frame-ancestors` en todos los navegadores):
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+Referrer-Policy: no-referrer
+```
+
+Si el API no está en el mismo origen, añade su URL a `connect-src`.
 
 ## API
 
@@ -46,7 +57,7 @@ Errores: **422** (`detail` string o lista `loc`/`msg`, sin `input`) y **409** (`
 ```bash
 pnpm install
 cp .env.example .env   # VITE_API_BASE_URL vacío usa el proxy de Vite
-pnpm dev
+pnpm dev               # solo localhost; VITE_DEV_HOST=1 para 0.0.0.0
 ```
 
 ```bash

@@ -45,18 +45,20 @@ export function useClientSearch(query: string, status: 'active' | 'blocked' | ''
 }
 
 export function useClient(clientId: string | undefined) {
+  const businessId = useBusinessStore((s) => s.activeBusinessId)
   return useQuery({
-    queryKey: clientKeys.detail(clientId ?? ''),
+    queryKey: clientKeys.detail(businessId, clientId ?? ''),
     queryFn: () => getClient(clientId!),
-    enabled: Boolean(clientId),
+    enabled: Boolean(clientId) && Boolean(businessId),
   })
 }
 
 export function useClientHistory(clientId: string | undefined) {
+  const businessId = useBusinessStore((s) => s.activeBusinessId)
   return useQuery({
-    queryKey: clientKeys.history(clientId ?? ''),
+    queryKey: clientKeys.history(businessId, clientId ?? ''),
     queryFn: () => getClientHistory(clientId!, { limit: 20 }),
-    enabled: Boolean(clientId),
+    enabled: Boolean(clientId) && Boolean(businessId),
   })
 }
 
@@ -114,11 +116,12 @@ export function useCheckClientMutation() {
 
 export function useLoadMoreHistory(clientId: string) {
   const queryClient = useQueryClient()
+  const businessId = useBusinessStore((s) => s.activeBusinessId)
   return useMutation({
     mutationFn: (before: string) =>
       getClientHistory(clientId, { limit: 20, before }),
     onSuccess: (page) => {
-      queryClient.setQueryData(clientKeys.history(clientId), (current) => {
+      queryClient.setQueryData(clientKeys.history(businessId, clientId), (current) => {
         if (!current || typeof current !== 'object' || !('events' in current)) {
           return page
         }

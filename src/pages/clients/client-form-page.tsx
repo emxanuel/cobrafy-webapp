@@ -61,7 +61,13 @@ export function ClientFormPage() {
             return
           }
           create.mutate(payload, {
-            onSuccess: (saved) => navigate(`/clientes/${saved.id}`),
+            onSuccess: (result) =>
+              navigate(`/clientes/${result.client.id}`, {
+                state:
+                  result.failedContacts > 0
+                    ? { contactsFailed: result.failedContacts }
+                    : undefined,
+              }),
           })
         }}
       />

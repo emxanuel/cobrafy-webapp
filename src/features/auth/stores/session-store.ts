@@ -14,6 +14,7 @@ import {
   SESSION_KEY,
   writeJson,
 } from '@/features/shared/lib/session-storage'
+import { resetQueryCache } from '@/query-client'
 
 export const UNAUTHORIZED_EVENT = 'cobrafy:unauthorized'
 
@@ -143,6 +144,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
 export function notifyUnauthorized() {
   useSessionStore.getState().clearSession()
+  void resetQueryCache()
   window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
 }
 
