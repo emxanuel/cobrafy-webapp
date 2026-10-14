@@ -95,6 +95,7 @@ export function AppLayout() {
                       flushSync(() => {
                         navigate('/clientes', { replace: true })
                       })
+                      void queryClient.cancelQueries()
                       void switchBusiness(queryClient, item.business_id)
                     }}
                   >

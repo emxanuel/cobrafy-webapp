@@ -6,9 +6,16 @@ import { getFieldErrors, isApiError } from '@/features/shared/lib/api-error'
 import { http, HttpResponse } from 'msw'
 
 import { authResponse, businesses, membership, users } from '@/test/fixtures'
-import { searchRequests } from '@/test/handlers'
+import { contactWrites, searchRequests } from '@/test/handlers'
 import { server } from '@/test/server'
-import { createClient, createClientWithContacts, searchClients } from './requests'
+import {
+  createClient,
+  createClientWithContacts,
+  createContact,
+  getClient,
+  saveContactsDiff,
+  searchClients,
+} from './requests'
 
 describe('client requests', () => {
   beforeEach(() => {
@@ -91,5 +98,61 @@ describe('client requests', () => {
     expect(result.failedContacts).toBe(1)
     expect(result.failedContactNames).toEqual(['Pedro Gómez'])
     expect(result.client.name).toBe('Ana Pérez')
+  })
+
+  it('el diff de contactos manda POST, PATCH y DELETE', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    await createContact(created.id, {
+      type: 'referencia',
+      name: 'Ref Uno',
+      phone: '8095550001',
+      relationship: 'Prima',
+    })
+    await createContact(created.id, {
+      type: 'garante',
+      name: 'Garante Viejo',
+      phone: '8095550002',
+      relationship: 'Tío',
+    })
+    const client = await getClient(created.id)
+    const referencia = client.contacts.find((item) => item.type === 'referencia')
+    expect(referencia).toBeTruthy()
+    contactWrites.length = 0
+
+    const failed = await saveContactsDiff(created.id, client.contacts, [
+      {
+        id: referencia!.id,
+        type: 'referencia',
+        name: 'Ref Nueva',
+        phone: '8095550001',
+        relationship: 'Prima',
+      },
+      {
+        type: 'garante',
+        name: 'Garante Nuevo',
+        phone: '8095550003',
+        relationship: 'Hermano',
+      },
+    ])
+
+    expect(failed).toEqual([])
+    expect(
+      contactWrites.some(
+        (item) => item.method === 'PATCH' && (item.body as { name?: string }).name === 'Ref Nueva',
+      ),
+    ).toBe(true)
+    expect(
+      contactWrites.some(
+        (item) =>
+          item.method === 'POST' && (item.body as { name?: string }).name === 'Garante Nuevo',
+      ),
+    ).toBe(true)
+    expect(contactWrites.some((item) => item.method === 'DELETE')).toBe(true)
   })
 })
