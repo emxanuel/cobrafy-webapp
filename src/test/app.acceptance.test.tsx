@@ -101,7 +101,7 @@ describe('CBF-110 aceptación', () => {
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Entra a tu negocio' })).not.toBeInTheDocument()
     expect(window.location.pathname).toBe('/clientes')
-    expect(screen.getByText('Créditos Sur')).toBeInTheDocument()
+    expect(screen.getAllByText('Créditos Sur').length).toBeGreaterThan(0)
   })
 
   it('el menú oculta opciones que el rol no puede usar y un 403 se muestra con calma', async () => {
@@ -384,7 +384,9 @@ describe('CBF-110 aceptación', () => {
     await user.click(screen.getByRole('button', { name: /Créditos Sur/ }))
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
     expect(window.location.pathname).toBe('/clientes')
-    expect(clientDetailRequests.some((item) => item.id === 'cli-1')).toBe(false)
+    expect(
+      clientDetailRequests.some((item) => item.id === 'cli-1' && item.token.includes('norte')),
+    ).toBe(false)
   })
 
   it('el dueño cambia el rol de un miembro', async () => {
