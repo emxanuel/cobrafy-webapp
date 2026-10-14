@@ -154,7 +154,7 @@ export async function saveContactsDiff(
   const keptIds = new Set(next.map((item) => item.id).filter((id): id is string => Boolean(id)))
   const failed: FailedContact[] = []
 
-  async function run(op: () => Promise<void>, fail: FailedContact): Promise<'stop' | 'continue'> {
+  async function run(op: () => Promise<unknown>, fail: FailedContact): Promise<'stop' | 'continue'> {
     try {
       await op()
       return 'continue'
