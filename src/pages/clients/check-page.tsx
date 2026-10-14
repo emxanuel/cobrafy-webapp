@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 
 import { useSessionStore } from '@/features/auth/stores/session-store'
@@ -37,12 +37,6 @@ export function CheckPage() {
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
   const role = activeMembership(memberships, activeBusinessId)?.role ?? null
-
-  useEffect(() => {
-    return () => {
-      verify.reset()
-    }
-  }, [verify.reset])
 
   function validate(): string {
     const normalized = normalizeDocumentInput(document)

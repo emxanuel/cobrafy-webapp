@@ -10,7 +10,10 @@ export function createAppQueryClient() {
         retry: (failureCount, error) => {
           if (
             isApiError(error) &&
-            (error.status === 401 || error.status === 403 || error.status === 404)
+            (error.status === 401 ||
+              error.status === 403 ||
+              error.status === 404 ||
+              error.status === 422)
           ) {
             return false
           }

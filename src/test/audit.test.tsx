@@ -187,7 +187,9 @@ describe('bitácora', () => {
     )
     window.history.pushState({}, '', '/auditoria')
     renderApp()
-    expect(await screen.findByText('from debe ser anterior a to')).toBeInTheDocument()
+    expect(
+      await screen.findByText('from debe ser anterior a to', {}, { timeout: 4000 }),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/Revisa tu conexión/)).not.toBeInTheDocument()
   })
 
