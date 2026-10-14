@@ -144,16 +144,14 @@ export function useVerifyClientMutation() {
       if (!check.found || !check.client_id) {
         return { check, client: null, blockedAt: null as string | null }
       }
-      const client = await getClient(check.client_id)
-      let blockedAt: string | null = null
-      if (check.is_blocked) {
-        try {
-          const page = await getClientHistory(check.client_id, { limit: 20 })
-          blockedAt = page.events.find((event) => event.type === 'blocked')?.occurred_at ?? null
-        } catch {
-          blockedAt = null
-        }
-      }
+      const [client, history] = await Promise.all([
+        getClient(check.client_id),
+        check.is_blocked
+          ? getClientHistory(check.client_id, { limit: 20 }).catch(() => null)
+          : Promise.resolve(null),
+      ])
+      const blockedAt =
+        history?.events.find((event) => event.type === 'blocked')?.occurred_at ?? null
       return { check, client, blockedAt }
     },
   })

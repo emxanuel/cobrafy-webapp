@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router'
-
-import { AuditUnauthorized } from '@/pages/audit/audit-unauthorized'
 
 import { useAuditQuery } from '@/features/audit/hooks/use-audit-queries'
 import {
@@ -31,6 +29,7 @@ import { Skeleton } from '@/features/shared/components/ui/skeleton'
 import { formatDateTime } from '@/features/shared/lib/format-date'
 import { isApiError } from '@/features/shared/lib/api-error'
 import { canViewAudit, ROLE_LABEL } from '@/features/shared/lib/roles'
+import { AuditUnauthorized } from '@/pages/audit/audit-unauthorized'
 
 function readFilters(params: URLSearchParams): {
   entity: string
@@ -70,14 +69,6 @@ export function AuditPage() {
   const role = activeMembership(memberships, activeBusinessId)?.role ?? null
   const allowed = canViewAudit(role)
   const members = useMembersQuery(allowed)
-
-  useEffect(() => {
-    setEntity(applied.entity)
-    setActor(applied.actor)
-    setFrom(applied.from)
-    setTo(applied.to)
-    if (countActiveFilters(applied) > 0) setFiltersOpen(true)
-  }, [applied.entity, applied.actor, applied.from, applied.to])
 
   const queryFilters = useMemo<AuditFilters>(() => {
     const filters: AuditFilters = {}
@@ -138,7 +129,7 @@ export function AuditPage() {
     const next = new URLSearchParams(searchParams)
     next.set('page', String(page))
     setSearchParams(next)
-    listRef.current?.scrollIntoView({ block: 'start' })
+    listRef.current?.scrollIntoView?.({ block: 'start' })
   }
 
   const items = audit.data?.items ?? []

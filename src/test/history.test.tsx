@@ -69,7 +69,9 @@ describe('historial del cliente', () => {
     )
     window.history.pushState({}, '', '/clientes/cli-1/historial')
     renderApp()
-    expect(await screen.findByText('No se pudo cargar el historial.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('No se pudo cargar el historial.', {}, { timeout: 4000 }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
   })
 

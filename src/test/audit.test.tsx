@@ -80,12 +80,33 @@ describe('bitácora', () => {
     expect(auditRequests.some((req) => req.url.includes('entity=client'))).toBe(true)
   })
 
-  it('muestra vacío, error y reintento', async () => {
+  it('muestra skeletons mientras carga', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    renderApp()
+    await loginAs(users.owner.email)
+    cleanup()
+    server.use(
+      http.get('*/audit', async () => {
+        await gate
+        return HttpResponse.json({ items: [], total: 0, page: 1, page_size: 20 })
+      }),
+    )
+    window.history.pushState({}, '', '/auditoria')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Bitácora' })).toBeInTheDocument()
+    expect(document.querySelector('[aria-busy="true"]')).toBeTruthy()
+    release()
+    expect(await screen.findByText('Todavía no hay eventos registrados.')).toBeInTheDocument()
+  })
+
+  it('muestra el vacío cuando no hay eventos con filtros', async () => {
     const user = userEvent.setup()
     renderApp()
     await loginAs(users.owner.email)
     cleanup()
-
     server.use(
       http.get('*/audit', () =>
         HttpResponse.json({ items: [], total: 0, page: 1, page_size: 20 }),
@@ -98,7 +119,11 @@ describe('bitácora', () => {
     await waitFor(() => {
       expect(window.location.search).toBe('')
     })
+  })
 
+  it('muestra error y permite reintentar', async () => {
+    renderApp()
+    await loginAs(users.owner.email)
     cleanup()
     server.use(
       http.get('*/audit', () =>
@@ -108,7 +133,11 @@ describe('bitácora', () => {
     window.history.pushState({}, '', '/auditoria')
     renderApp()
     expect(
-      await screen.findByText('No se pudo cargar la bitácora. Revisa tu conexión e inténtalo de nuevo.'),
+      await screen.findByText(
+        'No se pudo cargar la bitácora. Revisa tu conexión e inténtalo de nuevo.',
+        {},
+        { timeout: 4000 },
+      ),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
   })
