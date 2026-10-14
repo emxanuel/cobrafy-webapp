@@ -14,8 +14,8 @@ export async function switchBusiness(
     const result = await selectBusiness({ business_id: businessId })
     await queryClient.cancelQueries()
     queryClient.clear()
-    afterAuth?.()
     useSessionStore.getState().applyAuth(result)
+    afterAuth?.()
     return result
   } finally {
     setSwitchingFromToken(null)

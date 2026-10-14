@@ -388,14 +388,31 @@ describe('CBF-110 aceptación', () => {
     renderApp()
     expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
     clientDetailRequests.length = 0
-    await user.click(screen.getByRole('button', { name: 'Menú' }))
-    await user.click(screen.getByRole('button', { name: /Créditos Sur/ }))
-    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
-    expect(window.location.pathname).toBe('/clientes')
-    expect(
-      clientDetailRequests.some((item) => item.id === 'cli-1' && item.token.includes('norte')),
-    ).toBe(false)
-    expect(await screen.findByText('Sofía Sur')).toBeInTheDocument()
+    const tokensAfterClear: string[] = []
+    let cleared = false
+    const client = getQueryClient()
+    const originalClear = client.clear.bind(client)
+    const clearSpy = vi.spyOn(client, 'clear').mockImplementation(() => {
+      originalClear()
+      cleared = true
+    })
+    const onRequest = ({ request }: { request: Request }) => {
+      if (!cleared) return
+      tokensAfterClear.push(request.headers.get('Authorization') ?? '')
+    }
+    server.events.on('request:start', onRequest)
+    try {
+      await user.click(screen.getByRole('button', { name: 'Menú' }))
+      await user.click(screen.getByRole('button', { name: /Créditos Sur/ }))
+      expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+      expect(window.location.pathname).toBe('/clientes')
+      expect(clientDetailRequests.some((item) => item.id === 'cli-1')).toBe(false)
+      expect(tokensAfterClear.every((token) => !token.includes('norte'))).toBe(true)
+      expect(await screen.findByText('Sofía Sur')).toBeInTheDocument()
+    } finally {
+      server.events.removeListener('request:start', onRequest)
+      clearSpy.mockRestore()
+    }
   })
 
   it('el dueño cambia el rol de un miembro', async () => {

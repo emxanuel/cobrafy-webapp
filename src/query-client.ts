@@ -30,16 +30,18 @@ export function createAppQueryClient() {
 
 export let queryClient = createAppQueryClient()
 
+/** Test helper: always the current singleton after resetAppQueryClient. */
 export function getQueryClient() {
   return queryClient
 }
 
-export async function resetQueryCache(client: QueryClient = getQueryClient()) {
+export async function resetQueryCache(client: QueryClient = queryClient) {
   await client.cancelQueries()
   client.getMutationCache().clear()
   client.clear()
 }
 
+/** Test-only: drop in-flight work and replace the singleton QueryClient. */
 export async function resetAppQueryClient() {
   await resetQueryCache(queryClient)
   queryClient = createAppQueryClient()

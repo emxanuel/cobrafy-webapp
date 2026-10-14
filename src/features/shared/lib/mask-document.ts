@@ -1,4 +1,5 @@
 const CEDULA_IN_TEXT = /\b\d{3}-?\d{7}-?\d\b/g
+const PASSPORT_IN_TEXT = /\b[A-Za-z]{1,3}\d{6,9}\b/g
 
 /** Last 4 digits stay visible; other characters become • except dashes. */
 export function maskDocument(doc: string): string {
@@ -16,7 +17,9 @@ export function maskDocument(doc: string): string {
 }
 
 export function maskDocumentsInText(text: string): string {
-  return text.replace(CEDULA_IN_TEXT, (match) => maskDocument(match))
+  return text
+    .replace(CEDULA_IN_TEXT, (match) => maskDocument(match))
+    .replace(PASSPORT_IN_TEXT, (match) => maskDocument(match))
 }
 
 export function normalizeDocumentInput(value: string): string {

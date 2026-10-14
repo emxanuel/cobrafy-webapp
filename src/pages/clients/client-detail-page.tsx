@@ -23,6 +23,7 @@ import {
 } from '@/features/clients/lib/failed-contacts-notice'
 import { blockSchema, type BlockFormValues } from '@/features/clients/schemas'
 import { Alert } from '@/features/shared/components/ui/alert'
+import { LoadingState } from '@/features/shared/components/ui/loading-state'
 import { Button, buttonVariants } from '@/features/shared/components/ui/button'
 import { Field, TextArea } from '@/features/shared/components/ui/field'
 import { getApiErrorMessage, isApiError } from '@/features/shared/lib/api-error'
@@ -62,7 +63,13 @@ export function ClientDetailPage() {
     defaultValues: { reason: '' },
   })
 
-  if (clientQuery.isPending) return <p>Cargando ficha…</p>
+  if (clientQuery.isPending) {
+    return (
+      <LoadingState>
+        <p>Cargando ficha…</p>
+      </LoadingState>
+    )
+  }
   if (clientQuery.isError) {
     return (
       <Alert>

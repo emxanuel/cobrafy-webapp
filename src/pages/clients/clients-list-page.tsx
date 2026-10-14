@@ -12,6 +12,7 @@ import { PageHeader } from '@/features/shared/components/page-header'
 import { buttonVariants } from '@/features/shared/components/ui/button'
 import { SelectInput, TextInput } from '@/features/shared/components/ui/field'
 import { Alert } from '@/features/shared/components/ui/alert'
+import { LoadingState } from '@/features/shared/components/ui/loading-state'
 import { cn } from '@/features/shared/lib/cn'
 import { canCreateClients } from '@/features/shared/lib/roles'
 import { getApiErrorMessage } from '@/features/shared/lib/api-error'
@@ -88,7 +89,11 @@ export function ClientsListPage() {
         </Alert>
       ) : null}
 
-      {search.isPending ? <p>Cargando clientes…</p> : null}
+      {search.isPending ? (
+        <LoadingState>
+          <p>Cargando clientes…</p>
+        </LoadingState>
+      ) : null}
 
       {isEmpty ? (
         <p data-testid="clients-empty">{EMPTY_COPY}</p>

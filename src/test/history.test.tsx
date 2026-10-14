@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { businesses, membership, ownerMember, users } from './fixtures'
+import { businesses, collectorMember, membership, ownerMember, users } from './fixtures'
 import { renderApp, seedAuth } from './render'
 import { server } from './server'
 
@@ -57,7 +57,7 @@ describe('historial del cliente', () => {
     expect(screen.queryByText(/Olivia Dueña/)).not.toBeInTheDocument()
   })
 
-  it('el cobrador enmascara cédulas en el motivo y dice Asignado a ti', async () => {
+  it('el cobrador enmascara documentos en el motivo y ve Asignado a ti o a otro', async () => {
     seedCollector()
     server.use(
       http.get('*/clients/:id/history', () =>
@@ -71,17 +71,29 @@ describe('historial del cliente', () => {
             {
               id: 'h-block',
               type: 'blocked',
+              occurred_at: '2026-01-03T10:00:00Z',
+              actor: {
+                user_id: users.owner.id,
+                membership_id: ownerMember.id,
+              },
+              reason: 'deuda con 001-1234567-8 y pasaporte AB1234567',
+              from_collector_membership_id: null,
+              to_collector_membership_id: null,
+            },
+            {
+              id: 'h-mine',
+              type: 'collector_reassigned',
               occurred_at: '2026-01-02T10:00:00Z',
               actor: {
                 user_id: users.owner.id,
                 membership_id: ownerMember.id,
               },
-              reason: 'deuda con 001-1234567-8',
+              reason: null,
               from_collector_membership_id: null,
-              to_collector_membership_id: null,
+              to_collector_membership_id: collectorMember.id,
             },
             {
-              id: 'h-re',
+              id: 'h-other',
               type: 'collector_reassigned',
               occurred_at: '2026-01-01T10:00:00Z',
               actor: {
@@ -89,7 +101,7 @@ describe('historial del cliente', () => {
                 membership_id: ownerMember.id,
               },
               reason: null,
-              from_collector_membership_id: null,
+              from_collector_membership_id: collectorMember.id,
               to_collector_membership_id: null,
             },
           ],
@@ -100,9 +112,51 @@ describe('historial del cliente', () => {
     renderApp()
     expect(await screen.findByText('Bloqueo')).toBeInTheDocument()
     expect(screen.getAllByText(/•••-••••567-8/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/•••••4567/)).toBeInTheDocument()
     expect(screen.queryByText(/001-1234567-8/)).not.toBeInTheDocument()
-    expect(screen.getByText('Se reasignó cobrador')).toBeInTheDocument()
-    expect(screen.getByText('Asignado a ti → Asignado a ti')).toBeInTheDocument()
+    expect(screen.queryByText(/AB1234567/)).not.toBeInTheDocument()
+    expect(screen.getByText('Asignado a ti')).toBeInTheDocument()
+    expect(screen.getByText('Reasignado a otro cobrador')).toBeInTheDocument()
+    expect(screen.queryByText(/→/)).not.toBeInTheDocument()
+  })
+
+  it('el dueño ve los nombres en la reasignación', async () => {
+    seedAuth({
+      user: users.owner,
+      memberships: [membership(users.owner, businesses.norte, 'dueño')],
+      token: 'token-owner',
+    })
+    server.use(
+      http.get('*/clients/:id/history', () =>
+        HttpResponse.json({
+          purchases: [],
+          payments: [],
+          overdue: [],
+          follow_ups: [],
+          next_cursor: null,
+          events: [
+            {
+              id: 'h-re',
+              type: 'collector_reassigned',
+              occurred_at: '2026-01-01T10:00:00Z',
+              actor: {
+                user_id: users.owner.id,
+                membership_id: ownerMember.id,
+              },
+              reason: null,
+              from_collector_membership_id: collectorMember.id,
+              to_collector_membership_id: null,
+            },
+          ],
+        }),
+      ),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/historial')
+    renderApp()
+    expect(await screen.findByText('Se reasignó cobrador')).toBeInTheDocument()
+    expect(await screen.findByText('Coco Ruta → Cobrador')).toBeInTheDocument()
+    expect(screen.queryByText('Asignado a ti')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reasignado a otro cobrador')).not.toBeInTheDocument()
   })
 
   it('muestra el vacío de la ficha', async () => {

@@ -37,9 +37,12 @@ describe('maskDocument', () => {
     expect(maskDocument('ABCD')).toBe('••••')
   })
 
-  it('enmascara cédulas dentro de texto libre', () => {
+  it('enmascara cédulas y pasaportes dentro de texto libre', () => {
     expect(maskDocumentsInText('Atraso con 001-1234567-8 y 00188888888')).toBe(
       'Atraso con •••-••••567-8 y •••••••8888',
+    )
+    expect(maskDocumentsInText('Pasaporte AB1234567 en mora')).toBe(
+      'Pasaporte •••••4567 en mora',
     )
   })
 })

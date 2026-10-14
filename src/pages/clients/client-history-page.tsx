@@ -7,6 +7,7 @@ import {
 } from '@/features/business/stores/business-store'
 import { ClientRecordHeader } from '@/features/clients/components/client-record-header'
 import { displayFreeText } from '@/features/clients/lib/display-document'
+import { collectorEventDetail } from '@/features/clients/lib/history-collector'
 import {
   useClient,
   useClientHistory,
@@ -44,7 +45,8 @@ export function ClientHistoryPage() {
   const more = useLoadMoreHistory(clientId)
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
-  const role = activeMembership(memberships, activeBusinessId)?.role ?? null
+  const membership = activeMembership(memberships, activeBusinessId)
+  const role = membership?.role ?? null
   const showActor = canSeeHistoryActor(role)
   const members = useMembersQuery(canManageMembers(role))
   const nameByMembership = new Map(
@@ -56,20 +58,19 @@ export function ClientHistoryPage() {
     return nameByMembership.get(event.actor.membership_id) ?? 'Alguien del negocio'
   }
 
-  function collectorName(id: string | null): string {
-    if (!id) return role === 'cobrador' ? 'Asignado a ti' : 'Cobrador'
-    return nameByMembership.get(id) ?? 'Cobrador'
-  }
-
   function eventDetail(event: HistoryEvent): string | null {
     if (event.type === 'blocked' || event.type === 'unblocked') {
       return event.reason ? displayFreeText(event.reason, role) : null
     }
-    if (event.type === 'collector_assigned') {
-      return collectorName(event.to_collector_membership_id)
-    }
-    if (event.type === 'collector_reassigned') {
-      return `${collectorName(event.from_collector_membership_id)} → ${collectorName(event.to_collector_membership_id)}`
+    if (event.type === 'collector_assigned' || event.type === 'collector_reassigned') {
+      return collectorEventDetail({
+        role,
+        membershipId: membership?.id ?? null,
+        type: event.type,
+        fromId: event.from_collector_membership_id,
+        toId: event.to_collector_membership_id,
+        nameByMembership,
+      })
     }
     return event.reason ? displayFreeText(event.reason, role) : null
   }

@@ -14,6 +14,7 @@ import { ClientForm } from '@/features/clients/components/client-form'
 import { useMembersQuery } from '@/features/members/hooks/use-members-queries'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
+import { LoadingState } from '@/features/shared/components/ui/loading-state'
 import { canManageMembers } from '@/features/shared/lib/roles'
 
 export function ClientFormPage() {
@@ -34,7 +35,11 @@ export function ClientFormPage() {
   const error = create.error ?? update.error
 
   if (isEdit && existing.isPending) {
-    return <p>Cargando ficha…</p>
+    return (
+      <LoadingState>
+        <p>Cargando ficha…</p>
+      </LoadingState>
+    )
   }
 
   if (isEdit && existing.isError) {

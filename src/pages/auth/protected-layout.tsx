@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router'
 
 import { useMeQuery } from '@/features/auth/hooks/use-auth'
 import { useSessionStore } from '@/features/auth/stores/session-store'
+import { LoadingState } from '@/features/shared/components/ui/loading-state'
 
 export function ProtectedLayout() {
   const location = useLocation()
@@ -18,9 +19,9 @@ export function ProtectedLayout() {
 
   if (!hydrated) {
     return (
-      <div className="flex min-h-svh items-center justify-center px-4">
+      <LoadingState className="flex min-h-svh items-center justify-center px-4">
         <p>Cargando…</p>
-      </div>
+      </LoadingState>
     )
   }
 
