@@ -76,7 +76,7 @@ export function useCreateClientMutation() {
       contacts,
     }: {
       client: ClientCreate
-      contacts: ContactCreate[]
+      contacts: ContactDraft[]
     }) => createClientWithContacts(client, contacts),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: clientKeys.all })

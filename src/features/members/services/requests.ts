@@ -22,7 +22,10 @@ export async function patchMember(
   memberId: string,
   payload: MemberUpdate,
 ): Promise<MemberRead> {
-  const { data } = await api.patch<MemberRead>(`/users/${memberId}`, payload)
+  const body: MemberUpdate = {}
+  if (payload.role !== undefined) body.role = payload.role
+  if (payload.is_active !== undefined) body.is_active = payload.is_active
+  const { data } = await api.patch<MemberRead>(`/users/${memberId}`, body)
   return data
 }
 

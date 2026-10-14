@@ -50,7 +50,10 @@ export type ContactUpdate = {
   document?: string | null
 }
 
-export type ContactDraft = ContactCreate & { id?: string }
+export type ContactDraft = Omit<ContactCreate, 'doc_type'> & {
+  id?: string
+  doc_type?: DocType | '' | null
+}
 
 export type ClientRead = {
   id: string

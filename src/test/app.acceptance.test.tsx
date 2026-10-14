@@ -6,7 +6,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clientKeys } from '@/features/clients/query-keys'
 import { queryClient } from '@/query-client'
 import { renderApp } from './render'
-import { clientDetailRequests, contactWrites, logoutRequests, searchRequests } from './handlers'
+import {
+  clientDetailRequests,
+  contactWrites,
+  logoutRequests,
+  memberWrites,
+  searchRequests,
+} from './handlers'
 import { server } from './server'
 import { businesses, cashierMember, users } from './fixtures'
 
@@ -82,6 +88,7 @@ describe('CBF-110 aceptación', () => {
     expect(clear).toHaveBeenCalled()
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Entra a tu negocio' })).not.toBeInTheDocument()
+    expect(await screen.findByText('Sofía Sur')).toBeInTheDocument()
   })
 
   it('cambiar de negocio desde el menú no cierra la sesión aunque el token viejo ya no sirva', async () => {
@@ -102,6 +109,7 @@ describe('CBF-110 aceptación', () => {
     expect(screen.queryByRole('heading', { name: 'Entra a tu negocio' })).not.toBeInTheDocument()
     expect(window.location.pathname).toBe('/clientes')
     expect(screen.getAllByText('Créditos Sur').length).toBeGreaterThan(0)
+    expect(await screen.findByText('Sofía Sur')).toBeInTheDocument()
   })
 
   it('el menú oculta opciones que el rol no puede usar y un 403 se muestra con calma', async () => {
@@ -387,6 +395,7 @@ describe('CBF-110 aceptación', () => {
     expect(
       clientDetailRequests.some((item) => item.id === 'cli-1' && item.token.includes('norte')),
     ).toBe(false)
+    expect(await screen.findByText('Sofía Sur')).toBeInTheDocument()
   })
 
   it('el dueño cambia el rol de un miembro', async () => {
@@ -402,6 +411,8 @@ describe('CBF-110 aceptación', () => {
     await waitFor(() => {
       expect(roleSelect).toHaveValue('cobrador')
     })
+    expect(memberWrites.at(-1)?.body).toEqual({ role: 'cobrador' })
+    expect(memberWrites.at(-1)?.body).not.toHaveProperty('name')
   })
 
   it('el aviso de contactos fallidos se quita del sessionStorage al leerlo', async () => {

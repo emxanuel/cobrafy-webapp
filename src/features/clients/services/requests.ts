@@ -242,7 +242,7 @@ async function reloadClient(created: ClientRead): Promise<ClientDetail> {
 
 export async function createClientWithContacts(
   payload: ClientCreate,
-  contacts: ContactCreate[],
+  contacts: ContactDraft[],
 ): Promise<CreateClientWithContactsResult> {
   const created = await createClient(payload)
   const notice = await saveContactsDiff(created.id, [], contacts)

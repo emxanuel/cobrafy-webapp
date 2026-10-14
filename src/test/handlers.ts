@@ -35,6 +35,7 @@ export const clientDetailRequests: Array<{ id: string; token: string }> = []
 export const logoutRequests: Array<{ token: string | null }> = []
 export const contactWrites: Array<{ method: string; url: string; body: unknown }> = []
 export const clientWrites: Array<{ method: string; url: string; body: unknown }> = []
+export const memberWrites: Array<{ method: string; url: string; body: unknown }> = []
 const revokedTokens = new Set<string>()
 
 const MAX_PIN_ATTEMPTS = 5
@@ -52,6 +53,14 @@ resetMembers()
 
 export function resetData() {
   clients.clear()
+  clients.set(
+    'cli-sur-1',
+    clientFixture({
+      id: 'cli-sur-1',
+      name: 'Sofía Sur',
+      document: '001-2222222-2',
+    }),
+  )
   createdCount = 0
   contactCount = 0
   pinFailures = 0
@@ -63,8 +72,11 @@ export function resetData() {
   logoutRequests.length = 0
   contactWrites.length = 0
   clientWrites.length = 0
+  memberWrites.length = 0
   revokedTokens.clear()
 }
+
+resetData()
 
 function bearer(request: Request) {
   return request.headers.get('Authorization')
@@ -729,7 +741,18 @@ export const handlers = [
     if (roleFromToken(bearer(request)) !== 'dueño') {
       return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
     }
-    const payload = (await request.json()) as MemberUpdate
+    const payload = (await request.json()) as MemberUpdate & { name?: unknown }
+    memberWrites.push({ method: request.method, url: request.url, body: payload })
+    if ('name' in payload) {
+      return HttpResponse.json(
+        {
+          detail: [
+            { loc: ['body', 'name'], msg: 'Extra inputs are not permitted', type: 'extra_forbidden' },
+          ],
+        },
+        { status: 422 },
+      )
+    }
     const id = String(params.id)
     const index = membersState.findIndex((item) => item.id === id)
     if (index < 0) {

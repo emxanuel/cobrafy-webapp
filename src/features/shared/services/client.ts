@@ -8,6 +8,10 @@ const baseURL = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
 
 export const SELECT_BUSINESS_EVENT = 'cobrafy:select-business'
 
+type StampedConfig = InternalAxiosRequestConfig & {
+  cobrafyAccessToken?: string | null
+}
+
 export const api = axios.create({
   baseURL,
   headers: {
@@ -16,11 +20,13 @@ export const api = axios.create({
 })
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const stamped = config as StampedConfig
   const token = useSessionStore.getState().accessToken
+  stamped.cobrafyAccessToken = token
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+    stamped.headers.Authorization = `Bearer ${token}`
   }
-  return config
+  return stamped
 })
 
 api.interceptors.response.use(
@@ -43,15 +49,14 @@ api.interceptors.response.use(
     if (apiError.status === 401 && apiError.message === 'selecciona un negocio') {
       window.dispatchEvent(new Event(SELECT_BUSINESS_EVENT))
     } else if (apiError.status === 401 && !isAuthAttempt) {
-      const header = error.config?.headers?.Authorization
-      const sent = typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7) : null
-      const current = useSessionStore.getState().accessToken
-      if (!(sent && current && sent !== current)) {
-        queueMicrotask(() => notifyUnauthorized())
-      }
+      const sent = (error.config as StampedConfig | undefined)?.cobrafyAccessToken
+      queueMicrotask(() => {
+        const current = useSessionStore.getState().accessToken
+        if (sent && current && sent !== current) return
+        notifyUnauthorized()
+      })
     }
 
     return Promise.reject(apiError)
   },
 )
-

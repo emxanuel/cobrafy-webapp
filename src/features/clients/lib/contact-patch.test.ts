@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { toContactPatch } from './contact-patch'
+import { toContactCreate, toContactPatch } from './contact-patch'
 import type { ContactRead } from '@/features/clients/services/types'
 
 function contact(overrides: Partial<ContactRead> = {}): ContactRead {
@@ -51,6 +51,26 @@ describe('toContactPatch', () => {
       document: '',
     })
     expect(patch).toEqual({ address: null, document: null })
+  })
+
+  it('doc_type vacío se manda como null', () => {
+    expect(
+      toContactCreate({
+        type: 'referencia',
+        name: 'Ref Uno',
+        phone: '8095550001',
+        relationship: 'Prima',
+        doc_type: '',
+      }).doc_type,
+    ).toBeNull()
+    const patch = toContactPatch(contact(), {
+      type: 'referencia',
+      name: 'Ref Uno',
+      phone: '8095550001',
+      relationship: 'Prima',
+      doc_type: '',
+    })
+    expect(patch.doc_type).toBeNull()
   })
 
   it('no manda document si la API lo ocultó', () => {

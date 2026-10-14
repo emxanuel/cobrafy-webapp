@@ -9,9 +9,9 @@ export async function switchBusiness(
   afterAuth?: () => void,
 ) {
   const result = await selectBusiness({ business_id: businessId })
-  useSessionStore.getState().applyAuth(result)
-  afterAuth?.()
   await queryClient.cancelQueries()
   queryClient.clear()
+  useSessionStore.getState().applyAuth(result)
+  afterAuth?.()
   return result
 }

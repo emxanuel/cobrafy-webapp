@@ -11,6 +11,7 @@ import {
 } from '@/features/auth/services/requests'
 import { safeInternalPath } from '@/features/auth/lib/safe-internal-path'
 import { useSessionStore } from '@/features/auth/stores/session-store'
+import { useBusinessStore } from '@/features/business/stores/business-store'
 import { switchBusiness } from '@/features/business/lib/switch-business'
 import { isPinLockedError } from '@/features/shared/lib/api-error'
 import { LOGIN_NOTICE_KEY } from '@/features/shared/lib/session-storage'
@@ -115,8 +116,9 @@ export function useSetupPinMutation() {
 }
 
 export function useMeQuery(enabled: boolean) {
+  const businessId = useBusinessStore((s) => s.activeBusinessId)
   return useQuery({
-    queryKey: ['auth', 'me'],
+    queryKey: ['auth', 'me', businessId],
     queryFn: getMe,
     enabled,
   })
