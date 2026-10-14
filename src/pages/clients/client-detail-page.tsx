@@ -14,6 +14,7 @@ import {
   useUnblockClientMutation,
 } from '@/features/clients/hooks/use-clients-queries'
 import { ClientRecordHeader } from '@/features/clients/components/client-record-header'
+import { displayFreeText } from '@/features/clients/lib/display-document'
 import { ContactCard } from '@/features/clients/components/contact-card'
 import { ContactComposer } from '@/features/clients/components/contact-composer'
 import {
@@ -99,7 +100,7 @@ export function ClientDetailPage() {
       {blocked ? (
         <Alert>
           Bloqueado
-          {client.blocked_reason ? `: ${client.blocked_reason}` : '.'}
+          {client.blocked_reason ? `: ${displayFreeText(client.blocked_reason, role)}` : '.'}
         </Alert>
       ) : null}
 

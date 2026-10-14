@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 
 import { useSessionStore } from '@/features/auth/stores/session-store'
@@ -6,7 +6,7 @@ import {
   activeMembership,
   useBusinessStore,
 } from '@/features/business/stores/business-store'
-import { formatDocumentLine } from '@/features/clients/lib/display-document'
+import { displayFreeText, formatDocumentLine } from '@/features/clients/lib/display-document'
 import { useVerifyClientMutation } from '@/features/clients/hooks/use-clients-queries'
 import type { DocType } from '@/features/clients/services/types'
 import { PageHeader } from '@/features/shared/components/page-header'
@@ -37,6 +37,12 @@ export function CheckPage() {
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
   const role = activeMembership(memberships, activeBusinessId)?.role ?? null
+
+  useEffect(() => {
+    return () => {
+      verify.reset()
+    }
+  }, [verify.reset])
 
   function validate(): string {
     const normalized = normalizeDocumentInput(document)
@@ -96,6 +102,7 @@ export function CheckPage() {
                 setDocType('cedula')
                 setFieldError('')
                 setResult(null)
+                verify.reset()
               }}
             >
               Cédula
@@ -108,6 +115,7 @@ export function CheckPage() {
                 setDocType('pasaporte')
                 setFieldError('')
                 setResult(null)
+                verify.reset()
               }}
             >
               Pasaporte
@@ -152,7 +160,8 @@ export function CheckPage() {
           </p>
           {result.reason ? (
             <p className="m-0 mt-2 text-sm">
-              <span className="text-heading text-sm font-medium">Motivo:</span> {result.reason}
+              <span className="text-heading text-sm font-medium">Motivo:</span>{' '}
+              {displayFreeText(result.reason, role)}
             </p>
           ) : null}
           {result.since ? (

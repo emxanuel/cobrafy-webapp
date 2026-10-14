@@ -76,6 +76,13 @@ describe('verificar bloqueo', () => {
     expect(screen.queryByText('001-1234567-8')).not.toBeInTheDocument()
 
     await user.clear(screen.getByLabelText('Número de documento'))
+    await user.type(screen.getByLabelText('Número de documento'), '00188888888')
+    await user.click(screen.getByRole('button', { name: 'Verificar' }))
+    expect(await screen.findByText('⛔ Bloqueado')).toBeInTheDocument()
+    expect(screen.getByText(/•••-••••888-8/)).toBeInTheDocument()
+    expect(screen.queryByText('001-8888888-8')).not.toBeInTheDocument()
+
+    await user.clear(screen.getByLabelText('Número de documento'))
     await user.type(screen.getByLabelText('Número de documento'), '00100000000')
     await user.click(screen.getByRole('button', { name: 'Verificar' }))
     expect(await screen.findByText('No encontramos ese documento')).toBeInTheDocument()

@@ -235,8 +235,32 @@ function buildAuditEvents() {
       after: { phone: '8095550000' },
       created_at: '2026-10-10T15:00:00.000Z',
     },
+    {
+      ...base,
+      id: 'aud-6',
+      user_id: users.owner.id,
+      membership_id: ownerMember.id,
+      action: 'login',
+      entity: 'user',
+      entity_id: users.owner.id,
+      before: null,
+      after: null,
+      created_at: '2026-10-09T12:00:00.000Z',
+    },
+    {
+      ...base,
+      id: 'aud-7',
+      user_id: users.owner.id,
+      membership_id: ownerMember.id,
+      action: 'select_business',
+      entity: 'business',
+      entity_id: businesses.norte.id,
+      before: null,
+      after: { business_id: businesses.norte.id },
+      created_at: '2026-10-08T12:00:00.000Z',
+    },
   ]
-  for (let index = 6; index <= 25; index += 1) {
+  for (let index = 8; index <= 25; index += 1) {
     events.push({
       ...base,
       id: `aud-${index}`,
@@ -476,7 +500,7 @@ export const handlers = [
       return HttpResponse.json({
         found: true,
         is_blocked: true,
-        blocked_reason: 'Atraso de 3 cuotas',
+        blocked_reason: 'Atraso de 3 cuotas. Doc 001-8888888-8',
         client_id: 'cli-blocked',
       })
     }
@@ -530,7 +554,7 @@ export const handlers = [
               user_id: users.cashier.id,
               membership_id: cashierMember.id,
             },
-            reason: 'mora reiterada',
+            reason: 'mora reiterada 001-1234567-8',
             from_collector_membership_id: null,
             to_collector_membership_id: null,
           },

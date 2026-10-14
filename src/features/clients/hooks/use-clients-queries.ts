@@ -139,6 +139,7 @@ export function useCheckClientMutation() {
 
 export function useVerifyClientMutation() {
   return useMutation({
+    gcTime: 0,
     mutationFn: async (payload: ClientCheckRequest) => {
       const check = await checkClient(payload)
       if (!check.found || !check.client_id) {

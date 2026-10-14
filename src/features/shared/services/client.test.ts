@@ -81,4 +81,24 @@ describe('api 401 interceptor', () => {
     expect(useSessionStore.getState().user?.id).toBe(users.cashier.id)
     setSwitchingFromToken(null)
   })
+
+  it('un 401 con el token nuevo cierra la sesión', async () => {
+    useSessionStore.getState().applyAuth(
+      authResponse({
+        user: users.cashier,
+        memberships: [membership(users.cashier, businesses.norte, 'cajero')],
+        token: 'token-new',
+      }),
+    )
+    setSwitchingFromToken('token-old')
+    server.use(
+      http.get('*/clients', () =>
+        HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
+      ),
+    )
+    await api.get('/clients').catch(() => undefined)
+    await Promise.resolve()
+    expect(useSessionStore.getState().accessToken).toBeNull()
+    expect(useSessionStore.getState().user).toBeNull()
+  })
 })

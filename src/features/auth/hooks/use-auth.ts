@@ -15,7 +15,7 @@ import { useBusinessStore } from '@/features/business/stores/business-store'
 import { switchBusiness } from '@/features/business/lib/switch-business'
 import { isPinLockedError } from '@/features/shared/lib/api-error'
 import { LOGIN_NOTICE_KEY } from '@/features/shared/lib/session-storage'
-import { queryClient, resetQueryCache } from '@/query-client'
+import { getQueryClient, resetQueryCache } from '@/query-client'
 
 export function destinationAfterAuth(options: {
   needs_business_selection: boolean
@@ -32,6 +32,7 @@ export function useLoginMutation() {
   return useMutation({
     mutationFn: login,
     onSuccess: async (data) => {
+      const queryClient = getQueryClient()
       await queryClient.cancelQueries()
       queryClient.clear()
       applyAuth(data)
@@ -49,7 +50,7 @@ export function useSelectBusinessMutation() {
   const navigate = useNavigate()
   return useMutation({
     mutationFn: (businessId: string) =>
-      switchBusiness(queryClient, businessId, () => {
+      switchBusiness(getQueryClient(), businessId, () => {
         navigate('/clientes', { replace: true, flushSync: true })
       }),
   })
@@ -68,6 +69,7 @@ export function useLogoutMutation() {
       }
     },
     onSettled: async () => {
+      const queryClient = getQueryClient()
       await queryClient.cancelQueries()
       queryClient.clear()
       clearSession()

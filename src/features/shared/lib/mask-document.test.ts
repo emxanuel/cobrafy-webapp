@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isAlreadyMaskedDocument,
   maskDocument,
+  maskDocumentsInText,
   normalizeDocumentInput,
 } from './mask-document'
 
@@ -27,5 +28,18 @@ describe('maskDocument', () => {
   it('detecta documentos ya enmascarados', () => {
     expect(isAlreadyMaskedDocument('001-*****1234')).toBe(true)
     expect(isAlreadyMaskedDocument('001-1234567-8')).toBe(false)
+  })
+
+  it('cubre vacíos, menos de 4 dígitos y solo letras', () => {
+    expect(maskDocument('')).toBe('')
+    expect(maskDocument('12')).toBe('12')
+    expect(maskDocument('123')).toBe('123')
+    expect(maskDocument('ABCD')).toBe('••••')
+  })
+
+  it('enmascara cédulas dentro de texto libre', () => {
+    expect(maskDocumentsInText('Atraso con 001-1234567-8 y 00188888888')).toBe(
+      'Atraso con •••-••••567-8 y •••••••8888',
+    )
   })
 })

@@ -6,6 +6,7 @@ import {
   useBusinessStore,
 } from '@/features/business/stores/business-store'
 import { ClientRecordHeader } from '@/features/clients/components/client-record-header'
+import { displayFreeText } from '@/features/clients/lib/display-document'
 import {
   useClient,
   useClientHistory,
@@ -56,13 +57,13 @@ export function ClientHistoryPage() {
   }
 
   function collectorName(id: string | null): string {
-    if (!id) return 'Cobrador'
+    if (!id) return role === 'cobrador' ? 'Asignado a ti' : 'Cobrador'
     return nameByMembership.get(id) ?? 'Cobrador'
   }
 
   function eventDetail(event: HistoryEvent): string | null {
     if (event.type === 'blocked' || event.type === 'unblocked') {
-      return event.reason
+      return event.reason ? displayFreeText(event.reason, role) : null
     }
     if (event.type === 'collector_assigned') {
       return collectorName(event.to_collector_membership_id)
@@ -70,7 +71,7 @@ export function ClientHistoryPage() {
     if (event.type === 'collector_reassigned') {
       return `${collectorName(event.from_collector_membership_id)} → ${collectorName(event.to_collector_membership_id)}`
     }
-    return event.reason
+    return event.reason ? displayFreeText(event.reason, role) : null
   }
 
   const notFound =
@@ -100,15 +101,16 @@ export function ClientHistoryPage() {
           </>
         ) : null}
 
-        {history.isPending ? (
-          <ol className="m-0 flex list-none flex-col gap-3 p-0">
+        {history.isLoading ? (
+          <ol aria-busy="true" className="m-0 flex list-none flex-col gap-3 p-0">
+            <li className="sr-only">Cargando…</li>
             <HistorySkeleton />
             <HistorySkeleton />
             <HistorySkeleton />
           </ol>
         ) : null}
 
-        {!history.isPending && !history.isError && (history.data?.events.length ?? 0) === 0 ? (
+        {!history.isLoading && !history.isError && (history.data?.events.length ?? 0) === 0 ? (
           <EmptyState className="py-4 text-left">Aún no hay movimientos en esta ficha.</EmptyState>
         ) : null}
 

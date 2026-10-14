@@ -58,6 +58,10 @@ describe('bitácora', () => {
 
     expect(await screen.findByRole('heading', { name: 'Bitácora' })).toBeInTheDocument()
     expect(await screen.findByText('Cliente bloqueado')).toBeInTheDocument()
+    expect(screen.getByText('Inicio de sesión')).toBeInTheDocument()
+    expect(screen.getByText('Cambio de negocio')).toBeInTheDocument()
+    expect(screen.queryByText('login')).not.toBeInTheDocument()
+    expect(screen.queryByText('select_business')).not.toBeInTheDocument()
     expect(screen.getByText(/Mostrando 1–20 de 25 eventos/)).toBeInTheDocument()
 
     const edited = screen.getAllByText('Cliente editado')[0]?.closest('li')
@@ -156,5 +160,47 @@ describe('bitácora', () => {
     expect(
       screen.getByText('La fecha final debe ser igual o posterior a la inicial.'),
     ).toBeInTheDocument()
+  })
+
+  it('un rango inválido en la URL muestra el aviso y no pide la bitácora', async () => {
+    renderApp()
+    await loginAs(users.owner.email)
+    cleanup()
+    auditRequests.length = 0
+    window.history.pushState({}, '', '/auditoria?from=2026-10-14&to=2026-10-01')
+    renderApp()
+    expect(
+      await screen.findByText('La fecha final debe ser igual o posterior a la inicial.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Cargando…')).not.toBeInTheDocument()
+    expect(auditRequests).toHaveLength(0)
+  })
+
+  it('un 422 muestra validación, no un error de conexión', async () => {
+    renderApp()
+    await loginAs(users.owner.email)
+    cleanup()
+    server.use(
+      http.get('*/audit', () =>
+        HttpResponse.json({ detail: 'from debe ser anterior a to' }, { status: 422 }),
+      ),
+    )
+    window.history.pushState({}, '', '/auditoria')
+    renderApp()
+    expect(await screen.findByText('from debe ser anterior a to')).toBeInTheDocument()
+    expect(screen.queryByText(/Revisa tu conexión/)).not.toBeInTheDocument()
+  })
+
+  it('una página fuera de rango ofrece volver a la primera', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await loginAs(users.owner.email)
+    cleanup()
+    window.history.pushState({}, '', '/auditoria?page=999')
+    renderApp()
+    expect(await screen.findByText('página fuera de rango')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Ir a la página 1' }))
+    expect(await screen.findByText(/Mostrando 1–20 de 25 eventos/)).toBeInTheDocument()
+    expect(window.location.search).toContain('page=1')
   })
 })

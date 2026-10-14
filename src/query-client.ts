@@ -19,14 +19,25 @@ export function createAppQueryClient() {
       },
       mutations: {
         retry: false,
+        gcTime: 0,
       },
     },
   })
 }
 
-export const queryClient = createAppQueryClient()
+export let queryClient = createAppQueryClient()
 
-export async function resetQueryCache(client: QueryClient = queryClient) {
+export function getQueryClient() {
+  return queryClient
+}
+
+export async function resetQueryCache(client: QueryClient = getQueryClient()) {
   await client.cancelQueries()
+  client.getMutationCache().clear()
   client.clear()
+}
+
+export async function resetAppQueryClient() {
+  await resetQueryCache(queryClient)
+  queryClient = createAppQueryClient()
 }

@@ -27,7 +27,7 @@ import { EmptyState } from '@/features/shared/components/ui/empty-state'
 import { Field, SelectInput, TextInput } from '@/features/shared/components/ui/field'
 import { Skeleton } from '@/features/shared/components/ui/skeleton'
 import { formatDateTime } from '@/features/shared/lib/format-date'
-import { isApiError } from '@/features/shared/lib/api-error'
+import { getApiErrorMessage, isApiError } from '@/features/shared/lib/api-error'
 import { canViewAudit, ROLE_LABEL } from '@/features/shared/lib/roles'
 import { AuditUnauthorized } from '@/pages/audit/audit-unauthorized'
 
@@ -60,9 +60,13 @@ export function AuditPage() {
   const [actor, setActor] = useState(applied.actor)
   const [from, setFrom] = useState(applied.from)
   const [to, setTo] = useState(applied.to)
-  const [rangeError, setRangeError] = useState('')
+  const [draftRangeError, setDraftRangeError] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(activeCount > 0)
   const listRef = useRef<HTMLOListElement>(null)
+  const invalidRange = Boolean(applied.from && applied.to && applied.from > applied.to)
+  const rangeError = invalidRange
+    ? 'La fecha final debe ser igual o posterior a la inicial.'
+    : draftRangeError
 
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
@@ -74,12 +78,12 @@ export function AuditPage() {
     const filters: AuditFilters = {}
     if (applied.entity) filters.entity = applied.entity
     if (applied.actor) filters.user_id = applied.actor
-    if (applied.from) filters.from = dateToAwareStart(applied.from)
-    if (applied.to) filters.to = dateToAwareEnd(applied.to)
+    if (!invalidRange && applied.from) filters.from = dateToAwareStart(applied.from)
+    if (!invalidRange && applied.to) filters.to = dateToAwareEnd(applied.to)
     return filters
-  }, [applied.entity, applied.actor, applied.from, applied.to])
+  }, [applied.entity, applied.actor, applied.from, applied.to, invalidRange])
 
-  const audit = useAuditQuery(queryFilters, applied.page, allowed)
+  const audit = useAuditQuery(queryFilters, applied.page, allowed && !invalidRange)
   const namesById = useMemo(() => {
     const map = new Map<string, string>()
     for (const member of members.data ?? []) {
@@ -103,10 +107,10 @@ export function AuditPage() {
   function applyFilters(event: FormEvent) {
     event.preventDefault()
     if (from && to && from > to) {
-      setRangeError('La fecha final debe ser igual o posterior a la inicial.')
+      setDraftRangeError('La fecha final debe ser igual o posterior a la inicial.')
       return
     }
-    setRangeError('')
+    setDraftRangeError('')
     const next = new URLSearchParams()
     if (entity) next.set('entity', entity)
     if (actor) next.set('actor', actor)
@@ -121,7 +125,7 @@ export function AuditPage() {
     setActor('')
     setFrom('')
     setTo('')
-    setRangeError('')
+    setDraftRangeError('')
     setSearchParams(new URLSearchParams())
   }
 
@@ -135,10 +139,23 @@ export function AuditPage() {
   const items = audit.data?.items ?? []
   const total = audit.data?.total ?? 0
   const pageSize = audit.data?.page_size ?? AUDIT_PAGE_SIZE
+  const lastPage = Math.max(1, Math.ceil(total / pageSize))
   const start = total === 0 ? 0 : (applied.page - 1) * pageSize + 1
   const end = Math.min(applied.page * pageSize, total)
   const hasNext = applied.page * pageSize < total
-  const showEmpty = !audit.isPending && !audit.isError && items.length === 0
+  const pageOutOfRange =
+    !invalidRange &&
+    !audit.isLoading &&
+    !audit.isError &&
+    Boolean(audit.data) &&
+    total > 0 &&
+    applied.page > lastPage
+  const showEmpty =
+    !invalidRange &&
+    !audit.isLoading &&
+    !audit.isError &&
+    items.length === 0 &&
+    !pageOutOfRange
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -207,7 +224,7 @@ export function AuditPage() {
                 error={rangeError}
                 onChange={(event) => {
                   setTo(event.target.value)
-                  setRangeError('')
+                  setDraftRangeError('')
                 }}
               />
             </Field>
@@ -225,22 +242,43 @@ export function AuditPage() {
 
       {audit.isError ? (
         <>
-          <Alert>No se pudo cargar la bitácora. Revisa tu conexión e inténtalo de nuevo.</Alert>
+          <Alert>
+            {isApiError(audit.error) && audit.error.status === 422
+              ? getApiErrorMessage(
+                  audit.error,
+                  'Revisa los filtros. Hay un dato que el servidor no acepta.',
+                )
+              : 'No se pudo cargar la bitácora. Revisa tu conexión e inténtalo de nuevo.'}
+          </Alert>
           <Button variant="outline" onClick={() => void audit.refetch()}>
             Reintentar
           </Button>
         </>
       ) : null}
 
-      {audit.isPending && !audit.data ? (
+      {audit.isLoading && !audit.data ? (
         <ol aria-busy="true" className="m-0 flex list-none flex-col gap-3 p-0">
+          <li className="sr-only">Cargando…</li>
           <AuditSkeleton />
           <AuditSkeleton />
           <AuditSkeleton />
         </ol>
       ) : null}
 
-      {showEmpty ? (
+      {pageOutOfRange ? (
+        <EmptyState
+          title="página fuera de rango"
+          action={
+            <Button variant="outline" className="mt-3" onClick={() => goToPage(1)}>
+              Ir a la página 1
+            </Button>
+          }
+        >
+          Esta página no tiene eventos. Vuelve a la primera.
+        </EmptyState>
+      ) : null}
+
+      {showEmpty && !pageOutOfRange ? (
         activeCount > 0 ? (
           <EmptyState
             title="No hay eventos con estos filtros"

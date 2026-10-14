@@ -52,7 +52,19 @@ export function hasField(record: Record<string, unknown> | null, field: string):
   return Boolean(record && Object.prototype.hasOwnProperty.call(record, field))
 }
 
+const ACTION_TITLES: Record<string, string> = {
+  login: 'Inicio de sesión',
+  login_failed: 'Intento de entrada fallido',
+  select_business: 'Cambio de negocio',
+  pin_change: 'Cambio de clave rápida',
+  pin_unlock: 'Desbloqueo con clave rápida',
+  pin_failed: 'Clave rápida incorrecta',
+  accept: 'Invitación aceptada',
+  revoke: 'Invitación anulada',
+}
+
 export function auditActionTitle(event: AuditRead): string {
+  if (ACTION_TITLES[event.action]) return ACTION_TITLES[event.action]
   if (event.action === 'block') return 'Cliente bloqueado'
   if (event.action === 'unblock') return 'Cliente desbloqueado'
   if (event.entity === 'client' && event.action === 'update') {

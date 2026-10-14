@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { clientKeys } from '@/features/clients/query-keys'
-import { queryClient } from '@/query-client'
+import { getQueryClient } from '@/query-client'
 import { renderApp } from './render'
 import {
   clientDetailRequests,
@@ -76,7 +76,7 @@ describe('CBF-110 aceptación', () => {
 
   it('cambiar de negocio limpia la caché de TanStack Query', async () => {
     const user = userEvent.setup()
-    const clear = vi.spyOn(queryClient, 'clear')
+    const clear = vi.spyOn(getQueryClient(), 'clear')
     renderApp()
     await loginAs(users.multi.email)
     await user.click(await screen.findByRole('button', { name: /Créditos Norte/ }))
@@ -182,7 +182,7 @@ describe('CBF-110 aceptación', () => {
         HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
       ),
     )
-    queryClient.clear()
+    getQueryClient().clear()
     cleanup()
     window.history.pushState({}, '', '/clientes')
     renderApp()
@@ -252,7 +252,7 @@ describe('CBF-110 aceptación', () => {
     renderApp()
     expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
     expect(
-      queryClient.getQueryData(clientKeys.detail(businesses.norte.id, 'cli-1')),
+      getQueryClient().getQueryData(clientKeys.detail(businesses.norte.id, 'cli-1')),
     ).toBeTruthy()
 
     server.use(
@@ -266,21 +266,21 @@ describe('CBF-110 aceptación', () => {
         HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
       ),
     )
-    await queryClient.invalidateQueries()
+    await getQueryClient().invalidateQueries()
     expect(await screen.findByRole('heading', { name: 'Entra a tu negocio' })).toBeInTheDocument()
     await waitFor(() => {
-      expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+      expect(getQueryClient().getQueryCache().getAll()).toHaveLength(0)
     })
 
     server.resetHandlers()
     await loginAs(users.owner.email)
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
     expect(
-      queryClient.getQueryData(clientKeys.detail(businesses.norte.id, 'cli-1')),
+      getQueryClient().getQueryData(clientKeys.detail(businesses.norte.id, 'cli-1')),
     ).toBeUndefined()
     expect(screen.queryByRole('heading', { name: 'Ana Pérez' })).not.toBeInTheDocument()
     expect(
-      queryClient
+      getQueryClient()
         .getQueryCache()
         .getAll()
         .every((entry) => {
@@ -479,10 +479,10 @@ describe('CBF-110 aceptación', () => {
         HttpResponse.json({ detail: 'no autenticado' }, { status: 401 }),
       ),
     )
-    await queryClient.invalidateQueries()
+    await getQueryClient().invalidateQueries()
     expect(await screen.findByRole('heading', { name: 'Entra a tu negocio' })).toBeInTheDocument()
     await waitFor(() => {
-      expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+      expect(getQueryClient().getQueryCache().getAll()).toHaveLength(0)
     })
 
     server.resetHandlers()
@@ -490,7 +490,7 @@ describe('CBF-110 aceptación', () => {
     await user.click(await screen.findByRole('button', { name: /Créditos Sur/ }))
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
     expect(
-      queryClient.getQueryData(clientKeys.detail(businesses.norte.id, 'cli-1')),
+      getQueryClient().getQueryData(clientKeys.detail(businesses.norte.id, 'cli-1')),
     ).toBeUndefined()
     expect(screen.queryByRole('heading', { name: 'Ana Pérez' })).not.toBeInTheDocument()
   })

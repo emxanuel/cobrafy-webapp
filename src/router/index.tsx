@@ -13,7 +13,7 @@ import { SELECT_BUSINESS_EVENT } from '@/features/shared/services/client'
 import { ProtectedLayout } from '@/pages/auth/protected-layout'
 import { RoleGuard } from '@/pages/auth/role-guard'
 import { RouteFallback } from '@/pages/route-fallback'
-import { queryClient } from '@/query-client'
+import { getQueryClient } from '@/query-client'
 
 const LoginPage = lazy(async () => {
   const mod = await import('@/pages/auth/login-page')
@@ -72,6 +72,7 @@ function SessionListeners() {
   const navigate = useNavigate()
   useEffect(() => {
     function onUnauthorized() {
+      const queryClient = getQueryClient()
       void queryClient.cancelQueries().then(() => {
         queryClient.clear()
         navigate('/login', { replace: true })

@@ -5,6 +5,7 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import path from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 
+import { apiProxyConfig } from './src/features/shared/lib/api-proxy.ts'
 import {
   assertApiBaseUrl,
   buildContentSecurityPolicy,
@@ -45,18 +46,17 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       ...(bindAllInterfaces ? { host: true } : {}),
-      proxy: {
-        '/auth': { target: proxyTarget, changeOrigin: true },
-        '/clients': { target: proxyTarget, changeOrigin: true },
-        '/users': { target: proxyTarget, changeOrigin: true },
-        '/invitations': { target: proxyTarget, changeOrigin: true },
-        '/audit': { target: proxyTarget, changeOrigin: true },
-      },
+      proxy: apiProxyConfig(proxyTarget),
+    },
+    preview: {
+      proxy: apiProxyConfig(proxyTarget),
     },
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
       restoreMocks: true,
+      isolate: true,
+      fileParallelism: false,
       css: false,
     },
   }
