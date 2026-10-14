@@ -1,78 +1,52 @@
-# React + TypeScript + Vite
+# Cobrafy (web)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web de Cobrafy: entrar al negocio, elegir sucursal, ver y armar fichas de clientes, y (si eres dueño) invitar al equipo.
 
-Currently, two official plugins are available:
+## Cómo se guarda la sesión
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+El token **no** va a `localStorage`. Vive en **`sessionStorage`** (`cobrafy.session`).
 
-## React Compiler
+- No basta la memoria: en el celular un refresco a mitad de un alta no puede pedir el correo otra vez.
+- No usamos `localStorage`: el token no debe quedar en el disco después de cerrar la pestaña.
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+Nunca se escribe correo, cédula, contraseña ni token en `console.*` (solo método, ruta y código de error).
 
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
+## API
 
-## Expanding the ESLint configuration
+El cliente habla con `cobrafy-backend` (commit de referencia `4ddab7d`) con `Authorization: Bearer` y `X-Business-Id` en cada pedido del negocio activo.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Rutas usadas:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| Método | Ruta | Uso |
+|--------|------|-----|
+| POST | `/auth/login` | Correo y contraseña |
+| POST | `/auth/logout` | Salir |
+| GET | `/auth/me` | Sesión actual |
+| POST | `/auth/pin` | Configurar clave rápida |
+| POST | `/auth/pin/unlock` | Abrir con clave rápida |
+| POST | `/clients/search` | Lista y búsqueda (el documento **no** va en la URL) |
+| POST | `/clients` | Alta |
+| GET/PATCH | `/clients/{id}` | Ficha |
+| POST | `/clients/{id}/block` | Bloquear con motivo |
+| POST | `/clients/{id}/unblock` | Desbloquear (dueño) |
+| GET | `/clients/{id}/history` | Historial (`next_cursor`) |
+| GET | `/members` | Equipo y cobradores |
+| GET/POST/DELETE | `/members/invitations` | Invitaciones |
+| GET/POST | `/invitations/{token}` · `/invitations/{token}/accept` | Aceptar invitación |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Errores: **422** y **409** se pintan en el campo; **403** se avisa sin romper la pantalla; **401** manda al login.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Desarrollo
 
+```bash
+pnpm install
+cp .env.example .env   # VITE_API_BASE_URL vacío usa el proxy de Vite
+pnpm dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
 ```
