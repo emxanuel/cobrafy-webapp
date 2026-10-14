@@ -12,6 +12,32 @@ type StampedConfig = InternalAxiosRequestConfig & {
   cobrafyAccessToken?: string | null
 }
 
+function bearerFromHeader(header: unknown): string | null {
+  const value =
+    typeof header === 'string'
+      ? header
+      : Array.isArray(header)
+        ? header[0]
+        : header == null
+          ? null
+          : String(header)
+  if (typeof value === 'string' && value.startsWith('Bearer ')) {
+    return value.slice('Bearer '.length)
+  }
+  return null
+}
+
+function tokenUsedOnRequest(config?: StampedConfig): string | null {
+  if (!config) return null
+  if (config.cobrafyAccessToken !== undefined) return config.cobrafyAccessToken
+  const headers = config.headers
+  const header =
+    headers && typeof headers.get === 'function'
+      ? headers.get('Authorization')
+      : headers?.Authorization
+  return bearerFromHeader(header)
+}
+
 export const api = axios.create({
   baseURL,
   headers: {
@@ -49,7 +75,7 @@ api.interceptors.response.use(
     if (apiError.status === 401 && apiError.message === 'selecciona un negocio') {
       window.dispatchEvent(new Event(SELECT_BUSINESS_EVENT))
     } else if (apiError.status === 401 && !isAuthAttempt) {
-      const sent = (error.config as StampedConfig | undefined)?.cobrafyAccessToken
+      const sent = tokenUsedOnRequest(error.config as StampedConfig | undefined)
       queueMicrotask(() => {
         const current = useSessionStore.getState().accessToken
         if (sent && current && sent !== current) return

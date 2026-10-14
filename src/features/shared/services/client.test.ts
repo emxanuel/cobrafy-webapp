@@ -28,6 +28,7 @@ describe('api 401 interceptor', () => {
     )
 
     const pending = api.get('/clients')
+    await Promise.resolve()
     useSessionStore.getState().applyAuth(
       authResponse({
         user: users.multi,
