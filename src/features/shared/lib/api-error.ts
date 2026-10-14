@@ -38,6 +38,14 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError
 }
 
+/** Backend PinLockedError: 401 `demasiados intentos; entra con contraseña`. */
+export const PIN_LOCKED_DETAIL = 'demasiados intentos; entra con contraseña'
+
+export function isPinLockedError(error: unknown): boolean {
+  if (!isApiError(error) || error.status !== 401) return false
+  return /demasiados intentos/i.test(error.message)
+}
+
 export function getApiErrorMessage(
   error: unknown,
   fallback = 'No se pudo completar. Inténtalo de nuevo.',

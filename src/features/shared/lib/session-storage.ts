@@ -9,6 +9,7 @@
  */
 export const SESSION_KEY = 'cobrafy.session'
 export const BUSINESS_KEY = 'cobrafy.business'
+export const LOGIN_NOTICE_KEY = 'cobrafy.loginNotice'
 
 export function readJson<T>(key: string): T | null {
   try {

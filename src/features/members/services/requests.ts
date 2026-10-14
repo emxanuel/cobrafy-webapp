@@ -5,6 +5,7 @@ import type {
   MemberCreate,
   MemberInviteRead,
   MemberRead,
+  MemberUpdate,
 } from './types'
 
 export async function listMembers(): Promise<MemberRead[]> {
@@ -14,6 +15,14 @@ export async function listMembers(): Promise<MemberRead[]> {
 
 export async function inviteMember(payload: MemberCreate): Promise<MemberInviteRead> {
   const { data } = await api.post<MemberInviteRead>('/users', payload)
+  return data
+}
+
+export async function patchMember(
+  memberId: string,
+  payload: MemberUpdate,
+): Promise<MemberRead> {
+  const { data } = await api.patch<MemberRead>(`/users/${memberId}`, payload)
   return data
 }
 

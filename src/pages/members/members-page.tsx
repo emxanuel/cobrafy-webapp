@@ -5,8 +5,10 @@ import {
   useInvitationsQuery,
   useInviteMemberMutation,
   useMembersQuery,
+  usePatchMemberMutation,
   useRevokeInvitationMutation,
 } from '@/features/members/hooks/use-members-queries'
+import type { MemberRead } from '@/features/members/services/types'
 import { inviteSchema, type InviteFormValues } from '@/features/members/schemas'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -19,6 +21,7 @@ export function MembersPage() {
   const members = useMembersQuery(true)
   const invitations = useInvitationsQuery(true)
   const invite = useInviteMemberMutation()
+  const patchMember = usePatchMemberMutation()
   const revoke = useRevokeInvitationMutation()
   const form = useForm<InviteFormValues>({
     resolver: zodResolver(inviteSchema),
@@ -83,12 +86,23 @@ export function MembersPage() {
               : getApiErrorMessage(members.error)}
           </Alert>
         ) : null}
+        {patchMember.isError ? (
+          <Alert>
+            {isApiError(patchMember.error) && patchMember.error.status === 409
+              ? 'El negocio debe tener al menos un dueño activo.'
+              : getApiErrorMessage(patchMember.error)}
+          </Alert>
+        ) : null}
         <ul className="m-0 list-none p-0">
           {(members.data ?? []).map((member) => (
-            <li key={member.id} className="border-border border-b py-3">
-              <p className="text-heading m-0">{member.name}</p>
-              <p className="m-0 text-sm">{ROLE_LABEL[member.role]}</p>
-            </li>
+            <MemberRow
+              key={member.id}
+              member={member}
+              pending={patchMember.isPending}
+              onPatch={(payload) =>
+                patchMember.mutate({ memberId: member.id, payload })
+              }
+            />
           ))}
         </ul>
       </section>
@@ -121,5 +135,51 @@ export function MembersPage() {
         )}
       </section>
     </>
+  )
+}
+
+function MemberRow({
+  member,
+  pending,
+  onPatch,
+}: {
+  member: MemberRead
+  pending: boolean
+  onPatch: (payload: { role?: MemberRead['role']; is_active?: boolean }) => void
+}) {
+  return (
+    <li className="border-border flex flex-col gap-2 border-b py-3">
+      <div>
+        <p className="text-heading m-0">{member.name}</p>
+        <p className="m-0 text-sm">
+          {member.email}
+          {member.is_active ? '' : ' · Inactivo'}
+        </p>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <label className="sr-only" htmlFor={`role-${member.id}`}>
+          Rol de {member.name}
+        </label>
+        <SelectInput
+          id={`role-${member.id}`}
+          value={member.role}
+          disabled={pending}
+          onChange={(event) =>
+            onPatch({ role: event.target.value as MemberRead['role'] })
+          }
+        >
+          <option value="dueño">Dueño</option>
+          <option value="cajero">Cajero</option>
+          <option value="cobrador">Cobrador</option>
+        </SelectInput>
+        <Button
+          variant="ghost"
+          disabled={pending}
+          onClick={() => onPatch({ is_active: !member.is_active })}
+        >
+          {member.is_active ? 'Desactivar' : 'Activar'}
+        </Button>
+      </div>
+    </li>
   )
 }

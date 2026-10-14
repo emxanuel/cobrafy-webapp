@@ -40,6 +40,16 @@ export type ContactCreate = {
   document?: string | null
 }
 
+export type ContactUpdate = {
+  type?: ContactType
+  name?: string
+  phone?: string
+  relationship?: string
+  address?: string | null
+  doc_type?: DocType | null
+  document?: string | null
+}
+
 export type ClientRead = {
   id: string
   name: string

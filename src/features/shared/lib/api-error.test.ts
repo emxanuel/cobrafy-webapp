@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { describe, expect, it } from 'vitest'
 
-import { ApiError, toApiError } from './api-error'
+import { ApiError, isPinLockedError, PIN_LOCKED_DETAIL, toApiError } from './api-error'
 
 function axiosError(status: number, data: unknown) {
   return new axios.AxiosError(
@@ -45,6 +45,13 @@ describe('toApiError', () => {
     )
     expect(error.fieldErrors.document).toBe('ya existe un cliente con este documento')
     expect(error.message).toBe('ya existe un cliente con este documento')
+  })
+
+  it('detecta el bloqueo de PIN del backend', () => {
+    const locked = new ApiError(PIN_LOCKED_DETAIL, 401)
+    expect(isPinLockedError(locked)).toBe(true)
+    expect(isPinLockedError(new ApiError('credenciales inválidas', 401))).toBe(false)
+    expect(isPinLockedError(new ApiError(PIN_LOCKED_DETAIL, 403))).toBe(false)
   })
 
   it('deja los 409 de bloqueo como mensaje, no como campo', () => {

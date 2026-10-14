@@ -12,7 +12,9 @@ import {
 import { safeInternalPath } from '@/features/auth/lib/safe-internal-path'
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import { switchBusiness } from '@/features/business/lib/switch-business'
-import { queryClient } from '@/query-client'
+import { isPinLockedError } from '@/features/shared/lib/api-error'
+import { LOGIN_NOTICE_KEY } from '@/features/shared/lib/session-storage'
+import { queryClient, resetQueryCache } from '@/query-client'
 
 export function destinationAfterAuth(options: {
   needs_business_selection: boolean
@@ -75,6 +77,7 @@ export function useLogoutMutation() {
 
 export function useUnlockPinMutation() {
   const applyAuth = useSessionStore((s) => s.applyAuth)
+  const clearSession = useSessionStore((s) => s.clearSession)
   const navigate = useNavigate()
 
   return useMutation({
@@ -82,6 +85,20 @@ export function useUnlockPinMutation() {
     onSuccess: (data) => {
       applyAuth(data)
       navigate(destinationAfterAuth(data), { replace: true })
+    },
+    onError: async (error) => {
+      if (!isPinLockedError(error)) return
+      try {
+        if (useSessionStore.getState().accessToken) {
+          await logout()
+        }
+      } catch {
+        // Cerrar en el teléfono aunque el servidor ya no reconozca la sesión.
+      }
+      await resetQueryCache()
+      sessionStorage.setItem(LOGIN_NOTICE_KEY, 'pin-locked')
+      navigate('/login', { replace: true, state: { pinLocked: true } })
+      clearSession()
     },
   })
 }

@@ -13,6 +13,7 @@ import {
   useClient,
   useUnblockClientMutation,
 } from '@/features/clients/hooks/use-clients-queries'
+import { ContactCard } from '@/features/clients/components/contact-card'
 import { blockSchema, type BlockFormValues } from '@/features/clients/schemas'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -138,9 +139,12 @@ export function ClientDetailPage() {
         ) : (
           <ul className="m-0 list-none p-0">
             {references.map((item) => (
-              <li key={item.id} className="py-1">
-                {item.name} · {item.phone} · {item.relationship}
-              </li>
+              <ContactCard
+                key={item.id}
+                clientId={client.id}
+                contact={item}
+                canEdit={canEditClients(role)}
+              />
             ))}
           </ul>
         )}
@@ -153,10 +157,12 @@ export function ClientDetailPage() {
         ) : (
           <ul className="m-0 list-none p-0">
             {guarantors.map((item) => (
-              <li key={item.id} className="py-1">
-                {item.name}
-                {item.document ? ` · ${item.document}` : ''}
-              </li>
+              <ContactCard
+                key={item.id}
+                clientId={client.id}
+                contact={item}
+                canEdit={canEditClients(role)}
+              />
             ))}
           </ul>
         )}

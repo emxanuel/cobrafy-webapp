@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clientKeys } from '@/features/clients/query-keys'
 import { queryClient } from '@/query-client'
 import { renderApp } from './render'
-import { searchRequests } from './handlers'
+import { clientDetailRequests, logoutRequests, searchRequests } from './handlers'
 import { server } from './server'
 import { businesses, users } from './fixtures'
 
@@ -276,5 +276,108 @@ describe('CBF-110 aceptación', () => {
     await user.type(screen.getByLabelText('Clave rápida'), '1234')
     await user.click(screen.getByRole('button', { name: 'Continuar' }))
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+  })
+
+  it('si el PIN se bloquea cierra la sesión y manda al login', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await loginAs(users.pin.email)
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+
+    cleanup()
+    window.history.pushState({}, '', '/clientes')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Clave rápida' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Clave rápida'), '0000')
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await user.click(screen.getByRole('button', { name: 'Continuar' }))
+      if (attempt < 4) {
+        await waitFor(() => {
+          expect(screen.getByRole('button', { name: 'Continuar' })).toBeEnabled()
+        })
+      }
+    }
+    expect(await screen.findByRole('heading', { name: 'Entra a tu negocio' })).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Demasiados intentos con la clave rápida. Entra con tu correo y contraseña.',
+      ),
+    ).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.session')).toBeNull()
+    expect(window.location.pathname).toBe('/login')
+    expect(logoutRequests.some((item) => item.token?.includes('token-pin'))).toBe(true)
+  })
+
+  it('acepta la invitación pegando el enlace si no hay token en la ruta', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/invitar')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Únete al negocio' })).toBeInTheDocument()
+    await user.type(
+      screen.getByLabelText('Enlace o código de invitación'),
+      'https://app.local/invitar/inv-ok',
+    )
+    await user.type(screen.getByLabelText('Nombre'), 'Nora Nueva')
+    await user.type(screen.getByLabelText('Tu contraseña'), 'clavesegura')
+    await user.type(screen.getByLabelText('Repite la contraseña'), 'clavesegura')
+    await user.click(screen.getByRole('button', { name: 'Aceptar invitación' }))
+    expect(await screen.findByRole('heading', { name: 'Entra a tu negocio' })).toBeInTheDocument()
+  })
+
+  it('un cajero que abre /equipo vuelve a clientes', async () => {
+    renderApp()
+    await loginAs(users.cashier.email)
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    cleanup()
+    window.history.pushState({}, '', '/equipo')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Equipo' })).not.toBeInTheDocument()
+    expect(window.location.pathname).toBe('/clientes')
+  })
+
+  it('un cobrador que abre /clientes/nuevo vuelve a clientes', async () => {
+    renderApp()
+    await loginAs(users.collector.email)
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    cleanup()
+    window.history.pushState({}, '', '/clientes/nuevo')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Nuevo cliente' })).not.toBeInTheDocument()
+    expect(window.location.pathname).toBe('/clientes')
+  })
+
+  it('al cambiar de negocio no vuelve a pedir el cliente abierto del anterior', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await loginAs(users.multi.email)
+    await user.click(await screen.findByRole('button', { name: /Créditos Norte/ }))
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    cleanup()
+    window.history.pushState({}, '', '/clientes/cli-1')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    clientDetailRequests.length = 0
+    await user.click(screen.getByRole('button', { name: 'Menú' }))
+    await user.click(screen.getByRole('button', { name: /Créditos Sur/ }))
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/clientes')
+    expect(clientDetailRequests.some((item) => item.id === 'cli-1')).toBe(false)
+  })
+
+  it('el dueño cambia el rol de un miembro', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await loginAs(users.owner.email)
+    cleanup()
+    window.history.pushState({}, '', '/equipo')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Equipo' })).toBeInTheDocument()
+    const roleSelect = await screen.findByLabelText('Rol de Carla Caja')
+    await user.selectOptions(roleSelect, 'cobrador')
+    await waitFor(() => {
+      expect(roleSelect).toHaveValue('cobrador')
+    })
   })
 })

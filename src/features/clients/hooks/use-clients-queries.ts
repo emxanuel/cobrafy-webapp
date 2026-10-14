@@ -12,6 +12,7 @@ import {
   searchClients,
   unblockClient,
   updateClient,
+  updateContact,
 } from '@/features/clients/services/requests'
 import type {
   ClientCheckRequest,
@@ -19,6 +20,7 @@ import type {
   ClientHistory,
   ClientUpdate,
   ContactCreate,
+  ContactUpdate,
 } from '@/features/clients/services/types'
 
 export function useClientSearch(query: string, status: 'active' | 'blocked' | '') {
@@ -111,6 +113,22 @@ export function useUnblockClientMutation(clientId: string) {
 export function useCheckClientMutation() {
   return useMutation({
     mutationFn: (payload: ClientCheckRequest) => checkClient(payload),
+  })
+}
+
+export function useUpdateContactMutation(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      contactId,
+      payload,
+    }: {
+      contactId: string
+      payload: ContactUpdate
+    }) => updateContact(clientId, contactId, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: clientKeys.all })
+    },
   })
 }
 

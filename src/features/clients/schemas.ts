@@ -12,6 +12,9 @@ export const contactFormSchema = z.object({
   document: z.string().optional(),
 })
 
+export const contactEditSchema = contactFormSchema.omit({ type: true })
+export type ContactEditValues = z.input<typeof contactEditSchema>
+
 export const clientFormSchema = z.object({
   name: z.string().min(1, 'Escribe el nombre.'),
   doc_type: docType,

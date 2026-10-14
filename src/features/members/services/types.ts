@@ -18,6 +18,11 @@ export type MemberCreate = {
   role: Role
 }
 
+export type MemberUpdate = {
+  role?: Role
+  is_active?: boolean
+}
+
 export type InvitationRead = {
   id: string
   email: string

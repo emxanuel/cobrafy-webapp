@@ -45,7 +45,9 @@ Rutas usadas:
 | POST | `/clients/{id}/unblock` | Desbloquear con `reason` (solo dueño) |
 | GET | `/clients/{id}/history` | Historial (`limit`, `before`, `events`, `next_cursor`) |
 | POST/GET | `/clients/{id}/contacts` | Referencias (`referencia`) y garantes (`garante`) |
+| PATCH/DELETE | `/clients/{id}/contacts/{contact_id}` | Editar o desactivar un contacto (dueño y cajero) |
 | GET/POST | `/users` | Equipo e invitaciones por email (solo dueño) |
+| PATCH | `/users/{id}` | Cambiar rol o `is_active` de una membresía (`id` de membresía) |
 | GET | `/invitations` | Invitaciones pendientes |
 | POST | `/invitations/accept` | Aceptar (`token`, `name`, `password`). No devuelve sesión. |
 | POST | `/invitations/{id}/revoke` | Revocar |

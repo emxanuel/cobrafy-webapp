@@ -90,10 +90,9 @@ export function AppLayout() {
                       'w-full',
                     )}
                     onClick={() => {
-                      void switchBusiness(queryClient, item.business_id).then(() => {
-                        close()
-                        navigate('/clientes')
-                      })
+                      close()
+                      navigate('/clientes', { replace: true })
+                      void switchBusiness(queryClient, item.business_id)
                     }}
                   >
                     {item.business_name}

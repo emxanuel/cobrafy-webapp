@@ -6,9 +6,10 @@ import {
   inviteMember,
   listInvitations,
   listMembers,
+  patchMember,
   revokeInvitation,
 } from '@/features/members/services/requests'
-import type { MemberCreate } from '@/features/members/services/types'
+import type { MemberCreate, MemberUpdate } from '@/features/members/services/types'
 
 export function useMembersQuery(enabled: boolean) {
   const businessId = useBusinessStore((s) => s.activeBusinessId)
@@ -32,6 +33,22 @@ export function useInviteMemberMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: MemberCreate) => inviteMember(payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: memberKeys.all })
+    },
+  })
+}
+
+export function usePatchMemberMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      payload,
+    }: {
+      memberId: string
+      payload: MemberUpdate
+    }) => patchMember(memberId, payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: memberKeys.all })
     },

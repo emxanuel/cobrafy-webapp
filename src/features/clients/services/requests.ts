@@ -12,6 +12,7 @@ import type {
   ClientUpdate,
   ContactCreate,
   ContactRead,
+  ContactUpdate,
 } from './types'
 
 export async function listClients(params?: {
@@ -101,6 +102,18 @@ export async function listContacts(
 ): Promise<{ items: ContactRead[] }> {
   const { data } = await api.get<{ items: ContactRead[] }>(
     `/clients/${clientId}/contacts`,
+  )
+  return data
+}
+
+export async function updateContact(
+  clientId: string,
+  contactId: string,
+  payload: ContactUpdate,
+): Promise<ContactRead> {
+  const { data } = await api.patch<ContactRead>(
+    `/clients/${clientId}/contacts/${contactId}`,
+    payload,
   )
   return data
 }

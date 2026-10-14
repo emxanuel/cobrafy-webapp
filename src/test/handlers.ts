@@ -8,7 +8,8 @@ import type {
   ClientUpdate,
   ContactCreate,
 } from '@/features/clients/services/types'
-import type { MemberCreate } from '@/features/members/services/types'
+import type { ContactUpdate } from '@/features/clients/services/types'
+import type { MemberCreate, MemberRead, MemberUpdate } from '@/features/members/services/types'
 import {
   authResponse,
   businesses,
@@ -24,18 +25,39 @@ import {
 const clients = new Map<string, ClientDetail>()
 let createdCount = 0
 let contactCount = 0
+let pinFailures = 0
+let membersState: MemberRead[] = []
 
 export const searchRequests: Array<{ method: string; url: string; body: unknown }> = []
 export const listRequests: Array<{ method: string; url: string }> = []
 export const checkRequests: Array<{ method: string; url: string; body: unknown }> = []
+export const clientDetailRequests: Array<{ id: string; token: string }> = []
+export const logoutRequests: Array<{ token: string | null }> = []
+
+const MAX_PIN_ATTEMPTS = 5
+const PIN_LOCKED = 'demasiados intentos; entra con contraseña'
+
+function resetMembers() {
+  membersState = [
+    { ...ownerMember },
+    { ...cashierMember },
+    { ...collectorMember },
+  ]
+}
+
+resetMembers()
 
 export function resetData() {
   clients.clear()
   createdCount = 0
   contactCount = 0
+  pinFailures = 0
+  resetMembers()
   searchRequests.length = 0
   listRequests.length = 0
   checkRequests.length = 0
+  clientDetailRequests.length = 0
+  logoutRequests.length = 0
 }
 
 function bearer(request: Request) {
@@ -187,7 +209,10 @@ export const handlers = [
     )
   }),
 
-  http.post('*/auth/logout', () => new HttpResponse(null, { status: 204 })),
+  http.post('*/auth/logout', ({ request }) => {
+    logoutRequests.push({ token: bearer(request) })
+    return new HttpResponse(null, { status: 204 })
+  }),
 
   http.get('*/auth/me', ({ request }) => {
     const denied = requireAuth(request)
@@ -207,6 +232,7 @@ export const handlers = [
     if (denied) return denied
     const body = (await request.json()) as { pin?: string }
     if (body.pin === '1234') {
+      pinFailures = 0
       return HttpResponse.json(
         authResponse({
           user: users.pin,
@@ -214,6 +240,10 @@ export const handlers = [
           token: 'token-pin',
         }),
       )
+    }
+    pinFailures += 1
+    if (pinFailures >= MAX_PIN_ATTEMPTS) {
+      return HttpResponse.json({ detail: PIN_LOCKED }, { status: 401 })
     }
     return HttpResponse.json({ detail: 'credenciales inválidas' }, { status: 401 })
   }),
@@ -413,10 +443,41 @@ export const handlers = [
     return HttpResponse.json(contact, { status: 201 })
   }),
 
+  http.patch('*/clients/:id/contacts/:contactId', async ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    if (roleFromToken(bearer(request)) === 'cobrador') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    const payload = (await request.json()) as ContactUpdate
+    const clientId = String(params.id)
+    const contactId = String(params.contactId)
+    const current = clients.get(clientId) ?? clientFixture({ id: clientId })
+    const index = current.contacts.findIndex((item) => item.id === contactId)
+    if (index < 0) {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    const previous = current.contacts[index]
+    const updated = {
+      ...previous,
+      name: payload.name ?? previous.name,
+      phone: payload.phone ?? previous.phone,
+      relationship: payload.relationship ?? previous.relationship,
+      address: payload.address === undefined ? previous.address : payload.address,
+      doc_type: payload.doc_type === undefined ? previous.doc_type : payload.doc_type,
+      document: payload.document === undefined ? previous.document : payload.document,
+      has_document: payload.document === undefined ? previous.has_document : Boolean(payload.document),
+    }
+    current.contacts = current.contacts.map((item, i) => (i === index ? updated : item))
+    clients.set(clientId, current)
+    return HttpResponse.json(updated)
+  }),
+
   http.get('*/clients/:id', ({ request, params }) => {
     const denied = requireAuth(request)
     if (denied) return denied
     const id = String(params.id)
+    clientDetailRequests.push({ id, token: bearer(request) ?? '' })
     if (id === 'cli-blocked') {
       return HttpResponse.json(
         clientFixture({
@@ -616,7 +677,43 @@ export const handlers = [
     if (roleFromToken(bearer(request)) !== 'dueño') {
       return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
     }
-    return HttpResponse.json([ownerMember, cashierMember, collectorMember])
+    return HttpResponse.json(membersState)
+  }),
+
+  http.patch('*/users/:id', async ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    if (roleFromToken(bearer(request)) !== 'dueño') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    const payload = (await request.json()) as MemberUpdate
+    const id = String(params.id)
+    const index = membersState.findIndex((item) => item.id === id)
+    if (index < 0) {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    const current = membersState[index]
+    const nextRole = payload.role ?? current.role
+    const nextActive = payload.is_active ?? current.is_active
+    const wouldDropLastOwner =
+      current.role === 'dueño' &&
+      current.is_active &&
+      (nextRole !== 'dueño' || !nextActive) &&
+      membersState.filter((item) => item.role === 'dueño' && item.is_active && item.id !== id)
+        .length === 0
+    if (wouldDropLastOwner) {
+      return HttpResponse.json(
+        { detail: 'el negocio debe tener al menos un dueño activo' },
+        { status: 409 },
+      )
+    }
+    const updated: MemberRead = {
+      ...current,
+      role: nextRole,
+      is_active: nextActive,
+    }
+    membersState = membersState.map((item, i) => (i === index ? updated : item))
+    return HttpResponse.json(updated)
   }),
 
   http.post('*/users', async ({ request }) => {
