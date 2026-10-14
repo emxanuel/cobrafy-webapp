@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
+import { getSwitchingFromToken } from '@/features/auth/lib/switching-token'
 import { notifyUnauthorized, useSessionStore } from '@/features/auth/stores/session-store'
 import { toApiError } from '@/features/shared/lib/api-error'
 import { logHttpError } from '@/features/shared/lib/logger'
@@ -76,9 +77,13 @@ api.interceptors.response.use(
       window.dispatchEvent(new Event(SELECT_BUSINESS_EVENT))
     } else if (apiError.status === 401 && !isAuthAttempt) {
       const sent = tokenUsedOnRequest(error.config as StampedConfig | undefined)
+      if (sent && sent === getSwitchingFromToken()) {
+        return Promise.reject(apiError)
+      }
       queueMicrotask(() => {
         const current = useSessionStore.getState().accessToken
         if (sent && current && sent !== current) return
+        if (sent && sent === getSwitchingFromToken()) return
         notifyUnauthorized()
       })
     }

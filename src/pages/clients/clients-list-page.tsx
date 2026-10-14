@@ -12,6 +12,7 @@ import { PageHeader } from '@/features/shared/components/page-header'
 import { buttonVariants } from '@/features/shared/components/ui/button'
 import { SelectInput, TextInput } from '@/features/shared/components/ui/field'
 import { Alert } from '@/features/shared/components/ui/alert'
+import { LoadingState } from '@/features/shared/components/ui/loading-state'
 import { cn } from '@/features/shared/lib/cn'
 import { canCreateClients } from '@/features/shared/lib/roles'
 import { getApiErrorMessage } from '@/features/shared/lib/api-error'
@@ -34,14 +35,22 @@ export function ClientsListPage() {
         title="Clientes"
         description="Busca por nombre o documento. El documento nunca va en la dirección de la página."
         action={
-          canCreateClients(role) ? (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Link
-              to="/clientes/nuevo"
-              className={cn(buttonVariants({ variant: 'primary' }), 'w-full no-underline sm:w-auto')}
+              to="/verificar"
+              className={cn(buttonVariants({ variant: 'outline' }), 'w-full no-underline sm:w-auto')}
             >
-              Nuevo cliente
+              Verificar bloqueo
             </Link>
-          ) : null
+            {canCreateClients(role) ? (
+              <Link
+                to="/clientes/nuevo"
+                className={cn(buttonVariants({ variant: 'primary' }), 'w-full no-underline sm:w-auto')}
+              >
+                Nuevo cliente
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
@@ -80,7 +89,11 @@ export function ClientsListPage() {
         </Alert>
       ) : null}
 
-      {search.isPending ? <p>Cargando clientes…</p> : null}
+      {search.isPending ? (
+        <LoadingState>
+          <p>Cargando clientes…</p>
+        </LoadingState>
+      ) : null}
 
       {isEmpty ? (
         <p data-testid="clients-empty">{EMPTY_COPY}</p>

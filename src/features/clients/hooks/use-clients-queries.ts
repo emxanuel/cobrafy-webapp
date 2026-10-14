@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 
+import { useSwitchingFromToken } from '@/features/auth/lib/switching-token'
 import { useBusinessStore } from '@/features/business/stores/business-store'
 import { clientKeys } from '@/features/clients/query-keys'
 import {
@@ -52,19 +54,31 @@ export function useClientSearch(query: string, status: 'active' | 'blocked' | ''
 
 export function useClient(clientId: string | undefined) {
   const businessId = useBusinessStore((s) => s.activeBusinessId)
+  const switchingFrom = useSwitchingFromToken()
+  const [openedForBusiness] = useState(businessId)
   return useQuery({
     queryKey: clientKeys.detail(businessId, clientId ?? ''),
     queryFn: () => getClient(clientId!),
-    enabled: Boolean(clientId) && Boolean(businessId),
+    enabled:
+      Boolean(clientId) &&
+      Boolean(businessId) &&
+      !switchingFrom &&
+      openedForBusiness === businessId,
   })
 }
 
 export function useClientHistory(clientId: string | undefined) {
   const businessId = useBusinessStore((s) => s.activeBusinessId)
+  const switchingFrom = useSwitchingFromToken()
+  const [openedForBusiness] = useState(businessId)
   return useQuery({
     queryKey: clientKeys.history(businessId, clientId ?? ''),
     queryFn: () => getClientHistory(clientId!, { limit: 20 }),
-    enabled: Boolean(clientId) && Boolean(businessId),
+    enabled:
+      Boolean(clientId) &&
+      Boolean(businessId) &&
+      !switchingFrom &&
+      openedForBusiness === businessId,
   })
 }
 
@@ -134,6 +148,27 @@ export function useUnblockClientMutation(clientId: string) {
 export function useCheckClientMutation() {
   return useMutation({
     mutationFn: (payload: ClientCheckRequest) => checkClient(payload),
+  })
+}
+
+export function useVerifyClientMutation() {
+  return useMutation({
+    gcTime: 0,
+    mutationFn: async (payload: ClientCheckRequest) => {
+      const check = await checkClient(payload)
+      if (!check.found || !check.client_id) {
+        return { check, client: null, blockedAt: null as string | null }
+      }
+      const [client, history] = await Promise.all([
+        getClient(check.client_id),
+        check.is_blocked
+          ? getClientHistory(check.client_id, { limit: 20 }).catch(() => null)
+          : Promise.resolve(null),
+      ])
+      const blockedAt =
+        history?.events.find((event) => event.type === 'blocked')?.occurred_at ?? null
+      return { check, client, blockedAt }
+    },
   })
 }
 

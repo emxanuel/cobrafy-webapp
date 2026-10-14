@@ -13,6 +13,8 @@ import {
   useClient,
   useUnblockClientMutation,
 } from '@/features/clients/hooks/use-clients-queries'
+import { ClientRecordHeader } from '@/features/clients/components/client-record-header'
+import { displayFreeText } from '@/features/clients/lib/display-document'
 import { ContactCard } from '@/features/clients/components/contact-card'
 import { ContactComposer } from '@/features/clients/components/contact-composer'
 import {
@@ -20,8 +22,8 @@ import {
   parseContactsSaveNotice,
 } from '@/features/clients/lib/failed-contacts-notice'
 import { blockSchema, type BlockFormValues } from '@/features/clients/schemas'
-import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
+import { LoadingState } from '@/features/shared/components/ui/loading-state'
 import { Button, buttonVariants } from '@/features/shared/components/ui/button'
 import { Field, TextArea } from '@/features/shared/components/ui/field'
 import { getApiErrorMessage, isApiError } from '@/features/shared/lib/api-error'
@@ -61,7 +63,13 @@ export function ClientDetailPage() {
     defaultValues: { reason: '' },
   })
 
-  if (clientQuery.isPending) return <p>Cargando ficha…</p>
+  if (clientQuery.isPending) {
+    return (
+      <LoadingState>
+        <p>Cargando ficha…</p>
+      </LoadingState>
+    )
+  }
   if (clientQuery.isError) {
     return (
       <Alert>
@@ -84,35 +92,22 @@ export function ClientDetailPage() {
 
   return (
     <>
-      <PageHeader
-        title={client.name}
-        description={`${client.doc_type === 'cedula' ? 'Cédula' : 'Pasaporte'} ${client.document ?? '—'}`}
-        action={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            {canEditClients(role) ? (
-              <Link
-                to={`/clientes/${client.id}/editar`}
-                className={`${buttonVariants({ variant: 'outline' })} no-underline`}
-              >
-                Editar
-              </Link>
-            ) : null}
-            <Link
-              to={`/clientes/${client.id}/historial`}
-              className={`${buttonVariants({ variant: 'outline' })} no-underline`}
-            >
-              Historial
-            </Link>
-          </div>
-        }
-      />
+      <ClientRecordHeader client={client} role={role} />
+      {canEditClients(role) ? (
+        <Link
+          to={`/clientes/${client.id}/editar`}
+          className={`${buttonVariants({ variant: 'outline' })} self-start no-underline`}
+        >
+          Editar
+        </Link>
+      ) : null}
 
       {failedNotice ? <Alert>{failedNotice}</Alert> : null}
 
       {blocked ? (
         <Alert>
           Bloqueado
-          {client.blocked_reason ? `: ${client.blocked_reason}` : '.'}
+          {client.blocked_reason ? `: ${displayFreeText(client.blocked_reason, role)}` : '.'}
         </Alert>
       ) : null}
 
