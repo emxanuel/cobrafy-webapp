@@ -1025,7 +1025,7 @@ export const handlers = [
             {
               field: null,
               code: 'CLIENT_BLOCKED',
-              message: 'Este cliente está bloqueado: Atraso de 3 cuotas.',
+              message: 'Este cliente está bloqueado: Atraso de 3 cuotas',
             },
           ],
         },
@@ -1061,26 +1061,12 @@ export const handlers = [
     if (body.client_id === 'cli-collector-off') {
       warnings.push({
         code: 'collector_inactive',
-        message: 'El cobrador de este cliente está inactivo.',
+        message:
+          'El cobrador asignado al cliente está inactivo; reasígnale un cobrador activo para que pueda cobrar esta venta.',
       })
     }
-    return HttpResponse.json({
-      settings_configured: true,
-      financed_balance: plan.financed,
-      surcharge: plan.surcharge,
-      surcharge_percent: '20.00',
-      surcharge_mode: 'percent',
-      total: plan.total,
-      installment_amount: plan.installment,
-      installment_count: n,
-      frequency,
-      first_due_date: plan.first,
-      last_due_date: plan.last,
-      anchor_date: plan.first,
-      anchor_offset: 0,
-      installments: plan.rows,
-      warnings,
-    })
+    const { simulateResponse } = await import('./sales-msw')
+    return HttpResponse.json(simulateResponse(plan, { warnings }))
   }),
 
   http.post('*/sales', async ({ request }) => {
@@ -1103,7 +1089,7 @@ export const handlers = [
             {
               field: null,
               code: 'CLIENT_BLOCKED',
-              message: 'Este cliente está bloqueado: Atraso de 3 cuotas.',
+              message: 'Este cliente está bloqueado: Atraso de 3 cuotas',
             },
           ],
         },
@@ -1127,33 +1113,20 @@ export const handlers = [
       firstDue: anchor,
       percent: '20.00',
     })
-    const sale = {
+    const { saleDetailFromPlan } = await import('./sales-msw')
+    const clientId = String(body.client_id ?? 'cli-1')
+    const sale = saleDetailFromPlan(plan, {
       id: `sale-${saleCount}`,
       sale_number: 100 + saleCount,
-      client: {
-        id: String(body.client_id ?? 'cli-1'),
-        name: clients.get(String(body.client_id))?.name ?? 'Ana Pérez',
-      },
+      client_id: clientId,
+      client_name: clients.get(clientId)?.name ?? 'Ana Pérez',
       item_description: String(body.item_description ?? ''),
-      price: plan && typeof body.price === 'string' ? body.price : '0.00',
+      price: typeof body.price === 'string' ? body.price : '0.00',
       down_payment: typeof body.down_payment === 'string' ? body.down_payment : '0.00',
-      financed_balance: plan.financed,
-      surcharge: plan.surcharge,
-      surcharge_percent: '20.00',
-      surcharge_mode: 'percent',
-      total: plan.total,
-      installment_amount: plan.installment,
-      installment_count: n,
       frequency,
-      first_due_date: plan.first,
-      last_due_date: plan.last,
-      status: 'activa',
-      voided_at: null,
-      voided_reason: null,
-      voided_by: null,
-      installments: plan.rows,
-      warnings: [],
-    }
+      anchor_date: typeof body.anchor_date === 'string' ? body.anchor_date : plan.first,
+      anchor_offset: typeof body.anchor_offset === 'number' ? body.anchor_offset : 0,
+    })
     sales.set(sale.id, sale)
     return HttpResponse.json(sale, { status: 201 })
   }),
@@ -1180,7 +1153,13 @@ export const handlers = [
   http.get('*/sales', ({ request }) => {
     const denied = requireAuth(request)
     if (denied) return denied
-    const items = [...sales.values()]
+    const items = [...sales.values()].map((sale) => {
+      const read = { ...sale }
+      delete read.installments
+      delete read.contract
+      delete read.warnings
+      return read
+    })
     return HttpResponse.json({
       items,
       total: items.length,

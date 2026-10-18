@@ -47,7 +47,8 @@ import {
   saleFormFingerprint,
   type SaleFormSnapshot,
 } from '@/features/sales/lib/sale-payload'
-import { FREQUENCIES, type Frequency, type SaleRead } from '@/features/sales/services/types'
+import { planCuotaCount, planFirstDue, planLastDue } from '@/features/sales/lib/plan-view'
+import { FREQUENCIES, type Frequency, type SaleDetail } from '@/features/sales/services/types'
 import { SaleRegistered } from '@/pages/sales/sale-registered'
 
 const FREQUENCY_LABEL: Record<Frequency, string> = {
@@ -103,6 +104,8 @@ export function NewSalePage() {
       allowed={allowed}
       maxInstallments={maxInstallments}
       minDown={minDown}
+      surchargeKind={settings?.surcharge_mode ?? 'percent'}
+      surchargePercent={settings?.surcharge_percent ?? null}
     />
   )
 }
@@ -118,6 +121,8 @@ function NewSaleForm({
   allowed,
   maxInstallments,
   minDown,
+  surchargeKind,
+  surchargePercent,
 }: {
   clientId: string
   clientName: string
@@ -129,6 +134,8 @@ function NewSaleForm({
   allowed: Frequency[]
   maxInstallments: number
   minDown: string | null | undefined
+  surchargeKind: string
+  surchargePercent: string | null
 }) {
   const [article, setArticle] = useState('')
   const [price, setPrice] = useState('')
@@ -142,7 +149,7 @@ function NewSaleForm({
   const [firstDue, setFirstDue] = useState('')
   const [debounced, setDebounced] = useState<SaleFormSnapshot | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [created, setCreated] = useState<SaleRead | null>(null)
+  const [created, setCreated] = useState<SaleDetail | null>(null)
   const idempotencyRef = useRef<IdempotencyState | null>(null)
   const bannerRef = useRef<HTMLDivElement>(null)
 
@@ -194,7 +201,7 @@ function NewSaleForm({
     (simulatePayload.first_due_date ?? '') !== snapshot.first_due_date
 
   const ready = Boolean(plan) && !simulating && !stale
-  const pickerDue = firstDue || plan?.first_due_date || ''
+  const pickerDue = firstDue || (plan ? planFirstDue(plan) : '')
 
   const fieldErrors = simulate.isError ? getFieldErrors(simulate.error) : {}
   const simulateCode = isApiError(simulate.error) ? simulate.error.code : undefined
@@ -513,6 +520,8 @@ function NewSaleForm({
         <PlanCard
           state={planState}
           plan={plan}
+          surchargeKind={surchargeKind}
+          surchargePercent={surchargePercent}
           dim={planState === 'calculating' && Boolean(plan)}
         />
       )}
@@ -520,7 +529,7 @@ function NewSaleForm({
       <StickyActionBar
         summary={
           ready && plan
-            ? `${plan.installment_count} × ${formatMoney(plan.installment_amount)}`
+            ? `${planCuotaCount(plan)} × ${formatMoney(plan.installment_amount)}`
             : simulating
               ? 'Calculando…'
               : '—'
@@ -551,19 +560,25 @@ function NewSaleForm({
             <ConfirmRow label="Artículo" value={article.trim()} />
             <ConfirmRow label="Precio" value={formatMoney(plan ? snapshot.price : price)} />
             <ConfirmRow label="Inicial" value={formatMoney(snapshot.down_payment)} />
-            <ConfirmRow label={surchargeLabel(plan)} value={formatMoney(plan.surcharge)} />
+            <ConfirmRow
+              label={surchargeLabel({
+                surcharge_kind: surchargeKind,
+                surcharge_percent: surchargePercent,
+              })}
+              value={formatMoney(plan.surcharge)}
+            />
             <ConfirmRow label="Total a pagar" value={formatMoney(plan.total)} strong />
             <ConfirmRow
               label="Cuotas"
-              value={`${plan.installment_count} ${frequencyAdjective(plan.frequency, plan.installment_count)} de ${formatMoney(plan.installment_amount)}`}
+              value={`${planCuotaCount(plan)} ${frequencyAdjective(frequency, planCuotaCount(plan))} de ${formatMoney(plan.installment_amount)}`}
             />
             <ConfirmRow
               label="Fechas"
-              value={`${formatDueDate(plan.first_due_date)} → ${formatDueDate(plan.last_due_date)}`}
+              value={`${formatDueDate(planFirstDue(plan))} → ${formatDueDate(planLastDue(plan))}`}
               last
             />
           </div>
-          <CuotaDots count={plan.installment_count} />
+          <CuotaDots count={planCuotaCount(plan)} />
           <Button
             className="min-h-12 w-full"
             disabled={create.isPending}

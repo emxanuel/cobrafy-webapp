@@ -9,8 +9,9 @@ import { isApiError } from '@/features/shared/lib/api-error'
 import { CuotaDots } from '@/features/sales/components/cuota-dots'
 import { SaleBanner } from '@/features/sales/components/sale-banner'
 import { frequencyAdjective, registeredCollectorWarning, saleErrorBanner } from '@/features/sales/lib/copy'
+import { saleCuotaAmount } from '@/features/sales/lib/plan-view'
 import { useDownloadContractMutation } from '@/features/sales/hooks/use-sales-queries'
-import type { SaleRead } from '@/features/sales/services/types'
+import type { SaleDetail } from '@/features/sales/services/types'
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -25,7 +26,7 @@ export function SaleRegistered({
   sale,
   role,
 }: {
-  sale: SaleRead
+  sale: SaleDetail
   role: Role | null
 }) {
   const download = useDownloadContractMutation()
@@ -54,13 +55,13 @@ export function SaleRegistered({
 
       <section className="border-border rounded-md border px-4 py-4">
         <p className="m-0 text-sm">
-          {sale.installment_count} cuotas {frequencyAdjective(sale.frequency, sale.installment_count)} de
+          {sale.installments_count} cuotas {frequencyAdjective(sale.frequency, sale.installments_count)} de
         </p>
         <p className="text-heading m-0 text-[30px] leading-tight font-semibold tabular-nums">
-          {formatMoney(sale.installment_amount)}
+          {formatMoney(saleCuotaAmount(sale))}
         </p>
         <div className="mt-2">
-          <CuotaDots count={sale.installment_count} />
+          <CuotaDots count={sale.installments_count} />
         </div>
         <div className="border-border mt-2 flex justify-between border-b border-dashed py-1.5">
           <span>Primera cuota</span>

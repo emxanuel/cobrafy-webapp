@@ -1,5 +1,20 @@
 import { api } from '@/features/shared/services/client'
-import { FREQUENCIES, type CreditSettings, type Frequency, type PlanInstallment, type SaleCreateRequest, type SalePage, type SaleRead, type SaleWarning, type SimulateSaleRequest, type SimulateSaleResponse, type SurchargeMode } from './types'
+import {
+  FREQUENCIES,
+  type CreditSettings,
+  type Frequency,
+  type InstallmentPreview,
+  type InstallmentRead,
+  type SaleCreateRequest,
+  type SaleDetail,
+  type SalePage,
+  type SaleRead,
+  type SaleVoidedBy,
+  type SaleWarning,
+  type SimulateSaleRequest,
+  type SimulateSaleResponse,
+  type SurchargeMode,
+} from './types'
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
@@ -37,22 +52,42 @@ function asWarnings(value: unknown): SaleWarning[] {
     }))
 }
 
-function asPlan(value: unknown): PlanInstallment[] {
+function asPreview(value: unknown): InstallmentPreview[] {
   if (!Array.isArray(value)) return []
   return value
     .filter((item): item is Record<string, unknown> => typeof item === 'object' && item != null)
     .map((item) => ({
-      number: asInt(item.number ?? item.n, 0),
-      due_date: asString(item.due_date ?? item.date),
+      number: asInt(item.number, 0),
+      due_date: asString(item.due_date),
       amount: asString(item.amount),
     }))
 }
 
-function pickPlan(data: Record<string, unknown>): PlanInstallment[] {
-  if (Array.isArray(data.installments)) return asPlan(data.installments)
-  if (Array.isArray(data.plan)) return asPlan(data.plan)
-  if (Array.isArray(data.schedule)) return asPlan(data.schedule)
-  return []
+function asInstallments(value: unknown): InstallmentRead[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item != null)
+    .map((item) => ({
+      number: asInt(item.number, 0),
+      due_date: asString(item.due_date),
+      amount: asString(item.amount),
+      paid: asString(item.paid, '0.00'),
+      late_fee: asString(item.late_fee, '0.00'),
+      status: asString(item.status, 'pendiente'),
+    }))
+}
+
+function asVoidedBy(value: unknown): SaleVoidedBy | null {
+  if (typeof value !== 'object' || value == null) return null
+  const row = value as Record<string, unknown>
+  const membershipId = asString(row.membership_id)
+  if (!membershipId) return null
+  return { membership_id: membershipId, name: asString(row.name) }
+}
+
+function asNullableString(value: unknown): string | null {
+  const text = asString(value)
+  return text || null
 }
 
 export function normalizeCreditSettings(data: unknown): CreditSettings {
@@ -63,71 +98,76 @@ export function normalizeCreditSettings(data: unknown): CreditSettings {
     : [...FREQUENCIES]
   return {
     interest_method: asString(row.interest_method, 'recargo_fijo'),
-    surcharge_mode: asMode(row.surcharge_mode ?? row.surcharge_type ?? row.recargo_tipo),
-    surcharge_percent: asString(row.surcharge_percent ?? row.recargo_porcentaje) || null,
-    surcharge_amount: asString(row.surcharge_amount ?? row.surcharge_fixed_amount) || null,
+    surcharge_mode: asMode(row.surcharge_mode),
+    surcharge_percent: asNullableString(row.surcharge_percent),
+    surcharge_amount: asNullableString(row.surcharge_amount),
     allowed_frequencies: allowed.length ? allowed : [...FREQUENCIES],
-    max_installments: asInt(row.max_installments ?? row.plazo_max, 24) || 24,
-    min_down_payment_percent:
-      asString(row.min_down_payment_percent ?? row.inicial_minima_porcentaje) || null,
+    max_installments: asInt(row.max_installments, 24) || 24,
+    min_down_payment_percent: asNullableString(row.min_down_payment_percent),
   }
 }
 
 export function normalizeSimulation(data: unknown): SimulateSaleResponse {
   const row = (data ?? {}) as Record<string, unknown>
-  const plan = pickPlan(row)
-  const count =
-    asInt(row.installment_count) ||
-    (typeof row.installments === 'number' ? row.installments : plan.length)
+  const installments = asPreview(row.installments)
   return {
-    settings_configured: row.settings_configured !== false,
-    financed_balance: asString(row.financed_balance ?? row.saldo_financiado, '0.00'),
-    surcharge: asString(row.surcharge ?? row.recargo, '0.00'),
-    surcharge_percent: asString(row.surcharge_percent) || null,
-    surcharge_mode: asMode(row.surcharge_mode ?? row.surcharge_type),
+    financed: asString(row.financed, '0.00'),
+    surcharge: asString(row.surcharge, '0.00'),
     total: asString(row.total, '0.00'),
-    installment_amount: asString(row.installment_amount ?? row.cuota, '0.00'),
-    installment_count: count,
-    frequency: asFrequency(row.frequency ?? row.frecuencia),
-    first_due_date: asString(row.first_due_date),
-    last_due_date: asString(row.last_due_date) || plan.at(-1)?.due_date || '',
-    anchor_date: asString(row.anchor_date) || asString(row.first_due_date),
+    installment_amount: asString(row.installment_amount, '0.00'),
+    installments,
+    settings_configured: row.settings_configured !== false,
+    anchor_date: asString(row.anchor_date),
     anchor_offset: asInt(row.anchor_offset, 0),
-    installments: plan,
     warnings: asWarnings(row.warnings),
   }
 }
 
 export function normalizeSale(data: unknown): SaleRead {
   const row = (data ?? {}) as Record<string, unknown>
-  const sim = normalizeSimulation(row)
   const clientRaw = (row.client ?? {}) as Record<string, unknown>
   return {
     id: asString(row.id),
-    sale_number: asInt(row.sale_number ?? row.number, 0),
+    sale_number: asInt(row.sale_number, 0),
+    client_id: asString(row.client_id) || asString(clientRaw.id),
     client: {
-      id: asString(clientRaw.id),
+      id: asString(clientRaw.id) || asString(row.client_id),
       name: asString(clientRaw.name),
     },
-    item_description: asString(row.item_description ?? row.article),
+    seller_membership_id: asString(row.seller_membership_id),
+    item_description: asString(row.item_description),
     price: asString(row.price, '0.00'),
     down_payment: asString(row.down_payment, '0.00'),
-    financed_balance: sim.financed_balance,
-    surcharge: sim.surcharge,
-    surcharge_percent: sim.surcharge_percent,
-    surcharge_mode: sim.surcharge_mode,
-    total: sim.total,
-    installment_amount: sim.installment_amount,
-    installment_count: sim.installment_count,
-    frequency: sim.frequency,
-    first_due_date: sim.first_due_date,
-    last_due_date: sim.last_due_date,
+    financed: asString(row.financed, '0.00'),
+    surcharge: asString(row.surcharge, '0.00'),
+    total: asString(row.total, '0.00'),
+    surcharge_kind: asString(row.surcharge_kind, 'percent'),
+    surcharge_percent: asNullableString(row.surcharge_percent),
+    surcharge_amount: asNullableString(row.surcharge_amount),
+    interest_method: asString(row.interest_method, 'recargo_fijo'),
+    frequency: asFrequency(row.frequency),
+    installments_count: asInt(row.installments_count, 0),
+    anchor_date: asString(row.anchor_date),
+    anchor_offset: asInt(row.anchor_offset, 0),
+    first_due_date: asString(row.first_due_date),
     status: asString(row.status, 'activa'),
-    voided_at: asString(row.voided_at) || null,
-    voided_reason: asString(row.voided_reason) || null,
-    voided_by: asString(row.voided_by ?? row.voided_by_membership_id) || null,
-    installments: sim.installments,
-    warnings: sim.warnings,
+    voided_at: asNullableString(row.voided_at),
+    void_reason: asNullableString(row.void_reason),
+    voided_by: asVoidedBy(row.voided_by),
+    created_at: asString(row.created_at),
+  }
+}
+
+export function normalizeSaleDetail(data: unknown): SaleDetail {
+  const row = (data ?? {}) as Record<string, unknown>
+  return {
+    ...normalizeSale(row),
+    installments: asInstallments(row.installments),
+    contract:
+      typeof row.contract === 'object' && row.contract != null
+        ? (row.contract as Record<string, unknown>)
+        : {},
+    warnings: asWarnings(row.warnings),
   }
 }
 
@@ -144,13 +184,13 @@ export async function simulateSale(payload: SimulateSaleRequest): Promise<Simula
 export async function createSale(
   payload: SaleCreateRequest,
   idempotencyKey: string,
-): Promise<SaleRead> {
+): Promise<SaleDetail> {
   // Send Idempotency-Key only. Do not read Idempotent-Replayed: CORS has no
   // expose_headers yet (CBF-212). Success is the JSON body / status.
   const { data } = await api.post<unknown>('/sales', payload, {
     headers: { 'Idempotency-Key': idempotencyKey },
   })
-  return normalizeSale(data)
+  return normalizeSaleDetail(data)
 }
 
 export async function listSales(params?: {

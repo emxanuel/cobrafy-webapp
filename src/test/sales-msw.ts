@@ -1,4 +1,9 @@
-import type { Frequency, PlanInstallment } from '@/features/sales/services/types'
+import type {
+  Frequency,
+  InstallmentPreview,
+  SaleDetail,
+  SimulateSaleResponse,
+} from '@/features/sales/services/types'
 import {
   lastDayOfMonth,
   parseIsoDate,
@@ -97,7 +102,7 @@ export function buildPlan(input: {
   installment: string
   first: string
   last: string
-  rows: PlanInstallment[]
+  rows: InstallmentPreview[]
 } {
   const price = centsFromAmount(input.price)
   const down = centsFromAmount(input.down)
@@ -142,5 +147,77 @@ export function buildPlan(input: {
     first: rows[0]?.due_date ?? toIsoDate(first),
     last: rows.at(-1)?.due_date ?? toIsoDate(first),
     rows,
+  }
+}
+
+export function simulateResponse(
+  plan: ReturnType<typeof buildPlan>,
+  extras: Partial<SimulateSaleResponse> = {},
+): SimulateSaleResponse {
+  return {
+    financed: plan.financed,
+    surcharge: plan.surcharge,
+    total: plan.total,
+    installment_amount: plan.installment,
+    installments: plan.rows,
+    settings_configured: true,
+    anchor_date: plan.first,
+    anchor_offset: 0,
+    warnings: [],
+    ...extras,
+  }
+}
+
+export function saleDetailFromPlan(
+  plan: ReturnType<typeof buildPlan>,
+  input: {
+    id: string
+    sale_number: number
+    client_id: string
+    client_name: string
+    item_description: string
+    price: string
+    down_payment: string
+    frequency: Frequency
+    anchor_date?: string
+    anchor_offset?: number
+    seller_membership_id?: string
+    warnings?: SaleDetail['warnings']
+  },
+): SaleDetail {
+  return {
+    id: input.id,
+    sale_number: input.sale_number,
+    client_id: input.client_id,
+    client: { id: input.client_id, name: input.client_name },
+    seller_membership_id: input.seller_membership_id ?? 'mem-user-cashier-biz-norte',
+    item_description: input.item_description,
+    price: input.price,
+    down_payment: input.down_payment,
+    financed: plan.financed,
+    surcharge: plan.surcharge,
+    total: plan.total,
+    surcharge_kind: 'percent',
+    surcharge_percent: '20.00',
+    surcharge_amount: null,
+    interest_method: 'recargo_fijo',
+    frequency: input.frequency,
+    installments_count: plan.rows.length,
+    anchor_date: input.anchor_date ?? plan.first,
+    anchor_offset: input.anchor_offset ?? 0,
+    first_due_date: plan.first,
+    status: 'activa',
+    voided_at: null,
+    void_reason: null,
+    voided_by: null,
+    created_at: '2026-10-18T00:00:00.000Z',
+    installments: plan.rows.map((row) => ({
+      ...row,
+      paid: '0.00',
+      late_fee: '0.00',
+      status: 'pendiente',
+    })),
+    contract: {},
+    warnings: input.warnings ?? [],
   }
 }

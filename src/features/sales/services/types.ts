@@ -9,10 +9,19 @@ export type SaleWarning = {
   message: string
 }
 
-export type PlanInstallment = {
+export type InstallmentPreview = {
   number: number
   due_date: string
   amount: string
+}
+
+export type InstallmentRead = {
+  number: number
+  due_date: string
+  amount: string
+  paid: string
+  late_fee: string
+  status: string
 }
 
 export type CreditSettings = {
@@ -34,21 +43,16 @@ export type SimulateSaleRequest = {
   first_due_date?: string
 }
 
+/** POST /sales/simulate — exact SimulateResponse. */
 export type SimulateSaleResponse = {
-  settings_configured: boolean
-  financed_balance: string
+  financed: string
   surcharge: string
-  surcharge_percent: string | null
-  surcharge_mode: SurchargeMode
   total: string
   installment_amount: string
-  installment_count: number
-  frequency: Frequency
-  first_due_date: string
-  last_due_date: string
+  installments: InstallmentPreview[]
+  settings_configured: boolean
   anchor_date: string
   anchor_offset: number
-  installments: PlanInstallment[]
   warnings: SaleWarning[]
 }
 
@@ -64,33 +68,49 @@ export type SaleCreateRequest = {
   anchor_offset?: number
 }
 
-export type SaleClient = {
+export type SaleClientRef = {
   id: string
   name: string
 }
 
+export type SaleVoidedBy = {
+  membership_id: string
+  name: string
+}
+
+/** GET /sales item — exact SaleRead. */
 export type SaleRead = {
   id: string
   sale_number: number
-  client: SaleClient
+  client_id: string
+  client: SaleClientRef
+  seller_membership_id: string
   item_description: string
   price: string
   down_payment: string
-  financed_balance: string
+  financed: string
   surcharge: string
-  surcharge_percent: string | null
-  surcharge_mode: SurchargeMode
   total: string
-  installment_amount: string
-  installment_count: number
+  surcharge_kind: string
+  surcharge_percent: string | null
+  surcharge_amount: string | null
+  interest_method: string
   frequency: Frequency
+  installments_count: number
+  anchor_date: string
+  anchor_offset: number
   first_due_date: string
-  last_due_date: string
   status: string
   voided_at: string | null
-  voided_reason: string | null
-  voided_by: string | null
-  installments: PlanInstallment[]
+  void_reason: string | null
+  voided_by: SaleVoidedBy | null
+  created_at: string
+}
+
+/** POST /sales, GET /sales/{id} — exact SaleDetail. */
+export type SaleDetail = SaleRead & {
+  installments: InstallmentRead[]
+  contract: Record<string, unknown>
   warnings: SaleWarning[]
 }
 

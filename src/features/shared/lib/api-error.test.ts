@@ -61,14 +61,14 @@ describe('toApiError', () => {
           {
             field: null,
             code: 'CREDIT_SETTINGS_MISSING',
-            message: 'Todavía no has configurado el crédito del negocio.',
+            message: 'Configura el crédito del negocio antes de vender',
           },
         ],
       }),
     )
     expect(error.code).toBe('CREDIT_SETTINGS_MISSING')
     expect(error.fieldErrors).toEqual({})
-    expect(error.message).toBe('Todavía no has configurado el crédito del negocio.')
+    expect(error.message).toBe('Configura el crédito del negocio antes de vender')
   })
 
   it('lee DOCUMENT_UNREADABLE por código, no por texto', () => {

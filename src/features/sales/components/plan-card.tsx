@@ -5,15 +5,20 @@ import { formatMoney } from '@/features/shared/lib/format-money'
 import { cn } from '@/features/shared/lib/cn'
 import { CuotaDots } from '@/features/sales/components/cuota-dots'
 import { surchargeLabel } from '@/features/sales/lib/copy'
+import { planCuotaCount } from '@/features/sales/lib/plan-view'
 import type { SimulateSaleResponse } from '@/features/sales/services/types'
 
 export function PlanCard({
   state,
   plan,
+  surchargePercent = null,
+  surchargeKind = 'percent',
   dim = false,
 }: {
   state: 'idle' | 'calculating' | 'result' | 'field-error'
   plan?: SimulateSaleResponse | null
+  surchargePercent?: string | null
+  surchargeKind?: string
   dim?: boolean
 }) {
   if (state === 'idle') {
@@ -57,6 +62,7 @@ export function PlanCard({
   if (!plan) return null
 
   const last = plan.installments.at(-1)
+  const count = planCuotaCount(plan)
   const lastDiffers = Boolean(last && last.amount !== plan.installment_amount)
 
   return (
@@ -73,7 +79,7 @@ export function PlanCard({
           <Badge tone="success">✓ Actualizado</Badge>
         )}
       </div>
-      <p className="mt-1 mb-0 text-sm">{plan.installment_count} cuotas de</p>
+      <p className="mt-1 mb-0 text-sm">{count} cuotas de</p>
       <p className="text-heading m-0 text-[30px] leading-tight font-semibold tabular-nums">
         {formatMoney(plan.installment_amount)}
       </p>
@@ -83,15 +89,15 @@ export function PlanCard({
         </p>
       ) : null}
       <div className="mt-2">
-        <CuotaDots count={plan.installment_count} />
+        <CuotaDots count={count} />
       </div>
       <div className="mt-1.5">
         <div className="border-border flex justify-between border-b border-dashed py-1.5 text-[15px]">
           <span>Saldo financiado</span>
-          <b className="text-heading font-medium tabular-nums">{formatMoney(plan.financed_balance)}</b>
+          <b className="text-heading font-medium tabular-nums">{formatMoney(plan.financed)}</b>
         </div>
         <div className="border-border flex justify-between border-b border-dashed py-1.5 text-[15px]">
-          <span>{surchargeLabel(plan)}</span>
+          <span>{surchargeLabel({ surcharge_kind: surchargeKind, surcharge_percent: surchargePercent })}</span>
           <b className="text-heading font-medium tabular-nums">{formatMoney(plan.surcharge)}</b>
         </div>
         <div className="flex justify-between py-1.5 text-[15px]">
@@ -101,7 +107,7 @@ export function PlanCard({
       </div>
       <details className="mt-1">
         <summary className="text-accent flex min-h-11 cursor-pointer items-center">
-          Ver calendario ({plan.installment_count} cuotas)
+          Ver calendario ({count} cuotas)
         </summary>
         <table className="mt-1 w-full border-collapse text-sm">
           <thead>

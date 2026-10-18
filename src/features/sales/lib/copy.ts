@@ -9,12 +9,14 @@ function trimPercent(value: string): string {
   return value.replace(/\.?0+$/, '')
 }
 
-export function surchargeLabel(plan: {
-  surcharge_mode: string
-  surcharge_percent: string | null
+export function surchargeLabel(input: {
+  surcharge_kind?: string | null
+  surcharge_mode?: string | null
+  surcharge_percent?: string | null
 }): string {
-  if (plan.surcharge_mode === 'fixed') return 'Recargo (monto fijo)'
-  if (plan.surcharge_percent) return `Recargo (${trimPercent(plan.surcharge_percent)} %)`
+  const kind = input.surcharge_kind ?? input.surcharge_mode ?? ''
+  if (kind === 'fixed' || kind === 'monto_fijo') return 'Recargo (monto fijo)'
+  if (input.surcharge_percent) return `Recargo (${trimPercent(input.surcharge_percent)} %)`
   return 'Recargo'
 }
 
