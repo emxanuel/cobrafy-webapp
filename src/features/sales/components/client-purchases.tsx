@@ -49,7 +49,7 @@ export function ClientPurchases({
         <p className="m-0 text-sm">{purchaseCounterLabel(items)}</p>
       ) : null}
 
-      {sales.isError && !(isApiError(sales.error) && sales.error.status === 404) ? (
+      {sales.isError ? (
         <Alert
           icon="✕"
           title="No se pudieron cargar las compras."
@@ -59,7 +59,9 @@ export function ClientPurchases({
             </Button>
           }
         >
-          Revisa tu conexión e inténtalo de nuevo.
+          {isApiError(sales.error) && sales.error.status === 403
+            ? 'No tienes permiso para ver las compras de este cliente.'
+            : 'Revisa tu conexión e inténtalo de nuevo.'}
         </Alert>
       ) : null}
 

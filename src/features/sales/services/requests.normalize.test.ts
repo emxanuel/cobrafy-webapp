@@ -77,7 +77,7 @@ describe('normalizeSimulation / normalizeSaleDetail vs fa39236', () => {
     expect(sale).not.toHaveProperty('voided_reason')
   })
 
-  it('SaleRead.balance es string requerido; si falta el normalizador usa 0.00', () => {
+  it('SaleRead.balance es null si falta o no es string', () => {
     const sale = normalizeSaleDetail({
       id: 'sale-2',
       sale_number: 2,
@@ -87,8 +87,7 @@ describe('normalizeSimulation / normalizeSaleDetail vs fa39236', () => {
       total: '100.00',
       status: 'activa',
     })
-    expect(sale.balance).toBe('0.00')
-    expect(typeof sale.balance).toBe('string')
+    expect(sale.balance).toBeNull()
     expect(sale.total).toBe('100.00')
   })
 })

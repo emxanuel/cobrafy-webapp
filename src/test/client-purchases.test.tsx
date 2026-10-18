@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
+import { clientKeys } from '@/features/clients/query-keys'
 import { formatDate } from '@/features/shared/lib/format-date'
 import { formatMoney } from '@/features/shared/lib/format-money'
 import { useBusinessStore } from '@/features/business/stores/business-store'
@@ -46,6 +47,15 @@ function comprasSection() {
 }
 
 describe('compras del cliente', () => {
+  it('clientKeys.sales incluye businessId', () => {
+    expect(clientKeys.sales('biz-norte', 'cli-1')).toEqual([
+      'clients',
+      'sales',
+      'biz-norte',
+      'cli-1',
+    ])
+  })
+
   it('mantiene el orden del servidor y no reordena en el cliente', async () => {
     loginCashier()
     mockClientSales([
@@ -118,7 +128,7 @@ describe('compras del cliente', () => {
     expect(within(voided).queryByText(formatMoney('0.00'))).not.toBeInTheDocument()
     expect(within(active).getByText('● Activa')).toBeInTheDocument()
     expect(within(active).getByText(formatMoney('18000.00'))).not.toHaveClass('line-through')
-    expect(within(active).getByText(formatMoney('15000.00'))).toBeInTheDocument()
+    expect(within(active).getByText(`Saldo ${formatMoney('15000.00')}`)).toBeInTheDocument()
     expect(within(active).getByText(`Vendida el ${formatDate('2026-10-17T16:00:00.000Z')}`)).toBeInTheDocument()
     expect(screen.getByText('2 activas · 1 anulada')).toBeInTheDocument()
     expect(voided.closest('a')).toBeNull()
@@ -177,6 +187,50 @@ describe('compras del cliente', () => {
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
+  })
+
+  it('si falta el saldo la tarjeta muestra — y nunca RD$ 0.00', async () => {
+    loginCashier()
+    mockClientSales([clientSaleFixture({ balance: null })])
+    window.history.pushState({}, '', '/clientes/cli-1/historial')
+    renderApp()
+    const card = (await screen.findByText('#128 · Nevera Mabe 14 pies')).closest('article')!
+    expect(within(card).getByText('—')).toBeInTheDocument()
+    expect(within(card).queryByText(/RD\$ 0\.00/)).not.toBeInTheDocument()
+    expect(within(card).queryByText(/Saldo/)).not.toBeInTheDocument()
+  })
+
+  it('un 404 de compras en la ficha muestra el error, no el vacío', async () => {
+    loginCashier()
+    server.use(
+      http.get('*/clients/:id/sales', () =>
+        HttpResponse.json({ detail: 'Not Found' }, { status: 404 }),
+      ),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    expect(await screen.findByText('No se pudieron cargar las compras.')).toBeInTheDocument()
+    expect(screen.getByText('Revisa tu conexión e inténtalo de nuevo.')).toBeInTheDocument()
+    expect(screen.queryByText('Aún no hay compras registradas para este cliente.')).not.toBeInTheDocument()
+  })
+
+  it('un 403 de compras dice que no hay permiso', async () => {
+    loginCashier()
+    server.use(
+      http.get('*/clients/:id/sales', () =>
+        HttpResponse.json({ detail: 'Forbidden' }, { status: 403 }),
+      ),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    expect(await screen.findByText('No se pudieron cargar las compras.')).toBeInTheDocument()
+    expect(
+      screen.getByText('No tienes permiso para ver las compras de este cliente.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Revisa tu conexión e inténtalo de nuevo.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Aún no hay compras registradas para este cliente.')).not.toBeInTheDocument()
   })
 
   it('el cobrador no ve Nueva venta y solo lista lo que devuelve la API', async () => {

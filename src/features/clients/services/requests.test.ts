@@ -58,10 +58,7 @@ describe('client requests', () => {
       throw new Error('debía fallar')
     } catch (error) {
       expect(isApiError(error)).toBe(true)
-      expect(getFieldErrors(error)).toEqual({})
-      expect(error instanceof Error && error.message).toBe(
-        'No se pudo completar. Inténtalo de nuevo.',
-      )
+      expect(getFieldErrors(error).document).toBe('ya existe un cliente con este documento')
     }
   })
 

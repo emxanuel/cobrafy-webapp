@@ -45,7 +45,7 @@ export function useClientSales(clientId: string | undefined) {
   const businessId = useBusinessStore((s) => s.activeBusinessId)
   const switchingFrom = useSwitchingFromToken()
   return useQuery({
-    queryKey: clientKeys.sales(clientId ?? ''),
+    queryKey: clientKeys.sales(businessId, clientId ?? ''),
     queryFn: () => listClientSales(clientId!),
     enabled: Boolean(clientId) && Boolean(businessId) && !switchingFrom,
   })
@@ -53,6 +53,7 @@ export function useClientSales(clientId: string | undefined) {
 
 export function useCreateSaleMutation(clientId: string) {
   const queryClient = useQueryClient()
+  const businessId = useBusinessStore((s) => s.activeBusinessId)
   return useMutation({
     mutationFn: ({
       payload,
@@ -64,7 +65,7 @@ export function useCreateSaleMutation(clientId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: saleKeys.all })
       void queryClient.invalidateQueries({ queryKey: clientKeys.history(null, clientId) })
-      void queryClient.invalidateQueries({ queryKey: clientKeys.sales(clientId) })
+      void queryClient.invalidateQueries({ queryKey: clientKeys.sales(businessId, clientId) })
     },
   })
 }

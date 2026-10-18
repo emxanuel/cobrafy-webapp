@@ -10,11 +10,9 @@ import {
 } from '@/features/sales/lib/copy'
 import {
   PENDING_SALE_BODY,
-  PENDING_SALE_EDITED_BODY,
-  PENDING_SALE_EDITED_TITLE,
   PENDING_SALE_FAILED,
-  PENDING_SALE_SHEET_WARNING,
   PENDING_SALE_STILL_OFFLINE,
+  PENDING_SALE_TITLE,
 } from '@/features/sales/lib/pending-sale'
 import { MONEY_INVALID_MESSAGE } from '@/features/sales/components/money-input'
 import { quincenalOptions } from '@/features/sales/lib/calendar'
@@ -93,26 +91,19 @@ async function openConfirmSheet(user: ReturnType<typeof userEvent.setup>) {
   expect(await screen.findByRole('button', { name: 'Registrar venta' })).toBeInTheDocument()
 }
 
-function expectNetworkWarning(options?: { edited?: boolean; stillOffline?: boolean }) {
-  if (options?.edited) {
-    expect(screen.getByText(PENDING_SALE_EDITED_TITLE)).toBeInTheDocument()
-    expect(screen.getByText(PENDING_SALE_EDITED_BODY)).toBeInTheDocument()
-    expect(screen.queryByText(PENDING_SALE_BODY)).not.toBeInTheDocument()
-    expect(screen.queryByText(/no se duplicará/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
-  } else {
-    expect(screen.getByText(PENDING_SALE_BODY)).toBeInTheDocument()
-    expect(screen.queryByText(PENDING_SALE_EDITED_TITLE)).not.toBeInTheDocument()
-    const retry = screen.getByRole('button', { name: 'Reintentar' })
-    expect(retry).toHaveClass('min-h-12')
-  }
+function expectNetworkWarning(options?: { stillOffline?: boolean }) {
+  expect(screen.getByText(PENDING_SALE_TITLE)).toBeInTheDocument()
+  expect(screen.getByText(PENDING_SALE_BODY)).toBeInTheDocument()
+  const retry = screen.getByRole('button', { name: 'Reintentar' })
+  expect(retry).toHaveClass('min-h-12')
   if (options?.stillOffline) {
     expect(screen.getByText(PENDING_SALE_STILL_OFFLINE)).toBeInTheDocument()
   } else {
     expect(screen.queryByText(PENDING_SALE_STILL_OFFLINE)).not.toBeInTheDocument()
   }
   expectPurchasesLink()
-  expect(screen.getByLabelText('Artículo')).toBeEnabled()
+  expect(screen.getByLabelText('Artículo')).toBeDisabled()
+  expect(screen.queryByRole('button', { name: 'Confirmar venta' })).not.toBeInTheDocument()
   expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeTruthy()
 }
 
@@ -376,6 +367,15 @@ describe('CBF-206 ventas', () => {
     await confirmSale(user)
     expectNetworkWarning()
     expect(screen.getByLabelText('Artículo')).toHaveValue('Nevera Mabe 14 pies')
+    expect(screen.getByLabelText('Artículo')).toBeDisabled()
+    expect(screen.getByLabelText('Precio')).toBeDisabled()
+    expect(saleWrites).toHaveLength(1)
+    expect(keys).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Confirmar venta' })).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Artículo'), ' XL')
+    expect(screen.getByLabelText('Artículo')).toHaveValue('Nevera Mabe 14 pies')
+    expect(saleWrites).toHaveLength(1)
+    expect(keys).toHaveLength(1)
 
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     await waitFor(() => expect(keys.length).toBe(2))
@@ -388,53 +388,6 @@ describe('CBF-206 ventas', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText('Listo, venta #44 registrada.')).toBeInTheDocument()
-    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
-  })
-
-  it('editar el formulario pasa al aviso de venta anterior y la hoja avisa sin bloquear', async () => {
-    loginCashier()
-    let attempt = 0
-    server.use(
-      http.post('*/sales', async ({ request }) => {
-        saleWrites.push({
-          method: 'POST',
-          url: request.url,
-          body: await request.json(),
-          idempotencyKey: request.headers.get('Idempotency-Key'),
-        })
-        attempt += 1
-        if (attempt === 1) return HttpResponse.error()
-        return HttpResponse.json(saleJson({ id: 'sale-after-edit', sale_number: 55 }), { status: 201 })
-      }),
-    )
-    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
-    const user = userEvent.setup()
-    renderApp()
-    await goToNewSale()
-    await fillHappyPath(user)
-    await confirmSale(user)
-    expectNetworkWarning()
-    const bar = screen.getByLabelText('Barra fija inferior')
-    expect(within(bar).getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
-    expect(within(bar).getByRole('button', { name: 'Confirmar venta' })).toBeInTheDocument()
-
-    await user.type(screen.getByLabelText('Artículo'), ' XL')
-    expectNetworkWarning({ edited: true })
-    expect(within(bar).getByRole('link', { name: 'Ver compras del cliente' })).toHaveAttribute(
-      'href',
-      '/clientes/cli-1/historial',
-    )
-    const confirm = screen.getByRole('button', { name: 'Confirmar venta' })
-    await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 3000 })
-    await user.click(confirm)
-    expect(await screen.findByText(PENDING_SALE_SHEET_WARNING)).toBeInTheDocument()
-    const registrar = screen.getByRole('button', { name: 'Registrar venta' })
-    expect(registrar).toBeEnabled()
-    await user.click(registrar)
-    expect(await screen.findByText('Listo, venta #55 registrada.')).toBeInTheDocument()
-    expect(screen.queryByText(PENDING_SALE_EDITED_TITLE)).not.toBeInTheDocument()
-    expect(screen.queryByText(PENDING_SALE_BODY)).not.toBeInTheDocument()
-    expect(screen.queryByText(PENDING_SALE_SHEET_WARNING)).not.toBeInTheDocument()
     expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
   })
 
@@ -741,6 +694,7 @@ describe('CBF-206 ventas', () => {
     await user.click(confirm)
     await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
     expect(await screen.findByText('Listo, venta #88 registrada.')).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
   })
 
   it('un doble clic en Registrar venta manda una sola petición y la misma clave', async () => {
@@ -1092,9 +1046,10 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user)
     await waitFor(
-      () => expect(screen.getByText(GENERIC_SALE_ERROR)).toBeInTheDocument(),
+      () => expect(screen.getByText('conflicto de crédito')).toBeInTheDocument(),
       { timeout: 4000 },
     )
+    expect(screen.queryByText(GENERIC_SALE_ERROR)).not.toBeInTheDocument()
 
     server.use(
       http.post('*/sales/simulate', () =>

@@ -108,21 +108,41 @@ describe('toApiError', () => {
     )
   })
 
-  it('un detail string nunca se muestra crudo', () => {
-    const notFound = toApiError(axiosError(404, { detail: 'Not Found' }))
-    expect(notFound.fieldErrors).toEqual({})
-    expect(notFound.code).toBeUndefined()
-    expect(notFound.message).toBe(GENERIC_MESSAGE)
-    expect(notFound.message).not.toBe('Not Found')
+  it('un detail string en español se muestra tal cual', () => {
+    const login401 = toApiError(axiosError(401, { detail: 'credenciales inválidas' }))
+    expect(login401.message).toBe('credenciales inválidas')
+    expect(login401.message).not.toBe('Tu sesión caducó. Entra de nuevo.')
+
+    const invite = toApiError(axiosError(400, { detail: 'invitación inválida' }))
+    expect(invite.message).toBe('invitación inválida')
+
+    const contacts = toApiError(
+      axiosError(409, { detail: 'el cliente ya tiene el máximo de 50 contactos' }),
+    )
+    expect(contacts.message).toBe('el cliente ya tiene el máximo de 50 contactos')
 
     const plain409 = toApiError(
       axiosError(409, {
         detail: 'ya existe un cliente con este documento',
       }),
     )
-    expect(plain409.fieldErrors).toEqual({})
+    expect(plain409.fieldErrors.document).toBe('ya existe un cliente con este documento')
     expect(plain409.code).toBeUndefined()
-    expect(plain409.message).toBe(GENERIC_MESSAGE)
+    expect(plain409.message).toBe('ya existe un cliente con este documento')
+  })
+
+  it('un detail técnico en inglés se reemplaza por el genérico', () => {
+    const notFound = toApiError(axiosError(404, { detail: 'Not Found' }))
+    expect(notFound.fieldErrors).toEqual({})
+    expect(notFound.code).toBeUndefined()
+    expect(notFound.message).toBe(GENERIC_MESSAGE)
+    expect(notFound.message).not.toBe('Not Found')
+
+    const method = toApiError(axiosError(405, { detail: 'Method Not Allowed' }))
+    expect(method.message).toBe(GENERIC_MESSAGE)
+
+    const serverError = toApiError(axiosError(500, { detail: 'se rompió el servidor' }))
+    expect(serverError.message).toBe(GENERIC_MESSAGE)
   })
 
   it('un 409 con lista vacía usa el mensaje genérico', () => {
@@ -176,10 +196,10 @@ describe('toApiError', () => {
   it('deja los 409 de bloqueo como banner, no como campo', () => {
     const blocked = toApiError(axiosError(409, { detail: 'el cliente ya está bloqueado' }))
     expect(blocked.fieldErrors).toEqual({})
-    expect(blocked.message).toBe(GENERIC_MESSAGE)
+    expect(blocked.message).toBe('el cliente ya está bloqueado')
 
     const unblocked = toApiError(axiosError(409, { detail: 'el cliente no está bloqueado' }))
     expect(unblocked.fieldErrors).toEqual({})
-    expect(unblocked.message).toBe(GENERIC_MESSAGE)
+    expect(unblocked.message).toBe('el cliente no está bloqueado')
   })
 })

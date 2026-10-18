@@ -71,7 +71,7 @@ export function toApiError(error: unknown): ApiError {
 
   const status = error.response?.status ?? 0
   const body = (error.response?.data ?? {}) as ErrorBody
-  const fieldErrors = parseFieldErrors(body)
+  const fieldErrors = parseFieldErrors(body, status)
   const code = errorCode(body)
   const message = parseMessage(body, status, code, fieldErrors)
   return new ApiError(message, status, fieldErrors, code)
@@ -86,6 +86,44 @@ const DOCUMENT_UNREADABLE_GUARANTOR_MESSAGE =
   'No pudimos leer el documento de un garante. Revisa los contactos del cliente y vuelve a guardarlo.'
 
 export const GENERIC_MESSAGE = 'No se pudo completar. Inténtalo de nuevo.'
+
+const TECHNICAL_DETAILS = new Set(
+  [
+    'not found',
+    'method not allowed',
+    'internal server error',
+    'bad request',
+    'unauthorized',
+    'forbidden',
+    'validation error',
+    'unprocessable entity',
+    'too many requests',
+    'service unavailable',
+    'bad gateway',
+    'gateway timeout',
+    'conflict',
+    'unsupported media type',
+    'request timeout',
+    'http exception',
+    'error',
+  ].map((item) => item.toLowerCase()),
+)
+
+function isTechnicalDetail(text: string): boolean {
+  return TECHNICAL_DETAILS.has(text.trim().toLowerCase())
+}
+
+function stringDetail(body: ErrorBody): string | null {
+  if (typeof body.detail === 'string' && body.detail.trim()) return body.detail.trim()
+  if (typeof body.message === 'string' && body.message.trim()) return body.message.trim()
+  if (body.detail && typeof body.detail === 'object' && !Array.isArray(body.detail)) {
+    const nested = body.detail as { message?: string }
+    if (typeof nested.message === 'string' && nested.message.trim()) {
+      return nested.message.trim()
+    }
+  }
+  return null
+}
 
 function listItems(body: ErrorBody): FastApiDetailItem[] | null {
   const raw = Array.isArray(body.detail)
@@ -121,7 +159,7 @@ export function parseMessage(
   body: ErrorBody,
   status: number,
   code = errorCode(body),
-  fieldErrors: Record<string, string> = parseFieldErrors(body),
+  fieldErrors: Record<string, string> = parseFieldErrors(body, status),
 ): string {
   const fromCode = messageForCode(code)
   if (fromCode) return fromCode
@@ -137,16 +175,12 @@ export function parseMessage(
     }
   }
 
-  if (typeof body.message === 'string' && body.message.trim()) {
-    return body.message
+  const raw = stringDetail(body)
+  if (raw) {
+    if (status >= 500 || isTechnicalDetail(raw)) return GENERIC_MESSAGE
+    return raw
   }
-  if (typeof body.detail === 'string' && /demasiados intentos/i.test(body.detail)) {
-    return body.detail.trim()
-  }
-  if (body.detail && typeof body.detail === 'object' && !Array.isArray(body.detail)) {
-    const nested = body.detail as { message?: string }
-    if (typeof nested.message === 'string') return nested.message
-  }
+
   const fromFields = Object.values(fieldErrors)[0]
   if (fromFields) return fromFields
   if (code) return GENERIC_MESSAGE
@@ -156,7 +190,7 @@ export function parseMessage(
   return GENERIC_MESSAGE
 }
 
-export function parseFieldErrors(body: ErrorBody): Record<string, string> {
+export function parseFieldErrors(body: ErrorBody, status = 0): Record<string, string> {
   const errors: Record<string, string> = {}
   const items = listItems(body)
 
@@ -176,6 +210,19 @@ export function parseFieldErrors(body: ErrorBody): Record<string, string> {
     const nested = body.detail as { field?: string; message?: string }
     if (nested.field && nested.message) {
       errors[nested.field] = nested.message
+    }
+  }
+
+  if (status === 409 && !Object.keys(errors).length) {
+    const text =
+      (typeof body.detail === 'string' ? body.detail : '') +
+      ' ' +
+      (typeof body.message === 'string' ? body.message : '')
+    if (/documento|document|cédula|cedula|pasaporte/i.test(text)) {
+      errors.document =
+        typeof body.detail === 'string'
+          ? body.detail
+          : 'ya existe un cliente con este documento'
     }
   }
 

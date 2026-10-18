@@ -91,7 +91,7 @@ export type SaleRead = {
   financed: string
   surcharge: string
   total: string
-  balance: string
+  balance: string | null
   surcharge_kind: SurchargeKind
   surcharge_percent: string | null
   surcharge_amount: string | null

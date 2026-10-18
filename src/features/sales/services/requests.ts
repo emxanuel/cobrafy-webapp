@@ -140,7 +140,7 @@ export function normalizeSale(data: unknown): SaleRead {
     financed: asString(row.financed, '0.00'),
     surcharge: asString(row.surcharge, '0.00'),
     total: asString(row.total, '0.00'),
-    balance: asString(row.balance, '0.00'),
+    balance: typeof row.balance === 'string' ? row.balance : null,
     surcharge_kind: asSurchargeKind(row.surcharge_kind),
     surcharge_percent: asNullableString(row.surcharge_percent),
     surcharge_amount: asNullableString(row.surcharge_amount),

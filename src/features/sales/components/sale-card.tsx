@@ -25,7 +25,11 @@ export function SaleCard({ sale }: { sale: SaleRead }) {
         <p className={cn('text-heading m-0 tabular-nums', voided && 'line-through')}>
           {formatMoney(sale.total)}
         </p>
-        {voided ? null : <p className="m-0 tabular-nums">{formatMoney(sale.balance)}</p>}
+        {voided ? null : (
+          <p className="m-0 tabular-nums">
+            {sale.balance == null ? '—' : `Saldo ${formatMoney(sale.balance)}`}
+          </p>
+        )}
       </div>
       <p className="m-0 text-sm">Vendida el {formatDate(sale.created_at)}</p>
     </article>

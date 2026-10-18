@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Lock } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 
 import type { Role } from '@/features/auth/services/types'
@@ -52,11 +52,9 @@ import {
 } from '@/features/sales/lib/idempotency'
 import {
   PENDING_SALE_BODY,
-  PENDING_SALE_EDITED_BODY,
-  PENDING_SALE_EDITED_TITLE,
   PENDING_SALE_FAILED,
-  PENDING_SALE_SHEET_WARNING,
   PENDING_SALE_STILL_OFFLINE,
+  PENDING_SALE_TITLE,
   clearPendingSale,
   readPendingSale,
   writePendingSale,
@@ -185,6 +183,7 @@ function NewSaleForm({
   const [pending, setPending] = useState<PendingSaleAttempt | null>(storedPending)
   const [retryOffline, setRetryOffline] = useState(false)
   const [failedAfterPending, setFailedAfterPending] = useState(false)
+  const locked = pending != null
   const [idempotency, setIdempotency] = useState<IdempotencyState | null>(() => {
     if (!storedPending) return null
     const fingerprint = salePayloadFingerprint(storedPending.payload)
@@ -209,9 +208,6 @@ function NewSaleForm({
   )
 
   const fingerprint = saleFormFingerprint(snapshot)
-  const canRetryPending =
-    pending != null && saleFormFingerprint(pending.snapshot) === fingerprint
-  const showPendingWarning = pending != null && !idempotencyReused
   const canSimulate =
     isPositiveAmount(price) &&
     !priceInvalid &&
@@ -283,6 +279,7 @@ function NewSaleForm({
   )
   const hasFieldError = Object.keys(mergedFields).length > 0
   const confirmDisabled =
+    pending != null ||
     !articleValid ||
     !isPositiveAmount(price) ||
     priceInvalid ||
@@ -345,7 +342,7 @@ function NewSaleForm({
   const registerBanner =
     failedAfterPending &&
     create.isError &&
-    !canRetryPending &&
+    !pending &&
     !idempotencyReused &&
     createStatus !== 403
       ? saleErrorHasOwnCopy(createCode)
@@ -390,7 +387,7 @@ function NewSaleForm({
   }
 
   function openConfirm() {
-    if (confirmDisabled || !plan) return
+    if (locked || confirmDisabled || !plan) return
     rememberIdempotency(buildSaleCreateBody(snapshot, plan))
     setIdempotencyReused(false)
     setConfirmOpen(true)
@@ -449,7 +446,7 @@ function NewSaleForm({
   }
 
   function submitSale() {
-    if (confirmDisabled || !plan || !ready || create.isPending || inFlightRef.current) return
+    if (locked || confirmDisabled || !plan || !ready || create.isPending || inFlightRef.current) return
     const payload = buildSaleCreateBody(snapshot, plan)
     const next = rememberIdempotency(payload)
     const attempt = { payload, key: next.key, snapshot }
@@ -494,6 +491,19 @@ function NewSaleForm({
 
   return (
     <div className="flex flex-col gap-5 pb-56">
+      {locked ? (
+        <div
+          ref={bannerRef}
+          tabIndex={-1}
+          className="bg-bg sticky top-0 z-20 -mx-1 px-1 py-1"
+        >
+          <Alert tone="warning" icon="⚠" title={PENDING_SALE_TITLE}>
+            <p className="m-0">{PENDING_SALE_BODY}</p>
+            {retryOffline ? <p className="m-0 mt-1.5">{PENDING_SALE_STILL_OFFLINE}</p> : null}
+          </Alert>
+        </div>
+      ) : null}
+
       <div>
         <Link
           to={`/clientes/${clientId}`}
@@ -567,7 +577,17 @@ function NewSaleForm({
           event.preventDefault()
         }}
       >
-        <fieldset className="m-0 flex flex-col gap-4 border-0 p-0">
+        <fieldset
+          disabled={pending != null}
+          className={`m-0 flex flex-col gap-4 border-0 p-0 ${locked ? 'bg-muted pointer-events-none cursor-default rounded-md px-3 py-3 opacity-60' : ''}`}
+        >
+        {locked ? (
+          <p className="text-heading m-0 flex items-center gap-2 text-sm font-medium">
+            <Lock className="size-4 shrink-0" aria-hidden />
+            <span>Venta por confirmar</span>
+            <span className="sr-only">Bloqueado</span>
+          </p>
+        ) : null}
         <Field
           id="article"
           label="Artículo"
@@ -580,6 +600,8 @@ function NewSaleForm({
             value={article}
             maxLength={500}
             error={mergedFields.item_description}
+            disabled={locked}
+            readOnly={locked}
             onChange={(event) => setArticle(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') event.preventDefault()
@@ -604,6 +626,7 @@ function NewSaleForm({
               value={price}
               onValue={setPrice}
               onInvalid={setPriceInvalid}
+              disabled={locked}
               error={priceInvalid ? MONEY_INVALID_MESSAGE : mergedFields.price}
             />
           </Field>
@@ -624,6 +647,7 @@ function NewSaleForm({
               value={down}
               onValue={setDown}
               onInvalid={setDownInvalid}
+              disabled={locked}
               error={downInvalid ? MONEY_INVALID_MESSAGE : mergedFields.down_payment}
             />
           </Field>
@@ -641,6 +665,8 @@ function NewSaleForm({
             max={maxInstallments}
             onChange={setInstallments}
             error={mergedFields.installments}
+            disabled={locked}
+            hideButtons={locked}
           />
         </Field>
 
@@ -650,6 +676,7 @@ function NewSaleForm({
             value={frequency}
             options={allowed.map((item) => ({ value: item, label: FREQUENCY_LABEL[item] }))}
             onChange={changeFrequency}
+            disabled={locked}
           />
         </Field>
 
@@ -662,18 +689,22 @@ function NewSaleForm({
               ? formatFieldMessage(mergedFields.first_due_date)
               : undefined
           }
+          disabled={locked}
+          hidePicker={locked}
         />
         </fieldset>
       </form>
 
       {simulate.isError && simulateStatus === 409 && !plan ? null : (
-        <PlanCard
-          state={planState}
-          plan={plan}
-          surchargeKind={surchargeKind}
-          surchargePercent={surchargePercent}
-          dim={planState === 'calculating' && Boolean(plan)}
-        />
+        <div className={locked ? 'pointer-events-none cursor-default opacity-60' : undefined}>
+          <PlanCard
+            state={planState}
+            plan={plan}
+            surchargeKind={surchargeKind}
+            surchargePercent={surchargePercent}
+            dim={planState === 'calculating' && Boolean(plan)}
+          />
+        </div>
       )}
 
       <StickyActionBar
@@ -685,55 +716,40 @@ function NewSaleForm({
               : '—'
         }
         total={ready && plan ? formatMoney(plan.total) : simulating && !simulate.isError ? '…' : '—'}
-        hint={!confirmDisabled ? undefined : confirmHint}
+        hint={locked || !confirmDisabled ? undefined : confirmHint}
       >
-        {showPendingWarning ? (
-          <div ref={bannerRef} tabIndex={-1} className="mb-3">
-            <Alert
-              tone="warning"
-              icon="⚠"
-              title={canRetryPending ? undefined : PENDING_SALE_EDITED_TITLE}
-              action={
-                <div className="flex flex-col gap-2">
-                  {canRetryPending ? (
-                    <Button
-                      className="min-h-12 w-full"
-                      disabled={create.isPending}
-                      onClick={retryPending}
-                    >
-                      {create.isPending ? (
-                        <>
-                          <Loader2 className="size-4 animate-spin" aria-hidden />
-                          Confirmando…
-                        </>
-                      ) : (
-                        'Reintentar'
-                      )}
-                    </Button>
-                  ) : null}
-                  <Link
-                    to={`/clientes/${clientId}/historial`}
-                    className={`${buttonVariants({ variant: 'link' })} min-h-11 w-full`}
-                  >
-                    Ver compras del cliente
-                  </Link>
-                </div>
-              }
+        {locked ? (
+          <div className="flex flex-col gap-2">
+            <Button
+              className="min-h-12 w-full"
+              disabled={create.isPending}
+              onClick={retryPending}
             >
-              <p className="m-0">{canRetryPending ? PENDING_SALE_BODY : PENDING_SALE_EDITED_BODY}</p>
-              {retryOffline && canRetryPending ? (
-                <p className="m-0 mt-1.5">{PENDING_SALE_STILL_OFFLINE}</p>
-              ) : null}
-            </Alert>
+              {create.isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Confirmando…
+                </>
+              ) : (
+                'Reintentar'
+              )}
+            </Button>
+            <Link
+              to={`/clientes/${clientId}/historial`}
+              className={`${buttonVariants({ variant: 'link' })} min-h-11 w-full`}
+            >
+              Ver compras del cliente
+            </Link>
           </div>
-        ) : null}
-        <Button
-          className="min-h-12 w-full"
-          disabled={confirmDisabled}
-          onClick={openConfirm}
-        >
-          Confirmar venta
-        </Button>
+        ) : (
+          <Button
+            className="min-h-12 w-full"
+            disabled={confirmDisabled}
+            onClick={openConfirm}
+          >
+            Confirmar venta
+          </Button>
+        )}
       </StickyActionBar>
 
       {confirmOpen && plan ? (
@@ -743,11 +759,6 @@ function NewSaleForm({
           onClose={closeConfirm}
           closeDisabled={create.isPending}
         >
-          {showPendingWarning && !canRetryPending ? (
-            <Alert tone="warning" icon="⚠">
-              {PENDING_SALE_SHEET_WARNING}
-            </Alert>
-          ) : null}
           <div>
             <ConfirmRow label="Cliente" value={clientName} />
             <ConfirmRow label="Artículo" value={article.trim()} />
