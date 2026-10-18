@@ -74,6 +74,25 @@ describe('CBF-110 aceptación', () => {
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
   })
 
+  it('Salir borra todas las cobrafy.pendingSale:*', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await loginAs(users.cashier.email)
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    sessionStorage.setItem(
+      'cobrafy.pendingSale:cli-1',
+      JSON.stringify({ key: 'pending-1', payload: {}, snapshot: {} }),
+    )
+    sessionStorage.setItem(
+      'cobrafy.pendingSale:cli-2',
+      JSON.stringify({ key: 'pending-2', payload: {}, snapshot: {} }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Salir' }))
+    expect(await screen.findByRole('heading', { name: 'Entra a tu negocio' })).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-2')).toBeNull()
+  })
+
   it('cambiar de negocio limpia la caché de TanStack Query', async () => {
     const user = userEvent.setup()
     const clear = vi.spyOn(getQueryClient(), 'clear')

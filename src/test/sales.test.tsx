@@ -13,6 +13,7 @@ import {
   PENDING_SALE_FAILED,
   PENDING_SALE_STILL_OFFLINE,
   PENDING_SALE_TITLE,
+  PENDING_SALE_UNCONFIRMED,
 } from '@/features/sales/lib/pending-sale'
 import { MONEY_INVALID_MESSAGE } from '@/features/sales/components/money-input'
 import { quincenalOptions } from '@/features/sales/lib/calendar'
@@ -91,7 +92,18 @@ async function openConfirmSheet(user: ReturnType<typeof userEvent.setup>) {
   expect(await screen.findByRole('button', { name: 'Registrar venta' })).toBeInTheDocument()
 }
 
-function expectNetworkWarning(options?: { stillOffline?: boolean }) {
+function pendingSaleKey(clientId = 'cli-1'): string | null {
+  const raw = sessionStorage.getItem(`cobrafy.pendingSale:${clientId}`)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as { key?: string }
+    return typeof parsed.key === 'string' ? parsed.key : null
+  } catch {
+    return null
+  }
+}
+
+function expectNetworkWarning(options?: { stillOffline?: boolean; unconfirmed?: boolean }) {
   expect(screen.getAllByText(PENDING_SALE_TITLE).length).toBeGreaterThanOrEqual(2)
   expect(screen.getByText(PENDING_SALE_BODY)).toBeInTheDocument()
   const retry = screen.getByRole('button', { name: 'Reintentar' })
@@ -100,6 +112,11 @@ function expectNetworkWarning(options?: { stillOffline?: boolean }) {
     expect(screen.getByText(PENDING_SALE_STILL_OFFLINE)).toBeInTheDocument()
   } else {
     expect(screen.queryByText(PENDING_SALE_STILL_OFFLINE)).not.toBeInTheDocument()
+  }
+  if (options?.unconfirmed) {
+    expect(screen.getByText(PENDING_SALE_UNCONFIRMED)).toBeInTheDocument()
+  } else {
+    expect(screen.queryByText(PENDING_SALE_UNCONFIRMED)).not.toBeInTheDocument()
   }
   expectPurchasesLink()
   expect(screen.getByLabelText('Artículo')).toBeDisabled()
@@ -533,6 +550,69 @@ describe('CBF-206 ventas', () => {
     expect(keys[2]).not.toBe(keys[0])
     expect(saleWrites[2]?.body).not.toEqual(saleWrites[0]?.body)
     expect(await screen.findByText('Listo, venta #77 registrada.')).toBeInTheDocument()
+  })
+
+  it('403, 429 y 401 al reintentar mantienen el bloqueo y la misma clave', async () => {
+    loginCashier()
+    const keys: string[] = []
+    let attempt = 0
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        const key = request.headers.get('Idempotency-Key')
+        if (key) keys.push(key)
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: key,
+        })
+        attempt += 1
+        if (attempt === 1) return HttpResponse.error()
+        if (attempt === 2) {
+          return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+        }
+        if (attempt === 3) {
+          return HttpResponse.json({ detail: 'Too Many Requests' }, { status: 429 })
+        }
+        return HttpResponse.json({ detail: 'no autenticado' }, { status: 401 })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expectNetworkWarning()
+    const firstKey = keys[0]
+    expect(pendingSaleKey()).toBe(firstKey)
+    expect(saleWrites).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    await waitFor(() => expect(keys.length).toBe(2))
+    expectNetworkWarning({ unconfirmed: true })
+    expect(keys[1]).toBe(firstKey)
+    expect(pendingSaleKey()).toBe(firstKey)
+    expect(screen.queryByRole('button', { name: 'Confirmar venta' })).not.toBeInTheDocument()
+    expect(saleWrites).toHaveLength(2)
+    expect(saleWrites[1]?.body).toEqual(saleWrites[0]?.body)
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    await waitFor(() => expect(keys.length).toBe(3))
+    expectNetworkWarning({ unconfirmed: true })
+    expect(keys[2]).toBe(firstKey)
+    expect(pendingSaleKey()).toBe(firstKey)
+    expect(screen.queryByRole('button', { name: 'Confirmar venta' })).not.toBeInTheDocument()
+    expect(saleWrites).toHaveLength(3)
+    expect(saleWrites[2]?.body).toEqual(saleWrites[0]?.body)
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    await waitFor(() => expect(keys.length).toBe(4))
+    expect(keys[3]).toBe(firstKey)
+    expect(pendingSaleKey()).toBe(firstKey)
+    expect(new Set(keys).size).toBe(1)
+    expect(saleWrites).toHaveLength(4)
+    expect(saleWrites[3]?.body).toEqual(saleWrites[0]?.body)
   })
 
   it('un 422 definitivo desbloquea y muestra que la venta no se registró', async () => {

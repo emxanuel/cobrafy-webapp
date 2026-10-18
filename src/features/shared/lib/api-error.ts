@@ -71,7 +71,7 @@ export function toApiError(error: unknown): ApiError {
 
   const status = error.response?.status ?? 0
   const body = (error.response?.data ?? {}) as ErrorBody
-  const fieldErrors = parseFieldErrors(body, status)
+  const fieldErrors = parseFieldErrors(body, status, error.config?.url)
   const code = errorCode(body)
   const message = parseMessage(body, status, code, fieldErrors)
   return new ApiError(message, status, fieldErrors, code)
@@ -109,8 +109,35 @@ const TECHNICAL_DETAILS = new Set(
   ].map((item) => item.toLowerCase()),
 )
 
+const SPANISH_DETAIL_WORD =
+  /\b(?:el|la|los|las|un|una|unos|unas|de|del|al|no|se|ya|con|este|esta|esto|estos|estas|para|por|que|es|está|están|ser|debe|tienen?|existe|formato|revisa|inténtalo|sesión|permiso|bloqueo|bloqueado|anterior|motivo|correo|contraseña|cuota|venta|negocio|garante|cliente|documento|invitación|credenciales|válid\w*|inválid\w*)\b/i
+
 function isTechnicalDetail(text: string): boolean {
   return TECHNICAL_DETAILS.has(text.trim().toLowerCase())
+}
+
+function isUnmappedEnglish(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) return false
+  if (isTechnicalDetail(trimmed)) return true
+  if (/[áéíóúñü¿¡]/i.test(trimmed)) return false
+  if (SPANISH_DETAIL_WORD.test(trimmed)) return false
+  return /[A-Za-z]/.test(trimmed)
+}
+
+function clientDocumentWriteUrl(url = ''): boolean {
+  const path = url.split('?')[0]?.replace(/\/$/, '') ?? ''
+  if (/\/clients$/.test(path)) return true
+  return /\/clients\/(?!search$|check$)[^/]+$/.test(path)
+}
+
+function isDocumentConflictCode(code?: string): boolean {
+  return (
+    code === 'DOCUMENT_DUPLICATE' ||
+    code === 'DOCUMENT_EXISTS' ||
+    code === 'DOCUMENT_ALREADY_EXISTS' ||
+    code === 'CLIENT_DOCUMENT_EXISTS'
+  )
 }
 
 function stringDetail(body: ErrorBody): string | null {
@@ -177,7 +204,7 @@ export function parseMessage(
 
   const raw = stringDetail(body)
   if (raw) {
-    if (status >= 500 || isTechnicalDetail(raw)) return GENERIC_MESSAGE
+    if (status >= 500 || isTechnicalDetail(raw) || isUnmappedEnglish(raw)) return GENERIC_MESSAGE
     return raw
   }
 
@@ -190,7 +217,7 @@ export function parseMessage(
   return GENERIC_MESSAGE
 }
 
-export function parseFieldErrors(body: ErrorBody, status = 0): Record<string, string> {
+export function parseFieldErrors(body: ErrorBody, status = 0, url = ''): Record<string, string> {
   const errors: Record<string, string> = {}
   const items = listItems(body)
 
@@ -214,13 +241,13 @@ export function parseFieldErrors(body: ErrorBody, status = 0): Record<string, st
   }
 
   if (status === 409 && !Object.keys(errors).length) {
-    const text =
-      (typeof body.detail === 'string' ? body.detail : '') +
-      ' ' +
-      (typeof body.message === 'string' ? body.message : '')
-    if (/documento|document|cédula|cedula|pasaporte/i.test(text)) {
+    const code = errorCode(body)
+    if (code === 'DOCUMENT_UNREADABLE' || code === 'DOCUMENT_UNREADABLE_GUARANTOR') {
+      return errors
+    }
+    if (isDocumentConflictCode(code) || clientDocumentWriteUrl(url)) {
       errors.document =
-        typeof body.detail === 'string'
+        typeof body.detail === 'string' && body.detail.trim()
           ? body.detail
           : 'ya existe un cliente con este documento'
     }

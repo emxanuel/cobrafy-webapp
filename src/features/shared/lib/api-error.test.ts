@@ -9,18 +9,18 @@ import {
   toApiError,
 } from './api-error'
 
-function axiosError(status: number, data: unknown) {
+function axiosError(status: number, data: unknown, url = '') {
   return new axios.AxiosError(
     'Request failed',
     String(status),
-    undefined,
+    { headers: new axios.AxiosHeaders(), url },
     undefined,
     {
       status,
       data,
       statusText: '',
       headers: {},
-      config: { headers: new axios.AxiosHeaders() },
+      config: { headers: new axios.AxiosHeaders(), url },
     },
   )
 }
@@ -122,9 +122,13 @@ describe('toApiError', () => {
     expect(contacts.message).toBe('el cliente ya tiene el máximo de 50 contactos')
 
     const plain409 = toApiError(
-      axiosError(409, {
-        detail: 'ya existe un cliente con este documento',
-      }),
+      axiosError(
+        409,
+        {
+          detail: 'ya existe un cliente con este documento',
+        },
+        '/clients',
+      ),
     )
     expect(plain409.fieldErrors.document).toBe('ya existe un cliente con este documento')
     expect(plain409.code).toBeUndefined()
@@ -140,6 +144,12 @@ describe('toApiError', () => {
 
     const method = toApiError(axiosError(405, { detail: 'Method Not Allowed' }))
     expect(method.message).toBe(GENERIC_MESSAGE)
+
+    const duplicate = toApiError(
+      axiosError(409, { detail: 'Duplicate key value violates unique constraint' }, '/sales'),
+    )
+    expect(duplicate.message).toBe(GENERIC_MESSAGE)
+    expect(duplicate.fieldErrors).toEqual({})
 
     const serverError = toApiError(axiosError(500, { detail: 'se rompió el servidor' }))
     expect(serverError.message).toBe(GENERIC_MESSAGE)
@@ -194,12 +204,28 @@ describe('toApiError', () => {
   })
 
   it('deja los 409 de bloqueo como banner, no como campo', () => {
-    const blocked = toApiError(axiosError(409, { detail: 'el cliente ya está bloqueado' }))
+    const blocked = toApiError(
+      axiosError(409, { detail: 'el cliente ya está bloqueado' }, '/clients/cli-1/block'),
+    )
     expect(blocked.fieldErrors).toEqual({})
     expect(blocked.message).toBe('el cliente ya está bloqueado')
 
-    const unblocked = toApiError(axiosError(409, { detail: 'el cliente no está bloqueado' }))
+    const unblocked = toApiError(
+      axiosError(409, { detail: 'el cliente no está bloqueado' }, '/clients/cli-1/unblock'),
+    )
     expect(unblocked.fieldErrors).toEqual({})
     expect(unblocked.message).toBe('el cliente no está bloqueado')
+  })
+
+  it('un 409 de garante no va al campo document', () => {
+    const guarantor = toApiError(
+      axiosError(
+        409,
+        { detail: 'el documento del garante no se pudo leer' },
+        '/clients/cli-1/contacts',
+      ),
+    )
+    expect(guarantor.fieldErrors).toEqual({})
+    expect(guarantor.message).toBe('el documento del garante no se pudo leer')
   })
 })

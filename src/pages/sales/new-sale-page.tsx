@@ -55,6 +55,8 @@ import {
   PENDING_SALE_FAILED,
   PENDING_SALE_STILL_OFFLINE,
   PENDING_SALE_TITLE,
+  PENDING_SALE_UNCONFIRMED,
+  shouldReleasePendingSale,
   clearPendingSale,
   readPendingSale,
   writePendingSale,
@@ -181,7 +183,7 @@ function NewSaleForm({
   const [downInvalid, setDownInvalid] = useState(false)
   const [idempotencyReused, setIdempotencyReused] = useState(false)
   const [pending, setPending] = useState<PendingSaleAttempt | null>(storedPending)
-  const [retryOffline, setRetryOffline] = useState(false)
+  const [retryHint, setRetryHint] = useState<'offline' | 'unconfirmed' | null>(null)
   const [failedAfterPending, setFailedAfterPending] = useState(false)
   const locked = pending != null
   const [idempotency, setIdempotency] = useState<IdempotencyState | null>(() => {
@@ -402,13 +404,13 @@ function NewSaleForm({
   function releasePending() {
     clearPendingSale(clientId)
     setPending(null)
-    setRetryOffline(false)
+    setRetryHint(null)
   }
 
   function succeedCreate(sale: SaleDetail) {
     inFlightRef.current = false
     setFailedAfterPending(false)
-    setRetryOffline(false)
+    setRetryHint(null)
     forgetIdempotency()
     releasePending()
     setConfirmOpen(false)
@@ -431,8 +433,10 @@ function NewSaleForm({
       return
     }
     rememberIdempotency(attempt.payload)
-    if (status === 0 || status >= 500) {
-      setRetryOffline(pending != null)
+    if (!shouldReleasePendingSale(status, code)) {
+      setRetryHint(
+        pending == null ? null : status === 0 || status >= 500 ? 'offline' : 'unconfirmed',
+      )
       setFailedAfterPending(false)
       persistPending(attempt)
       setConfirmOpen(false)
@@ -464,7 +468,7 @@ function NewSaleForm({
 
   function retryPending() {
     if (!pending || create.isPending || inFlightRef.current) return
-    setRetryOffline(false)
+    setRetryHint(null)
     inFlightRef.current = true
     create.mutate(
       { payload: pending.payload, idempotencyKey: pending.key },
@@ -499,7 +503,12 @@ function NewSaleForm({
         >
           <Alert tone="warning" icon="⚠" title={PENDING_SALE_TITLE}>
             <p className="m-0">{PENDING_SALE_BODY}</p>
-            {retryOffline ? <p className="m-0 mt-1.5">{PENDING_SALE_STILL_OFFLINE}</p> : null}
+            {retryHint === 'offline' ? (
+              <p className="m-0 mt-1.5">{PENDING_SALE_STILL_OFFLINE}</p>
+            ) : null}
+            {retryHint === 'unconfirmed' ? (
+              <p className="m-0 mt-1.5">{PENDING_SALE_UNCONFIRMED}</p>
+            ) : null}
           </Alert>
         </div>
       ) : null}

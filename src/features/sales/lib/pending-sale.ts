@@ -7,8 +7,11 @@ export const PENDING_SALE_BODY =
   'No pudimos confirmar si la venta se registró. Reintenta; no se duplicará.'
 export const PENDING_SALE_STILL_OFFLINE =
   'Todavía sin conexión. Prueba de nuevo en un momento.'
+export const PENDING_SALE_UNCONFIRMED =
+  'No pudimos confirmar la venta. Reintenta o revisa las compras del cliente.'
 export const PENDING_SALE_FAILED =
   'La venta no se registró. Revisa los datos y confirma de nuevo.'
+export const PENDING_SALE_PREFIX = 'cobrafy.pendingSale:'
 
 export type PendingSaleAttempt = {
   key: string
@@ -17,7 +20,22 @@ export type PendingSaleAttempt = {
 }
 
 export function pendingSaleStorageKey(clientId: string): string {
-  return `cobrafy.pendingSale:${clientId}`
+  return `${PENDING_SALE_PREFIX}${clientId}`
+}
+
+/** 422 or a 409 with a business code (including REUSED) prove the original sale did not land. */
+export function shouldReleasePendingSale(status: number, code?: string): boolean {
+  if (status === 422) return true
+  return status === 409 && Boolean(code)
+}
+
+export function clearAllPendingSales() {
+  const keys: string[] = []
+  for (let index = 0; index < sessionStorage.length; index += 1) {
+    const key = sessionStorage.key(index)
+    if (key?.startsWith(PENDING_SALE_PREFIX)) keys.push(key)
+  }
+  for (const key of keys) sessionStorage.removeItem(key)
 }
 
 function isAttempt(value: unknown): value is PendingSaleAttempt {
