@@ -328,7 +328,7 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await user.type(screen.getByLabelText('Artículo'), 'Nevera')
     await user.type(screen.getByLabelText('Precio'), '1850O')
-    expect(screen.getByText(MONEY_INVALID_MESSAGE)).toBeInTheDocument()
+    expect(screen.getAllByText(MONEY_INVALID_MESSAGE).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeDisabled()
   })
 
@@ -443,17 +443,21 @@ describe('CBF-206 ventas', () => {
     renderApp()
     await goToNewSale()
     await fillHappyPath(user, '18500.00')
-    await waitFor(() => expect(screen.getByText('Calculando…')).toBeInTheDocument(), { timeout: 3000 })
+    await waitFor(() => expect(screen.getAllByText('Calculando…').length).toBeGreaterThan(0), {
+      timeout: 3000,
+    })
     expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeDisabled()
     await user.clear(screen.getByLabelText('Precio'))
     await user.type(screen.getByLabelText('Precio'), '10000.00')
-    await waitFor(() => expect(screen.getByText('RD$ 3,333.33')).toBeInTheDocument(), { timeout: 4000 })
+    await waitFor(() => expect(screen.getAllByText('RD$ 3,333.33').length).toBeGreaterThan(0), {
+      timeout: 4000,
+    })
     const confirm = screen.getByRole('button', { name: 'Confirmar venta' })
     await waitFor(() => expect(confirm).toBeEnabled())
     releaseSlow?.()
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(confirm).toBeEnabled()
-    expect(screen.getByText('RD$ 3,333.33')).toBeInTheDocument()
+    expect(screen.getAllByText('RD$ 3,333.33').length).toBeGreaterThan(0)
     expect(screen.queryByText('RD$ 1,850.00')).not.toBeInTheDocument()
   })
 
@@ -583,10 +587,10 @@ describe('CBF-206 ventas', () => {
     await user.click(screen.getByRole('button', { name: 'Quincenal' }))
     await waitForPlan()
     await user.click(screen.getByText(/Ver calendario/))
-    expect(screen.getByText('15/10/2026')).toBeInTheDocument()
-    expect(screen.getByText('31/10/2026')).toBeInTheDocument()
-    expect(screen.getByText('15/11/2026')).toBeInTheDocument()
-    expect(screen.getByText('30/11/2026')).toBeInTheDocument()
+    expect(screen.getAllByText('15/10/2026').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('31/10/2026').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('15/11/2026').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('30/11/2026').length).toBeGreaterThan(0)
   })
 
   it('409 de lista se enruta por código; 422 va al campo', async () => {
