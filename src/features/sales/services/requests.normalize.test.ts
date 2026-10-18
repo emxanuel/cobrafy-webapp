@@ -77,7 +77,7 @@ describe('normalizeSimulation / normalizeSaleDetail vs fa39236', () => {
     expect(sale).not.toHaveProperty('voided_reason')
   })
 
-  it('SaleRead.balance es string y cae a 0.00 si falta', () => {
+  it('SaleRead.balance es string requerido; si falta el normalizador usa 0.00', () => {
     const sale = normalizeSaleDetail({
       id: 'sale-2',
       sale_number: 2,

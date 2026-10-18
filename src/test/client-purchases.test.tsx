@@ -6,11 +6,16 @@ import { describe, expect, it } from 'vitest'
 import { formatDate } from '@/features/shared/lib/format-date'
 import { formatMoney } from '@/features/shared/lib/format-money'
 import { useBusinessStore } from '@/features/business/stores/business-store'
+import { createSale, getSale, listClientSales, listSales } from '@/features/sales/services/requests'
 import { businesses, membership, users } from './fixtures'
 import { seedSale } from './handlers'
 import { renderApp, seedAuth } from './render'
 import { server } from './server'
-import { clientSaleFixture, handwrittenClientSales } from './sales-msw'
+import {
+  clientSaleDetailFixture,
+  clientSaleFixture,
+  handwrittenClientSales,
+} from './sales-msw'
 
 function loginCashier() {
   seedAuth({
@@ -185,18 +190,45 @@ describe('compras del cliente', () => {
     expect(screen.queryByText('#121 · Televisor Samsung 50”')).not.toBeInTheDocument()
   })
 
-  it('un 404 de compras muestra el estado habitual de no encontrado', async () => {
+  it('un cobrador no asignado recibe 404 en las compras', async () => {
     loginCollector()
-    server.use(
-      http.get('*/clients/:id/sales', () =>
-        HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 }),
-      ),
-    )
-    window.history.pushState({}, '', '/clientes/cli-1/historial')
+    window.history.pushState({}, '', '/clientes/cli-unassigned/historial')
     renderApp()
     expect(
       await screen.findByText('Este cliente no existe o ya no está disponible.'),
     ).toBeInTheDocument()
+  })
+
+  it('POST 201, GET /sales y GET /sales/{id} incluyen balance requerido', async () => {
+    loginCashier()
+    const created = await createSale(
+      {
+        client_id: 'cli-1',
+        item_description: 'Radio',
+        price: '1000.00',
+        down_payment: '0.00',
+        installments: 2,
+        frequency: 'mensual',
+        first_due_date: '2026-11-17',
+      },
+      '11111111-1111-4111-8111-111111111111',
+    )
+    expect(created.balance).toMatch(/^\d+\.\d{2}$/)
+    expect(created.balance).toBe(created.total)
+    const page = await listSales()
+    expect(page.items.find((item) => item.id === created.id)?.balance).toBe(created.balance)
+    const detail = await getSale(created.id)
+    expect(detail.balance).toBe(created.balance)
+    expect(detail.installments.length).toBeGreaterThan(0)
+    const clientSales = await listClientSales('cli-1')
+    expect(clientSales.find((item) => item.id === created.id)?.balance).toBe(created.balance)
+  })
+
+  it('las fixtures SaleRead y SaleDetail traen balance escrito a mano', () => {
+    expect(clientSaleFixture().balance).toBe('15000.00')
+    expect(handwrittenClientSales[2]?.balance).toBe('0.00')
+    expect(clientSaleDetailFixture({ status: 'anulada', balance: '0.00' }).balance).toBe('0.00')
+    expect(clientSaleDetailFixture().balance).toBe('15000.00')
   })
 
   it('tras un replay 200 invalida las compras y la venta aparece', async () => {

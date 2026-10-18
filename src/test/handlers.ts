@@ -72,6 +72,18 @@ function compareSalesNewestFirst(left: Record<string, unknown>, right: Record<st
   return rightNumber - leftNumber
 }
 
+function collectorCanSeeClient(clientId: string): boolean {
+  if (clientId === 'cli-missing' || clientId === 'cli-unassigned') return false
+  const found = clients.get(clientId) ?? clientFixture({ id: clientId })
+  return found.collector_membership_id === collectorMember.id
+}
+
+function denyUnassignedCollector(request: Request, clientId: string) {
+  if (roleFromToken(bearer(request)) !== 'cobrador') return null
+  if (collectorCanSeeClient(clientId)) return null
+  return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+}
+
 const MAX_PIN_ATTEMPTS = 5
 const PIN_LOCKED = 'demasiados intentos; entra con contraseña'
 
@@ -564,6 +576,8 @@ export const handlers = [
     if (id === 'cli-missing') {
       return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
     }
+    const hidden = denyUnassignedCollector(request, id)
+    if (hidden) return hidden
     const items = [...sales.values()]
       .filter((sale) => sale.client_id === id)
       .sort(compareSalesNewestFirst)
@@ -738,6 +752,17 @@ export const handlers = [
     clientDetailRequests.push({ id, token: bearer(request) ?? '' })
     if (id === 'cli-missing') {
       return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    const hidden = denyUnassignedCollector(request, id)
+    if (hidden) return hidden
+    if (id === 'cli-unassigned') {
+      return HttpResponse.json(
+        clientFixture({
+          id,
+          name: 'Cliente sin ruta',
+          collector_membership_id: null,
+        }),
+      )
     }
     if (id === 'cli-blocked') {
       return HttpResponse.json(
@@ -1166,6 +1191,7 @@ export const handlers = [
       frequency,
       anchor_date: typeof body.anchor_date === 'string' ? body.anchor_date : plan.first,
       anchor_offset: typeof body.anchor_offset === 'number' ? body.anchor_offset : 0,
+      balance: plan.total,
     })
     sales.set(sale.id, sale)
     return HttpResponse.json(sale, { status: 201 })
@@ -1188,6 +1214,19 @@ export const handlers = [
         'Content-Disposition': `attachment; filename="contrato-venta-${id}.pdf"`,
       },
     })
+  }),
+
+  http.get('*/sales/:id', ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    const id = String(params.id)
+    const sale = sales.get(id)
+    if (!sale) {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    const hidden = denyUnassignedCollector(request, String(sale.client_id ?? ''))
+    if (hidden) return hidden
+    return HttpResponse.json(sale)
   }),
 
   http.get('*/sales', ({ request }) => {

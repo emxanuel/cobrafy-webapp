@@ -192,7 +192,7 @@ export function saleDetailFromPlan(
     anchor_offset?: number
     seller_membership_id?: string
     warnings?: SaleDetail['warnings']
-    balance?: string
+    balance: string
   },
 ): SaleDetail {
   return {
@@ -207,7 +207,7 @@ export function saleDetailFromPlan(
     financed: plan.financed,
     surcharge: plan.surcharge,
     total: plan.total,
-    balance: input.balance ?? plan.total,
+    balance: input.balance,
     surcharge_kind: 'percent_of_financed',
     surcharge_percent: '20.00',
     surcharge_amount: null,
@@ -263,6 +263,25 @@ export function clientSaleFixture(overrides: Partial<SaleRead> = {}): SaleRead {
     voided_by: null,
     created_at: '2026-10-17T16:00:00.000Z',
     ...overrides,
+  }
+}
+
+export function clientSaleDetailFixture(overrides: Partial<SaleDetail> = {}): SaleDetail {
+  const read = clientSaleFixture(overrides)
+  return {
+    ...read,
+    installments: overrides.installments ?? [
+      {
+        number: 1,
+        due_date: read.first_due_date,
+        amount: '1500.00',
+        paid: '0.00',
+        late_fee: '0.00',
+        status: 'pendiente',
+      },
+    ],
+    contract: overrides.contract ?? {},
+    warnings: overrides.warnings ?? [],
   }
 }
 

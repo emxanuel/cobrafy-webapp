@@ -213,6 +213,11 @@ export async function listClientSales(clientId: string): Promise<SaleRead[]> {
   return items.map(normalizeSale)
 }
 
+export async function getSale(saleId: string): Promise<SaleDetail> {
+  const { data } = await api.get<unknown>(`/sales/${saleId}`)
+  return normalizeSaleDetail(data)
+}
+
 function filenameFromDisposition(header: string): string | null {
   const utf = /filename\*=UTF-8''([^;]+)/i.exec(header)
   if (utf?.[1]) return decodeURIComponent(utf[1])

@@ -78,7 +78,7 @@ export type SaleVoidedBy = {
   name: string
 }
 
-/** GET /sales item — exact SaleRead. */
+/** GET /sales and GET /clients/{id}/sales item — exact SaleRead. `balance` is required. */
 export type SaleRead = {
   id: string
   sale_number: number
