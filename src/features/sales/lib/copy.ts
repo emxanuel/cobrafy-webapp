@@ -166,12 +166,37 @@ export function saleErrorBanner(
       body: '',
     }
   }
+  const backend = backendMessage?.trim()
+  if (backend && backend !== GENERIC_SALE_ERROR) {
+    return {
+      tone: 'warning',
+      icon: '⚠',
+      title: backend,
+      body: '',
+    }
+  }
   return {
     tone: 'danger',
     icon: '✕',
     title: GENERIC_SALE_ERROR,
-    body: backendMessage && backendMessage !== GENERIC_SALE_ERROR ? backendMessage : '',
+    body: '',
   }
+}
+
+const SALE_ERROR_OWN_COPY = new Set([
+  'CLIENT_BLOCKED',
+  'CREDIT_SETTINGS_MISSING',
+  'CREDIT_SETTINGS_INCOMPLETE',
+  'BUSINESS_LEGAL_DATA_MISSING',
+  'DOCUMENT_UNREADABLE',
+  'DOCUMENT_UNREADABLE_GUARANTOR',
+  'LEGACY_SALE_LEGAL_DATA_MISSING',
+  'SALE_ALREADY_VOIDED',
+  'SALE_HAS_PAYMENTS',
+])
+
+export function saleErrorHasOwnCopy(code?: string): boolean {
+  return Boolean(code && SALE_ERROR_OWN_COPY.has(code))
 }
 
 export function simulatorWarningCopy(

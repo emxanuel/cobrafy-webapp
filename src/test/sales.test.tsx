@@ -4,10 +4,19 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  GENERIC_SALE_ERROR,
   IDEMPOTENCY_REUSED_BODY,
   IDEMPOTENCY_REUSED_TITLE,
 } from '@/features/sales/lib/copy'
+import {
+  PENDING_SALE_BODY,
+  PENDING_SALE_FAILED,
+  PENDING_SALE_STILL_OFFLINE,
+  PENDING_SALE_TITLE,
+} from '@/features/sales/lib/pending-sale'
 import { MONEY_INVALID_MESSAGE } from '@/features/sales/components/money-input'
+import { quincenalOptions } from '@/features/sales/lib/calendar'
+import { formatDueDate } from '@/features/shared/lib/format-due-date'
 import { createSale } from '@/features/sales/services/requests'
 import { hasXorDueAnchor } from '@/features/sales/lib/sale-payload'
 import { CREDIT_SETTINGS_LINKS_ENABLED } from '@/features/sales/lib/flags'
@@ -65,6 +74,37 @@ function expectPurchasesLink() {
     'href',
     '/clientes/cli-1/historial',
   )
+}
+
+async function confirmSale(user: ReturnType<typeof userEvent.setup>) {
+  const confirm = await screen.findByRole('button', { name: 'Confirmar venta' })
+  await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 3000 })
+  await user.click(confirm)
+  await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
+}
+
+function expectLockedSaleState(options?: { stillOffline?: boolean }) {
+  expect(screen.getAllByText(PENDING_SALE_TITLE).length).toBeGreaterThanOrEqual(1)
+  expect(screen.getByText(PENDING_SALE_BODY)).toBeInTheDocument()
+  if (options?.stillOffline) {
+    expect(screen.getByText(PENDING_SALE_STILL_OFFLINE)).toBeInTheDocument()
+  } else {
+    expect(screen.queryByText(PENDING_SALE_STILL_OFFLINE)).not.toBeInTheDocument()
+  }
+  expect(screen.getByText('Bloqueado')).toBeInTheDocument()
+  const retry = screen.getByRole('button', { name: 'Reintentar' })
+  expect(retry).toHaveClass('min-h-12')
+  const purchases = screen.getByRole('link', { name: 'Ver compras del cliente' })
+  expect(purchases).toHaveAttribute('href', '/clientes/cli-1/historial')
+  expect(purchases).toHaveClass('min-h-11')
+  expect(screen.queryByRole('button', { name: 'Confirmar venta' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Artículo')).toBeDisabled()
+  expect(screen.getByLabelText('Precio')).toBeDisabled()
+  expect(screen.getByLabelText('Inicial')).toBeDisabled()
+  expect(screen.queryByRole('button', { name: 'Quitar una cuota' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Agregar una cuota' })).not.toBeInTheDocument()
+  expect(document.querySelector('input[type="date"]')).toBeNull()
+  expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeTruthy()
 }
 
 function saleJson(overrides: Record<string, unknown> = {}) {
@@ -156,10 +196,11 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user, '10000.00')
     await waitForPlan()
-    expect(screen.getAllByText('RD$ 3,333.33').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('RD$ 3,333.33')).toHaveLength(1)
     expect(screen.getByText(/La última cuota es de RD\$ 3,333.34/)).toBeInTheDocument()
     await user.click(screen.getByText(/Ver calendario/))
-    expect(screen.getAllByText('RD$ 3,333.34').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('RD$ 3,333.33')).toHaveLength(3)
+    expect(screen.getAllByText('RD$ 3,333.34')).toHaveLength(2)
   })
 
   it('muestra 1,607.14 / 1,607.16 tal cual vienen del simulador', async () => {
@@ -193,9 +234,11 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user, '12000.00')
     await waitForPlan()
-    expect(screen.getAllByText('RD$ 1,607.14').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('RD$ 1,607.14')).toHaveLength(1)
+    expect(screen.getByText(/La última cuota es de RD\$ 1,607.16/)).toBeInTheDocument()
     await user.click(screen.getByText(/Ver calendario/))
-    expect(screen.getAllByText('RD$ 1,607.16').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('RD$ 1,607.14')).toHaveLength(7)
+    expect(screen.getAllByText('RD$ 1,607.16')).toHaveLength(2)
   })
 
   it('mensual desde el 31-ene muestra 28/02, 31/03 y 30/04', async () => {
@@ -238,10 +281,20 @@ describe('CBF-206 ventas', () => {
     renderApp()
     await goToNewSale()
     await user.click(screen.getByRole('button', { name: 'Quincenal' }))
+    const more = screen.queryByRole('button', { name: 'Ver más fechas' })
+    if (more) await user.click(more)
     const group = screen.getByRole('radiogroup', { name: 'Primera cuota' })
-    const labels = within(group).getAllByRole('radio')
-    expect(labels.length).toBeGreaterThanOrEqual(1)
-    expect(within(group).getAllByText(/Día 15|fin de mes|Fin de mes/i).length).toBeGreaterThan(0)
+    const expected = quincenalOptions()
+    const radios = within(group).getAllByRole('radio')
+    expect(radios).toHaveLength(expected.length)
+    expect(expected.map((item) => formatDueDate(item.iso))).toEqual(
+      radios.map((radio) => {
+        const label = radio.closest('label')
+        const date = label?.querySelector('.text-heading')
+        return (date?.textContent ?? '').replace(/^\s*/, '').trim()
+      }),
+    )
+    expect(expected.every((item) => item.kind === 'day15' || item.kind === 'month_end')).toBe(true)
     expect(screen.getByText(/día 15 y el último día/i)).toBeInTheDocument()
   })
 
@@ -280,7 +333,7 @@ describe('CBF-206 ventas', () => {
     expect(hasXorDueAnchor(last?.body as never)).toBe(true)
   })
 
-  it('reusa el Idempotency-Key al reintentar y lo renueva si cambia el formulario', async () => {
+  it('un error de red deja la venta por confirmar; Reintentar manda el mismo cuerpo y la misma clave', async () => {
     loginCashier()
     const keys: string[] = []
     let fails = 0
@@ -296,7 +349,7 @@ describe('CBF-206 ventas', () => {
         })
         fails += 1
         if (fails <= 2) return HttpResponse.error()
-        return HttpResponse.json(saleJson({ id: 'sale-retry' }), { status: 201 })
+        return HttpResponse.json(saleJson({ id: 'sale-retry', sale_number: 44 }), { status: 201 })
       }),
     )
     window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
@@ -304,34 +357,62 @@ describe('CBF-206 ventas', () => {
     renderApp()
     await goToNewSale()
     await fillHappyPath(user)
-    const confirm = await screen.findByRole('button', { name: 'Confirmar venta' })
-    await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 3000 })
-    await user.click(confirm)
-    await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
-    expect(await screen.findByText('No se pudo registrar la venta.')).toBeInTheDocument()
+    await confirmSale(user)
+    expectLockedSaleState()
+    expect(screen.getByLabelText('Artículo')).toHaveValue('Nevera Mabe 14 pies')
+
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     await waitFor(() => expect(keys.length).toBe(2))
+    expectLockedSaleState({ stillOffline: true })
     expect(keys[0]).toBe(keys[1])
     expect(saleWrites[1]?.body).toEqual(saleWrites[0]?.body)
     expect(keys[0]).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     )
 
-    await user.type(screen.getByLabelText('Artículo'), ' XL')
-    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
-    expect(screen.getByText('No se pudo registrar la venta.')).toBeInTheDocument()
-    expect(screen.getByText(/mira las compras del cliente/i)).toBeInTheDocument()
-    expectPurchasesLink()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeEnabled(), {
-      timeout: 3000,
-    })
-    await user.click(screen.getByRole('button', { name: 'Confirmar venta' }))
-    await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
-    await waitFor(() => expect(keys.length).toBe(3))
-    expect(keys[2]).not.toBe(keys[0])
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByText('Listo, venta #44 registrada.')).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
   })
 
-  it('después de un error de red, editar oculta solo Reintentar y deja el aviso de compras', async () => {
+  it('Reintentar muestra Confirmando… y un 200 de replay llega a la venta registrada', async () => {
+    loginCashier()
+    let attempt = 0
+    let release: (() => void) | undefined
+    const hold = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        attempt += 1
+        if (attempt === 1) return HttpResponse.error()
+        await hold
+        return HttpResponse.json(saleJson({ id: 'sale-replay-lock', sale_number: 88 }), { status: 200 })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expectLockedSaleState()
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    const confirming = await screen.findByRole('button', { name: 'Confirmando…' })
+    expect(confirming).toBeDisabled()
+    expect(screen.queryByText(PENDING_SALE_STILL_OFFLINE)).not.toBeInTheDocument()
+    release?.()
+    expect(await screen.findByText('Listo, venta #88 registrada.')).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+  })
+
+  it('recargar o volver a la ficha restaura el bloqueo desde sessionStorage', async () => {
     loginCashier()
     server.use(
       http.post('*/sales', async ({ request }) => {
@@ -349,19 +430,145 @@ describe('CBF-206 ventas', () => {
     renderApp()
     await goToNewSale()
     await fillHappyPath(user)
-    const confirm = await screen.findByRole('button', { name: 'Confirmar venta' })
-    await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 3000 })
-    await user.click(confirm)
-    await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
-    expect(await screen.findByText('No se pudo registrar la venta.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
-    expectPurchasesLink()
+    await confirmSale(user)
+    expectLockedSaleState()
 
-    await user.type(screen.getByLabelText('Artículo'), ' XL')
-    expect(screen.getByText('No se pudo registrar la venta.')).toBeInTheDocument()
-    expect(screen.getByText(/mira las compras del cliente/i)).toBeInTheDocument()
-    expectPurchasesLink()
+    cleanup()
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    renderApp()
+    await goToNewSale()
+    expectLockedSaleState()
+    expect(screen.getByLabelText('Artículo')).toHaveValue('Nevera Mabe 14 pies')
+
+    await user.click(screen.getByRole('link', { name: '‹ Volver a la ficha' }))
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    await user.click(screen.getByRole('link', { name: /Nueva venta/ }))
+    expect(await screen.findByRole('heading', { name: 'Nueva venta' })).toBeInTheDocument()
+    expectLockedSaleState()
+  })
+
+  it('un 422 definitivo desbloquea y muestra que la venta no se registró', async () => {
+    loginCashier()
+    let attempt = 0
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        attempt += 1
+        if (attempt === 1) return HttpResponse.error()
+        return HttpResponse.json(
+          {
+            detail: [
+              {
+                field: 'item_description',
+                code: 'ITEM_DESCRIPTION_INVALID',
+                message: 'el artículo no es válido',
+              },
+            ],
+          },
+          { status: 422 },
+        )
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expectLockedSaleState()
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByText(PENDING_SALE_FAILED)).toBeInTheDocument()
+    expect(screen.getByText('El artículo no es válido.')).toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_TITLE)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Artículo')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Quitar una cuota' })).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+  })
+
+  it('un 409 con copy propio desbloquea y muestra ese aviso', async () => {
+    loginCashier()
+    let attempt = 0
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        attempt += 1
+        if (attempt === 1) return HttpResponse.error()
+        return HttpResponse.json(
+          {
+            detail: [
+              {
+                field: null,
+                code: 'CLIENT_BLOCKED',
+                message: 'Atraso de 3 cuotas',
+              },
+            ],
+          },
+          { status: 409 },
+        )
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expectLockedSaleState()
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByText('Este cliente está bloqueado: Atraso de 3 cuotas.')).toBeInTheDocument()
+    expect(screen.getByText('No se le puede vender a crédito.')).toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_TITLE)).not.toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_FAILED)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Artículo')).toBeEnabled()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+  })
+
+  it('un 409 desconocido al reintentar desbloquea con el aviso de no registrada', async () => {
+    loginCashier()
+    let attempt = 0
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        attempt += 1
+        if (attempt === 1) return HttpResponse.error()
+        return HttpResponse.json(
+          {
+            detail: [{ field: null, code: 'SOME_NEW_CODE', message: 'debug interno' }],
+          },
+          { status: 409 },
+        )
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expectLockedSaleState()
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByText(PENDING_SALE_FAILED)).toBeInTheDocument()
+    expect(screen.queryByText('debug interno')).not.toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_TITLE)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Artículo')).toBeEnabled()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
   })
 
   it('un monto inválido muestra Monto inválido y deshabilita Confirmar', async () => {
@@ -595,7 +802,7 @@ describe('CBF-206 ventas', () => {
     await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 3000 })
     await user.click(confirm)
     await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
-    expect(await screen.findByText('No se pudo registrar la venta.')).toBeInTheDocument()
+    expectLockedSaleState()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText(IDEMPOTENCY_REUSED_TITLE)).toBeInTheDocument()
@@ -733,6 +940,8 @@ describe('CBF-206 ventas', () => {
     await user.clear(screen.getByLabelText('Inicial'))
     await user.type(screen.getByLabelText('Inicial'), '18500.00')
     expect(await screen.findByText('La inicial debe ser menor que el precio.')).toBeInTheDocument()
+    expect(screen.getByText('Corrige el campo marcado para ver las cuotas.')).toBeInTheDocument()
+    expect(screen.queryByText('Espera a que termine el cálculo.')).not.toBeInTheDocument()
   })
 
   it('un 409 de texto plano y un código desconocido no rompen la pantalla', async () => {
@@ -748,7 +957,7 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user)
     await waitFor(
-      () => expect(screen.getByText('conflicto de crédito')).toBeInTheDocument(),
+      () => expect(screen.getByText(GENERIC_SALE_ERROR)).toBeInTheDocument(),
       { timeout: 4000 },
     )
 
@@ -761,6 +970,6 @@ describe('CBF-206 ventas', () => {
       ),
     )
     await user.type(screen.getByLabelText('Artículo'), '!')
-    expect(await screen.findByText('No se pudo completar. Inténtalo de nuevo.')).toBeInTheDocument()
+    expect(await screen.findByText('debug')).toBeInTheDocument()
   })
 })

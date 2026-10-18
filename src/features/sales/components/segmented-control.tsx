@@ -6,11 +6,13 @@ export function SegmentedControl<T extends string>({
   options,
   onChange,
   label,
+  disabled = false,
 }: {
   value: T
   options: Array<{ value: T; label: string }>
   onChange: (value: T) => void
   label: string
+  disabled?: boolean
 }) {
   return (
     <div
@@ -28,6 +30,7 @@ export function SegmentedControl<T extends string>({
             value === option.value && 'border-accent bg-accent-bg text-accent',
           )}
           aria-pressed={value === option.value}
+          disabled={disabled}
           onClick={() => onChange(option.value)}
         >
           {option.label}

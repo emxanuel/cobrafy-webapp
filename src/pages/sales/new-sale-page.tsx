@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2, Lock } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 
 import type { Role } from '@/features/auth/services/types'
@@ -39,10 +40,21 @@ import {
   formatFieldMessage,
   frequencyAdjective,
   saleErrorBanner,
+  saleErrorHasOwnCopy,
   simulatorWarningCopy,
   surchargeLabel,
 } from '@/features/sales/lib/copy'
 import { idempotencyForForm, type IdempotencyState } from '@/features/sales/lib/idempotency'
+import {
+  PENDING_SALE_BODY,
+  PENDING_SALE_FAILED,
+  PENDING_SALE_STILL_OFFLINE,
+  PENDING_SALE_TITLE,
+  clearPendingSale,
+  readPendingSale,
+  writePendingSale,
+  type PendingSaleAttempt,
+} from '@/features/sales/lib/pending-sale'
 import { isPositiveAmount } from '@/features/sales/lib/money-input'
 import {
   buildSaleCreateBody,
@@ -54,7 +66,6 @@ import { planCuotaCount, planFirstDue, planLastDue } from '@/features/sales/lib/
 import {
   FREQUENCIES,
   type Frequency,
-  type SaleCreateRequest,
   type SaleDetail,
 } from '@/features/sales/services/types'
 import { SaleRegistered } from '@/pages/sales/sale-registered'
@@ -145,28 +156,33 @@ function NewSaleForm({
   surchargeKind: string
   surchargePercent: string | null
 }) {
-  const [article, setArticle] = useState('')
-  const [price, setPrice] = useState('')
-  const [down, setDown] = useState('0.00')
+  const storedPending = readPendingSale(clientId)
+  const [article, setArticle] = useState(storedPending?.snapshot.item_description ?? '')
+  const [price, setPrice] = useState(storedPending?.snapshot.price ?? '')
+  const [down, setDown] = useState(storedPending?.snapshot.down_payment ?? '0.00')
   const [installments, setInstallments] = useState(
-    maxInstallments < 12 ? maxInstallments : 12,
+    storedPending?.snapshot.installments ?? (maxInstallments < 12 ? maxInstallments : 12),
   )
   const [frequency, setFrequency] = useState<Frequency>(
-    allowed.includes('mensual') ? 'mensual' : (allowed[0] ?? 'mensual'),
+    storedPending?.snapshot.frequency ??
+      (allowed.includes('mensual') ? 'mensual' : (allowed[0] ?? 'mensual')),
   )
-  const [firstDue, setFirstDue] = useState('')
+  const [firstDue, setFirstDue] = useState(storedPending?.snapshot.first_due_date ?? '')
   const [debounced, setDebounced] = useState<SaleFormSnapshot | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [created, setCreated] = useState<SaleDetail | null>(null)
   const [priceInvalid, setPriceInvalid] = useState(false)
   const [downInvalid, setDownInvalid] = useState(false)
   const [idempotencyReused, setIdempotencyReused] = useState(false)
-  const [lastSubmitted, setLastSubmitted] = useState<{
-    payload: SaleCreateRequest
-    key: string
-    snapshot: SaleFormSnapshot
-  } | null>(null)
-  const idempotencyRef = useRef<IdempotencyState | null>(null)
+  const [pending, setPending] = useState<PendingSaleAttempt | null>(storedPending)
+  const [retryOffline, setRetryOffline] = useState(false)
+  const [failedAfterPending, setFailedAfterPending] = useState(false)
+  const locked = pending != null
+  const idempotencyRef = useRef<IdempotencyState | null>(
+    storedPending
+      ? { fingerprint: salePayloadFingerprint(storedPending.payload), key: storedPending.key }
+      : null,
+  )
   const inFlightRef = useRef(false)
   const bannerRef = useRef<HTMLDivElement>(null)
 
@@ -255,6 +271,7 @@ function NewSaleForm({
   )
   const hasFieldError = Object.keys(mergedFields).length > 0
   const confirmDisabled =
+    locked ||
     !articleValid ||
     !isPositiveAmount(price) ||
     priceInvalid ||
@@ -271,20 +288,13 @@ function NewSaleForm({
     confirmHint = MONEY_INVALID_MESSAGE
   } else if (!isPositiveAmount(price) || installments < 1 || !articleValid) {
     confirmHint = 'Completa precio, plazo y artículo para continuar.'
-  } else if (simulating || stale) {
+  } else if (hasFieldError && simulate.isError) {
+    confirmHint = ''
+  } else if ((simulating || stale) && !simulate.isError) {
     confirmHint = 'Espera a que termine el cálculo.'
   } else if (blockReason) {
     confirmHint = blockReason
   }
-
-  const formChangedSinceSubmit =
-    lastSubmitted != null && saleFormFingerprint(lastSubmitted.snapshot) !== fingerprint
-  const registerFailed =
-    create.isError &&
-    (createStatus === 0 || createStatus >= 500) &&
-    createCode !== 'IDEMPOTENCY_KEY_REUSED' &&
-    lastSubmitted != null
-  const canRetryNetwork = registerFailed && !formChangedSinceSubmit
 
   const banners: ReturnType<typeof simulatorWarningCopy>[] = []
   if (blockedFromSim) {
@@ -320,21 +330,23 @@ function NewSaleForm({
     banners.push(simulatorWarningCopy(warning.code, role, clientId, warning.message))
   }
 
+  const createBackendMessage = isApiError(create.error) ? getApiErrorMessage(create.error) : undefined
   const registerBanner =
+    failedAfterPending &&
     create.isError &&
-    createStatus === 409 &&
-    createCode !== 'IDEMPOTENCY_KEY_REUSED'
-      ? saleErrorBanner(
-          createCode,
-          role,
-          clientId,
-          createCode === 'CLIENT_BLOCKED'
-            ? getApiErrorMessage(create.error)
-            : getApiErrorMessage(create.error),
-        )
-      : simulate.isError && simulateStatus === 409
-        ? saleErrorBanner(simulateCode, role, clientId, getApiErrorMessage(simulate.error))
-        : null
+    !locked &&
+    !idempotencyReused &&
+    createStatus !== 403
+      ? saleErrorHasOwnCopy(createCode)
+        ? saleErrorBanner(createCode, role, clientId, createBackendMessage)
+        : { tone: 'danger' as const, icon: '✕', title: PENDING_SALE_FAILED, body: '' }
+      : create.isError &&
+          createStatus === 409 &&
+          createCode !== 'IDEMPOTENCY_KEY_REUSED'
+        ? saleErrorBanner(createCode, role, clientId, createBackendMessage)
+        : simulate.isError && simulateStatus === 409
+          ? saleErrorBanner(simulateCode, role, clientId, getApiErrorMessage(simulate.error))
+          : null
 
   function changeFrequency(next: Frequency) {
     setFrequency(next)
@@ -357,55 +369,85 @@ function NewSaleForm({
     setConfirmOpen(true)
   }
 
-  function finishCreate(error?: unknown) {
+  function persistPending(attempt: PendingSaleAttempt) {
+    writePendingSale(clientId, attempt)
+    setPending(attempt)
+    idempotencyRef.current = { fingerprint: salePayloadFingerprint(attempt.payload), key: attempt.key }
+  }
+
+  function releasePending() {
+    clearPendingSale(clientId)
+    setPending(null)
+    setRetryOffline(false)
+  }
+
+  function succeedCreate(sale: SaleDetail) {
+    inFlightRef.current = false
+    setFailedAfterPending(false)
+    setRetryOffline(false)
+    releasePending()
+    setConfirmOpen(false)
+    setCreated(sale)
+  }
+
+  function finishCreate(error: unknown, attempt: PendingSaleAttempt) {
     inFlightRef.current = false
     if (!error) return
-    if (isApiError(error) && error.code === 'IDEMPOTENCY_KEY_REUSED') {
+    const status = isApiError(error) ? error.status : 0
+    const code = isApiError(error) ? error.code : undefined
+    if (code === 'IDEMPOTENCY_KEY_REUSED') {
+      releasePending()
       idempotencyRef.current = null
+      setFailedAfterPending(false)
       setIdempotencyReused(true)
       if (!confirmOpen) {
         queueMicrotask(() => bannerRef.current?.focus())
       }
       return
     }
+    if (status === 0 || status >= 500) {
+      setRetryOffline(pending != null)
+      setFailedAfterPending(false)
+      persistPending(attempt)
+      setConfirmOpen(false)
+      queueMicrotask(() => bannerRef.current?.focus())
+      return
+    }
+    releasePending()
+    idempotencyRef.current = null
+    setFailedAfterPending(true)
     setConfirmOpen(false)
     queueMicrotask(() => bannerRef.current?.focus())
   }
 
   function submitSale() {
-    if (confirmDisabled || !plan || !ready || create.isPending || inFlightRef.current) return
+    if (locked || confirmDisabled || !plan || !ready || create.isPending || inFlightRef.current) return
     const payload = buildSaleCreateBody(snapshot, plan)
     const payloadFingerprint = salePayloadFingerprint(payload)
     const next = idempotencyForForm(idempotencyRef.current, payloadFingerprint)
     idempotencyRef.current = next
-    setLastSubmitted({ payload, key: next.key, snapshot })
+    const attempt = { payload, key: next.key, snapshot }
     setIdempotencyReused(false)
+    setFailedAfterPending(false)
     inFlightRef.current = true
     create.mutate(
       { payload, idempotencyKey: next.key },
       {
-        onSuccess: (sale) => {
-          inFlightRef.current = false
-          setConfirmOpen(false)
-          setCreated(sale)
-        },
-        onError: finishCreate,
+        onSuccess: succeedCreate,
+        onError: (error) => finishCreate(error, attempt),
       },
     )
   }
 
-  function retryLastSubmitted() {
-    if (!lastSubmitted || create.isPending || inFlightRef.current || formChangedSinceSubmit) return
+  function retryPending() {
+    if (!pending || create.isPending || inFlightRef.current) return
+    setRetryOffline(false)
     inFlightRef.current = true
     create.mutate(
-      { payload: lastSubmitted.payload, idempotencyKey: lastSubmitted.key },
+      { payload: pending.payload, idempotencyKey: pending.key },
       {
-        onSuccess: (sale) => {
-          inFlightRef.current = false
-          setConfirmOpen(false)
-          setCreated(sale)
-        },
-        onError: finishCreate,
+        onSuccess: succeedCreate,
+        onError: (error) => finishCreate(error, pending),
       },
     )
   }
@@ -426,6 +468,19 @@ function NewSaleForm({
 
   return (
     <div className="flex flex-col gap-5 pb-36">
+      {locked ? (
+        <div
+          ref={bannerRef}
+          tabIndex={-1}
+          className="bg-bg sticky top-0 z-20 -mx-1 px-1 py-1"
+        >
+          <Alert tone="warning" icon="⚠" title={PENDING_SALE_TITLE}>
+            <p className="m-0">{PENDING_SALE_BODY}</p>
+            {retryOffline ? <p className="m-0 mt-1.5">{PENDING_SALE_STILL_OFFLINE}</p> : null}
+          </Alert>
+        </div>
+      ) : null}
+
       <div>
         <Link
           to={`/clientes/${clientId}`}
@@ -457,6 +512,14 @@ function NewSaleForm({
           <SaleBanner key={copy.title + copy.body} copy={copy} />
         ))}
 
+      {simulate.isError &&
+      simulateStatus !== 409 &&
+      simulateStatus !== 422 &&
+      simulateStatus !== 0 &&
+      simulateStatus < 500 ? (
+        <Alert tone="danger">{getApiErrorMessage(simulate.error)}</Alert>
+      ) : null}
+
       {simulate.isError && (simulateStatus === 0 || simulateStatus >= 500) ? (
         <Alert
           tone="danger"
@@ -476,32 +539,6 @@ function NewSaleForm({
         <Alert>No tienes permiso para registrar ventas.</Alert>
       ) : null}
 
-      {registerFailed ? (
-        <Alert
-          tone="danger"
-          icon="✕"
-          title="No se pudo registrar la venta."
-          action={
-            <div className="flex items-center gap-2">
-              {canRetryNetwork ? (
-                <Button variant="outline" onClick={retryLastSubmitted}>
-                  Reintentar
-                </Button>
-              ) : null}
-              <Link
-                to={`/clientes/${clientId}/historial`}
-                className={`${buttonVariants({ variant: 'link' })} min-h-11`}
-              >
-                Ver compras del cliente
-              </Link>
-            </div>
-          }
-        >
-          Revisa tu conexión. Antes de reintentar, mira las compras del cliente por si ya quedó
-          registrada.
-        </Alert>
-      ) : null}
-
       {idempotencyReused && !confirmOpen ? (
         <div ref={bannerRef} tabIndex={-1}>
           <IdempotencyReusedNotice
@@ -517,6 +554,17 @@ function NewSaleForm({
           event.preventDefault()
         }}
       >
+        <fieldset
+          disabled={locked}
+          className={`m-0 flex flex-col gap-4 border-0 p-0 ${locked ? 'bg-muted pointer-events-none cursor-default rounded-md px-3 py-3 opacity-60' : ''}`}
+        >
+        {locked ? (
+          <p className="text-heading m-0 flex items-center gap-2 text-sm font-medium">
+            <Lock className="size-4 shrink-0" aria-hidden />
+            <span>Venta por confirmar</span>
+            <span className="sr-only">Bloqueado</span>
+          </p>
+        ) : null}
         <Field
           id="article"
           label="Artículo"
@@ -529,6 +577,8 @@ function NewSaleForm({
             value={article}
             maxLength={500}
             error={mergedFields.item_description}
+            disabled={locked}
+            readOnly={locked}
             onChange={(event) => setArticle(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') event.preventDefault()
@@ -553,6 +603,7 @@ function NewSaleForm({
               value={price}
               onValue={setPrice}
               onInvalid={setPriceInvalid}
+              disabled={locked}
               error={priceInvalid ? MONEY_INVALID_MESSAGE : mergedFields.price}
             />
           </Field>
@@ -573,6 +624,7 @@ function NewSaleForm({
               value={down}
               onValue={setDown}
               onInvalid={setDownInvalid}
+              disabled={locked}
               error={downInvalid ? MONEY_INVALID_MESSAGE : mergedFields.down_payment}
             />
           </Field>
@@ -590,6 +642,8 @@ function NewSaleForm({
             max={maxInstallments}
             onChange={setInstallments}
             error={mergedFields.installments}
+            disabled={locked}
+            hideButtons={locked}
           />
         </Field>
 
@@ -599,6 +653,7 @@ function NewSaleForm({
             value={frequency}
             options={allowed.map((item) => ({ value: item, label: FREQUENCY_LABEL[item] }))}
             onChange={changeFrequency}
+            disabled={locked}
           />
         </Field>
 
@@ -611,37 +666,67 @@ function NewSaleForm({
               ? formatFieldMessage(mergedFields.first_due_date)
               : undefined
           }
+          disabled={locked}
+          hidePicker={locked}
         />
+        </fieldset>
       </form>
 
       {simulate.isError && simulateStatus === 409 && !plan ? null : (
-        <PlanCard
-          state={planState}
-          plan={plan}
-          surchargeKind={surchargeKind}
-          surchargePercent={surchargePercent}
-          dim={planState === 'calculating' && Boolean(plan)}
-        />
+        <div className={locked ? 'pointer-events-none cursor-default opacity-60' : undefined}>
+          <PlanCard
+            state={planState}
+            plan={plan}
+            surchargeKind={surchargeKind}
+            surchargePercent={surchargePercent}
+            dim={planState === 'calculating' && Boolean(plan)}
+          />
+        </div>
       )}
 
       <StickyActionBar
         summary={
           ready && plan
             ? `${planCuotaCount(plan)} × ${formatMoney(plan.installment_amount)}`
-            : simulating
+            : simulating && !simulate.isError
               ? 'Calculando…'
               : '—'
         }
-        total={ready && plan ? formatMoney(plan.total) : simulating ? '…' : '—'}
-        hint={confirmDisabled ? confirmHint : undefined}
+        total={ready && plan ? formatMoney(plan.total) : simulating && !simulate.isError ? '…' : '—'}
+        hint={locked || !confirmDisabled ? undefined : confirmHint}
       >
-        <Button
-          className="min-h-12 w-full"
-          disabled={confirmDisabled}
-          onClick={openConfirm}
-        >
-          Confirmar venta
-        </Button>
+        {locked ? (
+          <div className="flex flex-col gap-2">
+            <Button
+              className="min-h-12 w-full"
+              disabled={create.isPending}
+              onClick={retryPending}
+            >
+              {create.isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Confirmando…
+                </>
+              ) : (
+                'Reintentar'
+              )}
+            </Button>
+            <Link
+              to={`/clientes/${clientId}/historial`}
+              className={`${buttonVariants({ variant: 'link' })} min-h-11 w-full`}
+            >
+              Ver compras del cliente
+            </Link>
+          </div>
+        ) : (
+          <Button
+            className="min-h-12 w-full"
+            disabled={confirmDisabled}
+            onClick={openConfirm}
+          >
+            Confirmar venta
+          </Button>
+        )}
       </StickyActionBar>
 
       {confirmOpen && plan ? (

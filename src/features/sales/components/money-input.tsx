@@ -13,6 +13,7 @@ export function MoneyInput({
   onInvalid,
   error,
   placeholder = '0.00',
+  disabled = false,
 }: {
   id: string
   value: string
@@ -20,6 +21,7 @@ export function MoneyInput({
   onInvalid?: (invalid: boolean) => void
   error?: string
   placeholder?: string
+  disabled?: boolean
 }) {
   const [text, setText] = useState(value ? formatAmountInput(value) : '')
   const invalid = Boolean(text.trim()) && parseMoneyInput(text) === null
@@ -36,6 +38,7 @@ export function MoneyInput({
         placeholder={placeholder}
         error={shownError}
         value={text}
+        disabled={disabled}
         className={cn('tabular-nums pl-11')}
         onChange={(event) => {
           const next = event.target.value

@@ -19,6 +19,8 @@ export function Stepper({
   max = 24,
   onChange,
   error,
+  disabled = false,
+  hideButtons = false,
 }: {
   id: string
   value: number
@@ -26,11 +28,27 @@ export function Stepper({
   max?: number
   onChange: (value: number) => void
   error?: string
+  disabled?: boolean
+  hideButtons?: boolean
 }) {
   function clamp(next: number) {
     if (next < min) return min
     if (next > max) return max
     return next
+  }
+
+  if (hideButtons) {
+    return (
+      <TextInput
+        id={id}
+        inputMode="numeric"
+        error={error}
+        value={String(value)}
+        disabled
+        readOnly
+        className="text-center tabular-nums"
+      />
+    )
   }
 
   return (
@@ -39,7 +57,7 @@ export function Stepper({
         variant="outline"
         className="min-h-11 px-0 text-xl"
         aria-label="Quitar una cuota"
-        disabled={value <= min}
+        disabled={disabled || value <= min}
         onClick={() => onChange(clamp(value - 1))}
       >
         −
@@ -49,6 +67,7 @@ export function Stepper({
         inputMode="numeric"
         error={error}
         value={String(value)}
+        disabled={disabled}
         className="text-center tabular-nums"
         onChange={(event) => {
           const next = digitsToInt(event.target.value)
@@ -60,7 +79,7 @@ export function Stepper({
         variant="outline"
         className="min-h-11 px-0 text-xl"
         aria-label="Agregar una cuota"
-        disabled={value >= max}
+        disabled={disabled || value >= max}
         onClick={() => onChange(clamp(value + 1))}
       >
         +

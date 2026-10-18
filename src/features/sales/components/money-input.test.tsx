@@ -52,6 +52,15 @@ describe('MoneyInput', () => {
     expect(onValueCents).toHaveBeenLastCalledWith('0.99')
   })
 
+  it('un monto sobre el máximo muestra Monto inválido y deshabilita el valor', async () => {
+    const user = userEvent.setup()
+    const onValue = vi.fn()
+    render(<Harness onValue={onValue} />)
+    await user.type(screen.getByLabelText('Precio'), '10000000000000000')
+    expect(onValue).toHaveBeenLastCalledWith('')
+    expect(screen.getByText(MONEY_INVALID_MESSAGE)).toBeInTheDocument()
+  })
+
   it('1850O, 18500.999 y 1,5 muestran Monto inválido y llaman onValue vacio', async () => {
     const user = userEvent.setup()
     for (const typed of ['1850O', '18500.999', '1,5']) {

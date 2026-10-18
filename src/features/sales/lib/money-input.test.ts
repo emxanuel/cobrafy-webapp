@@ -12,11 +12,14 @@ describe('parseMoneyInput', () => {
     expect(parseMoneyInput('999.99')).toBe('999.99')
   })
 
-  it('rechaza 1850O, 18500.999 y comas mal puestas', () => {
+  it('rechaza 1850O, 18500.999, comas mal puestas y montos sobre el máximo', () => {
     expect(parseMoneyInput('1850O')).toBeNull()
     expect(parseMoneyInput('18500.999')).toBeNull()
     expect(parseMoneyInput('1,5')).toBeNull()
     expect(parseMoneyInput('1500,50')).toBeNull()
+    expect(parseMoneyInput('9,999,999,999,999,999.99')).toBe('9999999999999999.99')
+    expect(parseMoneyInput('10000000000000000')).toBeNull()
+    expect(parseMoneyInput('10,000,000,000,000,000.00')).toBeNull()
   })
 
   it('isPositiveAmount no usa Number', () => {

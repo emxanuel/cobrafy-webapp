@@ -1,7 +1,13 @@
 import axios from 'axios'
 import { describe, expect, it } from 'vitest'
 
-import { ApiError, isPinLockedError, PIN_LOCKED_DETAIL, toApiError } from './api-error'
+import {
+  ApiError,
+  GENERIC_MESSAGE,
+  isPinLockedError,
+  PIN_LOCKED_DETAIL,
+  toApiError,
+} from './api-error'
 
 function axiosError(status: number, data: unknown) {
   return new axios.AxiosError(
@@ -102,15 +108,29 @@ describe('toApiError', () => {
     )
   })
 
-  it('un 409 de texto plano sigue siendo banner', () => {
-    const error = toApiError(
+  it('un detail string nunca se muestra crudo', () => {
+    const notFound = toApiError(axiosError(404, { detail: 'Not Found' }))
+    expect(notFound.fieldErrors).toEqual({})
+    expect(notFound.code).toBeUndefined()
+    expect(notFound.message).toBe(GENERIC_MESSAGE)
+    expect(notFound.message).not.toBe('Not Found')
+
+    const plain409 = toApiError(
       axiosError(409, {
         detail: 'ya existe un cliente con este documento',
       }),
     )
-    expect(error.fieldErrors).toEqual({})
+    expect(plain409.fieldErrors).toEqual({})
+    expect(plain409.code).toBeUndefined()
+    expect(plain409.message).toBe(GENERIC_MESSAGE)
+  })
+
+  it('un 409 con lista vacía usa el mensaje genérico', () => {
+    const error = toApiError(axiosError(409, { detail: [] }))
     expect(error.code).toBeUndefined()
-    expect(error.message).toBe('ya existe un cliente con este documento')
+    expect(error.fieldErrors).toEqual({})
+    expect(error.message).toBe(GENERIC_MESSAGE)
+    expect(error.message).not.toBe('Ese dato ya está registrado.')
   })
 
   it('IDEMPOTENCY_KEY_REUSED conserva el código para el aviso de la hoja', () => {
@@ -153,13 +173,13 @@ describe('toApiError', () => {
     )
   })
 
-  it('deja los 409 de bloqueo como mensaje, no como campo', () => {
+  it('deja los 409 de bloqueo como banner, no como campo', () => {
     const blocked = toApiError(axiosError(409, { detail: 'el cliente ya está bloqueado' }))
     expect(blocked.fieldErrors).toEqual({})
-    expect(blocked.message).toBe('el cliente ya está bloqueado')
+    expect(blocked.message).toBe(GENERIC_MESSAGE)
 
     const unblocked = toApiError(axiosError(409, { detail: 'el cliente no está bloqueado' }))
     expect(unblocked.fieldErrors).toEqual({})
-    expect(unblocked.message).toBe('el cliente no está bloqueado')
+    expect(unblocked.message).toBe(GENERIC_MESSAGE)
   })
 })

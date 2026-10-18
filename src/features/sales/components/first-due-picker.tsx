@@ -18,19 +18,34 @@ export function FirstDuePicker({
   value,
   onChange,
   error,
+  disabled = false,
+  hidePicker = false,
 }: {
   frequency: Frequency
   value: string
   onChange: (iso: string) => void
   error?: string
+  disabled?: boolean
+  hidePicker?: boolean
 }) {
   const today = todayParts()
   const min = toIsoDate(today)
   const max = toIsoDate(addCalendarYears(today, 1))
 
+  if (hidePicker) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <p className="text-heading text-sm font-medium">Primera cuota</p>
+        <p className="border-border bg-muted text-heading m-0 rounded-md border px-3 py-2.5 tabular-nums">
+          {value ? formatDueDate(value) : '—'}
+        </p>
+      </div>
+    )
+  }
+
   if (frequency === 'quincenal') {
     return (
-      <QuincenalPicker value={value} onChange={onChange} error={error} />
+      <QuincenalPicker value={value} onChange={onChange} error={error} disabled={disabled} />
     )
   }
 
@@ -46,6 +61,7 @@ export function FirstDuePicker({
         max={max}
         value={value}
         error={error}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.preventDefault()
@@ -66,10 +82,12 @@ function QuincenalPicker({
   value,
   onChange,
   error,
+  disabled = false,
 }: {
   value: string
   onChange: (iso: string) => void
   error?: string
+  disabled?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const options = quincenalOptions()
@@ -100,6 +118,7 @@ function QuincenalPicker({
                   name="first-due-quincenal"
                   className="sr-only"
                   checked={selected}
+                  disabled={disabled}
                   onChange={() => onChange(option.iso)}
                 />
                 <span
@@ -117,7 +136,12 @@ function QuincenalPicker({
         })}
       </div>
       {options.length > 4 ? (
-        <Button variant="ghost" className="w-full" onClick={() => setExpanded((open) => !open)}>
+        <Button
+          variant="ghost"
+          className="w-full"
+          disabled={disabled}
+          onClick={() => setExpanded((open) => !open)}
+        >
           {expanded ? 'Ver menos fechas' : 'Ver más fechas'}
         </Button>
       ) : null}

@@ -85,7 +85,7 @@ const DOCUMENT_UNREADABLE_MESSAGE =
 const DOCUMENT_UNREADABLE_GUARANTOR_MESSAGE =
   'No pudimos leer el documento de un garante. Revisa los contactos del cliente y vuelve a guardarlo.'
 
-const GENERIC_MESSAGE = 'No se pudo completar. Inténtalo de nuevo.'
+export const GENERIC_MESSAGE = 'No se pudo completar. Inténtalo de nuevo.'
 
 function listItems(body: ErrorBody): FastApiDetailItem[] | null {
   const raw = Array.isArray(body.detail)
@@ -140,8 +140,8 @@ export function parseMessage(
   if (typeof body.message === 'string' && body.message.trim()) {
     return body.message
   }
-  if (typeof body.detail === 'string' && body.detail.trim()) {
-    return body.detail
+  if (typeof body.detail === 'string' && /demasiados intentos/i.test(body.detail)) {
+    return body.detail.trim()
   }
   if (body.detail && typeof body.detail === 'object' && !Array.isArray(body.detail)) {
     const nested = body.detail as { message?: string }
@@ -152,7 +152,6 @@ export function parseMessage(
   if (code) return GENERIC_MESSAGE
   if (status === 401) return 'Tu sesión caducó. Entra de nuevo.'
   if (status === 403) return 'No tienes permiso para hacer esto.'
-  if (status === 409) return 'Ese dato ya está registrado.'
   if (status === 422) return 'Revisa los datos marcados.'
   return GENERIC_MESSAGE
 }
