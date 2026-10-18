@@ -272,8 +272,7 @@ function NewSaleForm({
 
   useEffect(() => {
     resetCreateRef.current()
-    setFailedAfterPending(false)
-  }, [fingerprint, simulate.dataUpdatedAt])
+  }, [fingerprint])
   const plan = simulate.data
   const simulating = simulate.isFetching || (canSimulate && debounced !== snapshot)
   const stale = !plan || saleFormFingerprint({

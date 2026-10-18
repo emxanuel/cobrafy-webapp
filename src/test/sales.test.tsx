@@ -1426,6 +1426,7 @@ describe('CBF-206 ventas', () => {
     )
     await user.clear(screen.getByLabelText('Precio'))
     await user.type(screen.getByLabelText('Precio'), '19000.00')
-    expect(await screen.findByText('debug')).toBeInTheDocument()
+    expect(await screen.findByText(GENERIC_SALE_ERROR)).toBeInTheDocument()
+    expect(screen.queryByText('debug')).not.toBeInTheDocument()
   })
 })
