@@ -92,7 +92,7 @@ async function openConfirmSheet(user: ReturnType<typeof userEvent.setup>) {
 }
 
 function expectNetworkWarning(options?: { stillOffline?: boolean }) {
-  expect(screen.getByText(PENDING_SALE_TITLE)).toBeInTheDocument()
+  expect(screen.getAllByText(PENDING_SALE_TITLE).length).toBeGreaterThanOrEqual(2)
   expect(screen.getByText(PENDING_SALE_BODY)).toBeInTheDocument()
   const retry = screen.getByRole('button', { name: 'Reintentar' })
   expect(retry).toHaveClass('min-h-12')
