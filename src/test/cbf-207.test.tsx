@@ -98,9 +98,50 @@ function paidSale() {
   })
 }
 
+const VOID_REASON = 'Se registró con el precio equivocado.'
+const VOID_NOT_SAVED_TITLE = 'No se guardó la anulación.'
+const VOID_NOT_SAVED_BODY = 'Se cortó la conexión. Puedes intentar de nuevo.'
+const VOID_UNCONFIRMED_TITLE = 'No pudimos confirmar si se anuló.'
+const VOID_UNCONFIRMED_BODY =
+  'Revisa tu conexión y vuelve a intentar; si ya se anuló, no pasa nada.'
+
 async function openVoidSheet(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('button', { name: 'Anular venta' }))
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
+}
+
+async function submitVoidFromSheet(
+  user: ReturnType<typeof userEvent.setup>,
+  mode: 'timeout' | 'network',
+) {
+  await openVoidSheet(user)
+  await user.type(screen.getByLabelText('Motivo de la anulación'), VOID_REASON)
+  const submit = within(screen.getByRole('dialog')).getByRole('button', { name: 'Anular venta' })
+  if (mode === 'timeout') {
+    vi.useFakeTimers()
+    fireEvent.click(submit)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MUTATION_TIMEOUT_MS)
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    vi.useRealTimers()
+    return
+  }
+  await user.click(submit)
+}
+
+async function expectVoidSheetWarning(title: string, body: string) {
+  const dialog = await screen.findByRole('dialog')
+  expect(await screen.findByText(title)).toBeInTheDocument()
+  expect(within(dialog).getByText(body)).toBeInTheDocument()
+  expect(screen.getByLabelText('Motivo de la anulación')).toHaveValue(VOID_REASON)
+  expect(screen.queryByText(UNCONFIRMED_MUTATION_MESSAGE)).not.toBeInTheDocument()
+  await waitFor(
+    () => {
+      expect(within(dialog).getByRole('button', { name: 'Anular venta' })).toBeEnabled()
+    },
+    { timeout: 4000 },
+  )
 }
 
 function expectFigure(label: string, value: string) {
@@ -367,27 +408,18 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     window.history.pushState({}, '', '/ventas/sale-128')
     const user = userEvent.setup()
     renderApp()
-    await openVoidSheet(user)
-    await user.type(
-      screen.getByLabelText('Motivo de la anulación'),
-      'Se registró con el precio equivocado.',
-    )
-    vi.useFakeTimers()
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Anular venta' }))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(MUTATION_TIMEOUT_MS)
-    })
-    vi.useRealTimers()
+    await submitVoidFromSheet(user, 'timeout')
     expect(await screen.findByText('Venta #128 anulada.')).toBeInTheDocument()
+    expect(screen.queryByText(VOID_NOT_SAVED_TITLE)).not.toBeInTheDocument()
+    expect(screen.queryByText(VOID_UNCONFIRMED_TITLE)).not.toBeInTheDocument()
     expect(screen.queryByText(UNCONFIRMED_MUTATION_MESSAGE)).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(voidCalls).toBe(1)
   })
 
-  it('un timeout al anular seguido de venta activa deja la hoja y permite reintentar', async () => {
+  it('un timeout al anular seguido de venta activa muestra que no se guardó', async () => {
     loginOwner()
-    const active = clientSaleDetailFixture()
-    seedSale(active)
+    seedSale(clientSaleDetailFixture())
     const voided = voidedSaleDetailFixture({
       id: 'sale-128',
       sale_number: 128,
@@ -406,37 +438,15 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     window.history.pushState({}, '', '/ventas/sale-128')
     const user = userEvent.setup()
     renderApp()
-    await openVoidSheet(user)
-    const reason = screen.getByLabelText('Motivo de la anulación')
-    await user.type(reason, 'Se registró con el precio equivocado.')
-    vi.useFakeTimers()
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Anular venta' }))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(MUTATION_TIMEOUT_MS)
-    })
-    vi.useRealTimers()
-    expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(await screen.findByText(UNCONFIRMED_MUTATION_MESSAGE)).toBeInTheDocument()
-    expect(screen.getByLabelText('Motivo de la anulación')).toHaveValue(
-      'Se registró con el precio equivocado.',
-    )
-    const retry = await waitFor(
-      () => {
-        const button = within(screen.getByRole('dialog')).getByRole('button', {
-          name: 'Anular venta',
-        })
-        expect(button).toBeEnabled()
-        return button
-      },
-      { timeout: 4000 },
-    )
+    await submitVoidFromSheet(user, 'timeout')
+    await expectVoidSheetWarning(VOID_NOT_SAVED_TITLE, VOID_NOT_SAVED_BODY)
     expect(voidCalls).toBe(1)
-    await user.click(retry)
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Anular venta' }))
     expect(await screen.findByText('Venta #128 anulada.')).toBeInTheDocument()
     expect(voidCalls).toBe(2)
   })
 
-  it('un timeout al anular cuyo refresco falla deja la hoja con el aviso y permite reintentar', async () => {
+  it('un timeout al anular cuyo refresco falla no confirma la anulación', async () => {
     loginOwner()
     seedSale(clientSaleDetailFixture())
     let voidCalls = 0
@@ -449,8 +459,8 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
       http.get('*/sales/:id', () => {
         if (voidCalls > 0) {
           return HttpResponse.json(
-            { detail: [{ field: null, code: 'FORBIDDEN', message: 'falló el refresco' }] },
-            { status: 403 },
+            { detail: [{ field: null, code: 'INTERNAL', message: 'falló el refresco' }] },
+            { status: 500 },
           )
         }
         return HttpResponse.json(clientSaleDetailFixture())
@@ -459,30 +469,77 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     window.history.pushState({}, '', '/ventas/sale-128')
     const user = userEvent.setup()
     renderApp()
-    await openVoidSheet(user)
-    await user.type(
-      screen.getByLabelText('Motivo de la anulación'),
-      'Se registró con el precio equivocado.',
-    )
-    vi.useFakeTimers()
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Anular venta' }))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(MUTATION_TIMEOUT_MS)
+    await submitVoidFromSheet(user, 'timeout')
+    await expectVoidSheetWarning(VOID_UNCONFIRMED_TITLE, VOID_UNCONFIRMED_BODY)
+    expect(voidCalls).toBe(1)
+  })
+
+  it('un error de red al anular seguido de venta anulada cierra con éxito', async () => {
+    loginOwner()
+    seedSale(clientSaleDetailFixture())
+    const voided = voidedSaleDetailFixture({
+      id: 'sale-128',
+      sale_number: 128,
+      item_description: 'Nevera Mabe 14 pies',
     })
-    vi.useRealTimers()
-    expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(await screen.findByText(UNCONFIRMED_MUTATION_MESSAGE)).toBeInTheDocument()
-    expect(screen.getByLabelText('Motivo de la anulación')).toHaveValue(
-      'Se registró con el precio equivocado.',
+    let voidCalls = 0
+    server.use(
+      http.post('*/sales/:id/void', () => {
+        voidCalls += 1
+        return HttpResponse.error()
+      }),
+      http.get('*/sales/:id', () =>
+        HttpResponse.json(voidCalls > 0 ? voided : clientSaleDetailFixture()),
+      ),
     )
-    await waitFor(
-      () => {
-        expect(
-          within(screen.getByRole('dialog')).getByRole('button', { name: 'Anular venta' }),
-        ).toBeEnabled()
-      },
-      { timeout: 4000 },
+    window.history.pushState({}, '', '/ventas/sale-128')
+    const user = userEvent.setup()
+    renderApp()
+    await submitVoidFromSheet(user, 'network')
+    expect(await screen.findByText('Venta #128 anulada.')).toBeInTheDocument()
+    expect(screen.queryByText(VOID_NOT_SAVED_TITLE)).not.toBeInTheDocument()
+    expect(screen.queryByText(VOID_UNCONFIRMED_TITLE)).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(voidCalls).toBe(1)
+  })
+
+  it('un error de red al anular seguido de venta activa muestra que no se guardó', async () => {
+    loginOwner()
+    seedSale(clientSaleDetailFixture())
+    let voidCalls = 0
+    server.use(
+      http.post('*/sales/:id/void', () => {
+        voidCalls += 1
+        return HttpResponse.error()
+      }),
     )
+    window.history.pushState({}, '', '/ventas/sale-128')
+    const user = userEvent.setup()
+    renderApp()
+    await submitVoidFromSheet(user, 'network')
+    await expectVoidSheetWarning(VOID_NOT_SAVED_TITLE, VOID_NOT_SAVED_BODY)
+    expect(voidCalls).toBe(1)
+  })
+
+  it('un error de red al anular cuyo refresco falla no confirma la anulación', async () => {
+    loginOwner()
+    seedSale(clientSaleDetailFixture())
+    let voidCalls = 0
+    server.use(
+      http.post('*/sales/:id/void', () => {
+        voidCalls += 1
+        return HttpResponse.error()
+      }),
+      http.get('*/sales/:id', () => {
+        if (voidCalls > 0) return HttpResponse.error()
+        return HttpResponse.json(clientSaleDetailFixture())
+      }),
+    )
+    window.history.pushState({}, '', '/ventas/sale-128')
+    const user = userEvent.setup()
+    renderApp()
+    await submitVoidFromSheet(user, 'network')
+    await expectVoidSheetWarning(VOID_UNCONFIRMED_TITLE, VOID_UNCONFIRMED_BODY)
     expect(voidCalls).toBe(1)
   })
 

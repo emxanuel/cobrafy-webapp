@@ -1,8 +1,14 @@
 import { useState } from 'react'
 
 import { BottomSheet } from '@/features/sales/components/bottom-sheet'
-import { VOID_NETWORK_BODY, VOID_NETWORK_TITLE } from '@/features/sales/lib/copy'
-import { UNCONFIRMED_MUTATION_MESSAGE } from '@/features/shared/services/client'
+import {
+  VOID_NETWORK_BODY,
+  VOID_NETWORK_TITLE,
+  VOID_NOT_SAVED_BODY,
+  VOID_NOT_SAVED_TITLE,
+  VOID_UNCONFIRMED_BODY,
+  VOID_UNCONFIRMED_TITLE,
+} from '@/features/sales/lib/copy'
 import {
   VOID_REASON_MAX,
   isVoidReasonValid,
@@ -22,7 +28,7 @@ export function VoidSaleSheet({
   pending,
   submitting,
   networkError,
-  unconfirmed,
+  voidWarning,
   fieldError,
   onSubmit,
   onClose,
@@ -34,7 +40,7 @@ export function VoidSaleSheet({
   pending: boolean
   submitting: boolean
   networkError: boolean
-  unconfirmed: boolean
+  voidWarning: 'not-saved' | 'unconfirmed' | null
   fieldError: string | null
   onSubmit: () => void
   onClose: () => void
@@ -64,8 +70,14 @@ export function VoidSaleSheet({
         Las {installmentsCount} cuotas quedan canceladas y la venta deja de contar en la cartera.
       </Alert>
 
-      {unconfirmed ? (
-        <Alert tone="warning" icon="⚠" title={UNCONFIRMED_MUTATION_MESSAGE} />
+      {voidWarning === 'not-saved' ? (
+        <Alert tone="warning" icon="⚠" title={VOID_NOT_SAVED_TITLE}>
+          {VOID_NOT_SAVED_BODY}
+        </Alert>
+      ) : voidWarning === 'unconfirmed' ? (
+        <Alert tone="warning" icon="⚠" title={VOID_UNCONFIRMED_TITLE}>
+          {VOID_UNCONFIRMED_BODY}
+        </Alert>
       ) : networkError ? (
         <Alert tone="danger" icon="✕" title={VOID_NETWORK_TITLE}>
           {VOID_NETWORK_BODY}

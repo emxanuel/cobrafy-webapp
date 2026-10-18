@@ -62,7 +62,7 @@ export function SaleDetailPage() {
   const [reason, setReason] = useState('')
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [networkError, setNetworkError] = useState(false)
-  const [unconfirmed, setUnconfirmed] = useState(false)
+  const [voidWarning, setVoidWarning] = useState<'not-saved' | 'unconfirmed' | null>(null)
   const [voidForbidden, setVoidForbidden] = useState(false)
   const [voidBusy, setVoidBusy] = useState(false)
   const businessId = activeBusinessId
@@ -122,7 +122,7 @@ export function SaleDetailPage() {
   function closeSheet() {
     setSheetOpen(false)
     setNetworkError(false)
-    setUnconfirmed(false)
+    setVoidWarning(null)
     setFieldError(null)
   }
 
@@ -131,21 +131,25 @@ export function SaleDetailPage() {
     setNotice({ tone: 'success', title: voidSuccessMessage(current.sale_number) })
   }
 
-  async function afterTimeout() {
+  async function afterNoResponse() {
     const result = await saleQuery.refetch()
+    if (result.isError || result.error) {
+      setVoidWarning('unconfirmed')
+      return
+    }
     const next = result.data
     if (next && isSaleVoided(next.status)) {
       markSuccess(next)
       return
     }
-    setUnconfirmed(true)
+    setVoidWarning('not-saved')
   }
 
   async function submitVoid() {
     if (!isVoidReasonValid(reason) || !sale || voidBusy) return
     setFieldError(null)
     setNetworkError(false)
-    setUnconfirmed(false)
+    setVoidWarning(null)
     setVoidBusy(true)
     try {
       const updated = await voidMutation.mutateAsync(reason.trim())
@@ -153,7 +157,7 @@ export function SaleDetailPage() {
     } catch (error) {
       if (isApiError(error) && error.status === 0) {
         voidMutation.reset()
-        await afterTimeout()
+        await afterNoResponse()
         return
       }
       if (isApiError(error) && error.code === 'SALE_ALREADY_VOIDED') {
@@ -303,7 +307,7 @@ export function SaleDetailPage() {
             onClick={() => {
               setSheetOpen(true)
               setNetworkError(false)
-              setUnconfirmed(false)
+              setVoidWarning(null)
               setFieldError(null)
             }}
           >
@@ -324,7 +328,7 @@ export function SaleDetailPage() {
           pending={voidBusy}
           submitting={voidBusy}
           networkError={networkError}
-          unconfirmed={unconfirmed}
+          voidWarning={voidWarning}
           fieldError={fieldError}
           onSubmit={() => {
             void submitVoid()

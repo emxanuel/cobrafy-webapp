@@ -52,6 +52,11 @@ export function firstDueHint(frequency: Frequency): string {
 export const VOID_FORBIDDEN_MESSAGE = 'Solo el dueño puede anular ventas.'
 export const VOID_NETWORK_TITLE = 'No se pudo anular la venta.'
 export const VOID_NETWORK_BODY = 'Revisa tu conexión e inténtalo de nuevo.'
+export const VOID_NOT_SAVED_TITLE = 'No se guardó la anulación.'
+export const VOID_NOT_SAVED_BODY = 'Se cortó la conexión. Puedes intentar de nuevo.'
+export const VOID_UNCONFIRMED_TITLE = 'No pudimos confirmar si se anuló.'
+export const VOID_UNCONFIRMED_BODY =
+  'Revisa tu conexión y vuelve a intentar; si ya se anuló, no pasa nada.'
 export const CONTRACT_FORBIDDEN_MESSAGE = 'No tienes permiso para descargar el contrato.'
 export const CONTRACT_DOWNLOAD_ERROR_TITLE = 'No se pudo descargar el contrato.'
 export const CONTRACT_DOWNLOAD_ERROR_BODY = 'Inténtalo de nuevo.'
