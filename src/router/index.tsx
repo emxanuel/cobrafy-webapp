@@ -6,6 +6,7 @@ import {
   canCreateClients,
   canEditClients,
   canManageMembers,
+  canSell,
   canViewAudit,
 } from '@/features/shared/lib/roles'
 import { AppLayout } from '@/features/shared/components/app-layout'
@@ -67,6 +68,18 @@ const AuditUnauthorized = lazy(async () => {
   const mod = await import('@/pages/audit/audit-unauthorized')
   return { default: mod.AuditUnauthorized }
 })
+const ChooseClientPage = lazy(async () => {
+  const mod = await import('@/pages/sales/choose-client-page')
+  return { default: mod.ChooseClientPage }
+})
+const NewSalePage = lazy(async () => {
+  const mod = await import('@/pages/sales/new-sale-page')
+  return { default: mod.NewSalePage }
+})
+const SalesUnauthorized = lazy(async () => {
+  const mod = await import('@/pages/sales/sales-unauthorized')
+  return { default: mod.SalesUnauthorized }
+})
 
 function SessionListeners() {
   const navigate = useNavigate()
@@ -113,6 +126,12 @@ export function Router() {
                 <Route path="/clientes/:clientId/editar" element={<ClientFormPage />} />
               </Route>
               <Route path="/clientes/:clientId/historial" element={<ClientHistoryPage />} />
+              <Route
+                element={<RoleGuard allow={canSell} unauthorized={<SalesUnauthorized />} />}
+              >
+                <Route path="/ventas/nueva" element={<ChooseClientPage />} />
+                <Route path="/clientes/:clientId/ventas/nueva" element={<NewSalePage />} />
+              </Route>
               <Route element={<RoleGuard allow={canManageMembers} />}>
                 <Route path="/equipo" element={<MembersPage />} />
               </Route>

@@ -31,6 +31,7 @@ import { FAILED_CONTACTS_KEY } from '@/features/shared/lib/session-storage'
 import {
   canBlockClients,
   canEditClients,
+  canSell,
   canUnblockClients,
 } from '@/features/shared/lib/roles'
 
@@ -93,14 +94,30 @@ export function ClientDetailPage() {
   return (
     <>
       <ClientRecordHeader client={client} role={role} />
-      {canEditClients(role) ? (
-        <Link
-          to={`/clientes/${client.id}/editar`}
-          className={`${buttonVariants({ variant: 'outline' })} self-start no-underline`}
-        >
-          Editar
-        </Link>
-      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {canSell(role) ? (
+          blocked ? (
+            <Button disabled>
+              Cliente bloqueado: no se le puede vender
+            </Button>
+          ) : (
+            <Link
+              to={`/clientes/${client.id}/ventas/nueva`}
+              className={`${buttonVariants({ variant: 'primary' })} self-start no-underline`}
+            >
+              ＋ Nueva venta
+            </Link>
+          )
+        ) : null}
+        {canEditClients(role) ? (
+          <Link
+            to={`/clientes/${client.id}/editar`}
+            className={`${buttonVariants({ variant: 'outline' })} self-start no-underline`}
+          >
+            Editar
+          </Link>
+        ) : null}
+      </div>
 
       {failedNotice ? <Alert>{failedNotice}</Alert> : null}
 

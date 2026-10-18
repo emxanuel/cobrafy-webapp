@@ -58,6 +58,9 @@ export default defineConfig(({ mode }) => {
       isolate: true,
       fileParallelism: false,
       css: false,
+      env: {
+        TZ: 'America/Santo_Domingo',
+      },
     },
   }
 })

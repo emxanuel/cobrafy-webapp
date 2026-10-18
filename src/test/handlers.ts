@@ -37,7 +37,19 @@ export const contactWrites: Array<{ method: string; url: string; body: unknown }
 export const clientWrites: Array<{ method: string; url: string; body: unknown }> = []
 export const memberWrites: Array<{ method: string; url: string; body: unknown }> = []
 export const auditRequests: Array<{ method: string; url: string }> = []
+export const saleWrites: Array<{
+  method: string
+  url: string
+  body: unknown
+  idempotencyKey: string | null
+}> = []
 const revokedTokens = new Set<string>()
+const sales = new Map<string, Record<string, unknown>>()
+let saleCount = 0
+
+export function seedClient(client: ClientDetail) {
+  clients.set(client.id, client)
+}
 
 const MAX_PIN_ATTEMPTS = 5
 const PIN_LOCKED = 'demasiados intentos; entra con contraseña'
@@ -75,6 +87,9 @@ export function resetData() {
   clientWrites.length = 0
   memberWrites.length = 0
   auditRequests.length = 0
+  saleWrites.length = 0
+  sales.clear()
+  saleCount = 0
   revokedTokens.clear()
 }
 
@@ -973,5 +988,204 @@ export const handlers = [
     }
     const payload = (await request.json()) as MemberCreate
     return HttpResponse.json({ email: payload.email, role: payload.role }, { status: 201 })
+  }),
+
+  http.get('*/businesses/:id/credit-settings', ({ request }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    return HttpResponse.json({
+      interest_method: 'recargo_fijo',
+      surcharge_mode: 'percent',
+      surcharge_percent: '20.00',
+      surcharge_amount: null,
+      allowed_frequencies: ['semanal', 'quincenal', 'mensual'],
+      max_installments: 24,
+      min_down_payment_percent: '10.00',
+    })
+  }),
+
+  http.post('*/sales/simulate', async ({ request }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    if (roleFromToken(bearer(request)) === 'cobrador') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    const body = (await request.json()) as {
+      client_id?: string
+      price?: string
+      down_payment?: string
+      installments?: number
+      frequency?: string
+      first_due_date?: string
+    }
+    if (body.client_id === 'cli-blocked') {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              field: null,
+              code: 'CLIENT_BLOCKED',
+              message: 'Este cliente está bloqueado: Atraso de 3 cuotas.',
+            },
+          ],
+        },
+        { status: 409 },
+      )
+    }
+    if (body.down_payment && body.price && body.down_payment === body.price) {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              field: 'down_payment',
+              code: 'DOWN_PAYMENT_INVALID',
+              message: 'La inicial debe ser menor que el precio.',
+            },
+          ],
+        },
+        { status: 422 },
+      )
+    }
+    const { buildPlan } = await import('./sales-msw')
+    const n = body.installments ?? 12
+    const frequency = (body.frequency ?? 'mensual') as 'semanal' | 'quincenal' | 'mensual'
+    const plan = buildPlan({
+      price: body.price ?? '0.00',
+      down: body.down_payment ?? '0.00',
+      n,
+      frequency,
+      firstDue: body.first_due_date,
+      percent: '20.00',
+    })
+    const warnings: Array<{ code: string; message: string }> = []
+    if (body.client_id === 'cli-collector-off') {
+      warnings.push({
+        code: 'collector_inactive',
+        message: 'El cobrador de este cliente está inactivo.',
+      })
+    }
+    return HttpResponse.json({
+      settings_configured: true,
+      financed_balance: plan.financed,
+      surcharge: plan.surcharge,
+      surcharge_percent: '20.00',
+      surcharge_mode: 'percent',
+      total: plan.total,
+      installment_amount: plan.installment,
+      installment_count: n,
+      frequency,
+      first_due_date: plan.first,
+      last_due_date: plan.last,
+      anchor_date: plan.first,
+      anchor_offset: 0,
+      installments: plan.rows,
+      warnings,
+    })
+  }),
+
+  http.post('*/sales', async ({ request }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    if (roleFromToken(bearer(request)) === 'cobrador') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    const body = (await request.json()) as Record<string, unknown>
+    saleWrites.push({
+      method: request.method,
+      url: request.url,
+      body,
+      idempotencyKey: request.headers.get('Idempotency-Key'),
+    })
+    if (body.client_id === 'cli-blocked') {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              field: null,
+              code: 'CLIENT_BLOCKED',
+              message: 'Este cliente está bloqueado: Atraso de 3 cuotas.',
+            },
+          ],
+        },
+        { status: 409 },
+      )
+    }
+    saleCount += 1
+    const { buildPlan } = await import('./sales-msw')
+    const n = typeof body.installments === 'number' ? body.installments : 12
+    const frequency = (typeof body.frequency === 'string' ? body.frequency : 'mensual') as
+      | 'semanal'
+      | 'quincenal'
+      | 'mensual'
+    const firstDue = typeof body.first_due_date === 'string' ? body.first_due_date : undefined
+    const anchor = typeof body.anchor_date === 'string' ? body.anchor_date : firstDue
+    const plan = buildPlan({
+      price: typeof body.price === 'string' ? body.price : '0.00',
+      down: typeof body.down_payment === 'string' ? body.down_payment : '0.00',
+      n,
+      frequency,
+      firstDue: anchor,
+      percent: '20.00',
+    })
+    const sale = {
+      id: `sale-${saleCount}`,
+      sale_number: 100 + saleCount,
+      client: {
+        id: String(body.client_id ?? 'cli-1'),
+        name: clients.get(String(body.client_id))?.name ?? 'Ana Pérez',
+      },
+      item_description: String(body.item_description ?? ''),
+      price: plan && typeof body.price === 'string' ? body.price : '0.00',
+      down_payment: typeof body.down_payment === 'string' ? body.down_payment : '0.00',
+      financed_balance: plan.financed,
+      surcharge: plan.surcharge,
+      surcharge_percent: '20.00',
+      surcharge_mode: 'percent',
+      total: plan.total,
+      installment_amount: plan.installment,
+      installment_count: n,
+      frequency,
+      first_due_date: plan.first,
+      last_due_date: plan.last,
+      status: 'activa',
+      voided_at: null,
+      voided_reason: null,
+      voided_by: null,
+      installments: plan.rows,
+      warnings: [],
+    }
+    sales.set(sale.id, sale)
+    return HttpResponse.json(sale, { status: 201 })
+  }),
+
+  http.get('*/sales/:id/contract.pdf', ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    if (roleFromToken(bearer(request)) === 'cobrador') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    const id = String(params.id)
+    if (!sales.has(id) && id !== 'sale-1') {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    return new HttpResponse(new Blob(['%PDF-1.4 mock'], { type: 'application/pdf' }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="contrato-venta-${id}.pdf"`,
+      },
+    })
+  }),
+
+  http.get('*/sales', ({ request }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    const items = [...sales.values()]
+    return HttpResponse.json({
+      items,
+      total: items.length,
+      page: 1,
+      page_size: 50,
+    })
   }),
 ]

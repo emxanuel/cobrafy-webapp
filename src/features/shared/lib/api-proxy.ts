@@ -4,6 +4,8 @@ export const API_PROXY_PREFIXES = [
   'users',
   'invitations',
   'audit',
+  'sales',
+  'businesses',
 ] as const
 
 export function apiProxyPattern(prefix: string): string {

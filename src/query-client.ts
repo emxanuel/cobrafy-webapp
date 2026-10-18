@@ -13,6 +13,7 @@ export function createAppQueryClient() {
             (error.status === 401 ||
               error.status === 403 ||
               error.status === 404 ||
+              error.status === 409 ||
               error.status === 422)
           ) {
             return false

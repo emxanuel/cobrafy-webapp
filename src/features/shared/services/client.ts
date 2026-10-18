@@ -58,7 +58,15 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
+    if (error.response?.data instanceof Blob) {
+      const text = await error.response.data.text()
+      try {
+        error.response.data = JSON.parse(text)
+      } catch {
+        /* keep the blob when the body is not JSON */
+      }
+    }
     const apiError = toApiError(error)
     logHttpError({
       method: error.config?.method?.toUpperCase(),
