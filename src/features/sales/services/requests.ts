@@ -145,6 +145,8 @@ export async function createSale(
   payload: SaleCreateRequest,
   idempotencyKey: string,
 ): Promise<SaleRead> {
+  // Send Idempotency-Key only. Do not read Idempotent-Replayed: CORS has no
+  // expose_headers yet (CBF-212). Success is the JSON body / status.
   const { data } = await api.post<unknown>('/sales', payload, {
     headers: { 'Idempotency-Key': idempotencyKey },
   })
