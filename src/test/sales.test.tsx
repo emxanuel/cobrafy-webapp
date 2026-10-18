@@ -10,9 +10,9 @@ import {
 } from '@/features/sales/lib/copy'
 import {
   PENDING_SALE_BODY,
+  PENDING_SALE_EDITED_BODY,
   PENDING_SALE_FAILED,
   PENDING_SALE_STILL_OFFLINE,
-  PENDING_SALE_TITLE,
 } from '@/features/sales/lib/pending-sale'
 import { MONEY_INVALID_MESSAGE } from '@/features/sales/components/money-input'
 import { quincenalOptions } from '@/features/sales/lib/calendar'
@@ -91,27 +91,23 @@ async function openConfirmSheet(user: ReturnType<typeof userEvent.setup>) {
   expect(await screen.findByRole('button', { name: 'Registrar venta' })).toBeInTheDocument()
 }
 
-function expectLockedSaleState(options?: { stillOffline?: boolean }) {
-  expect(screen.getAllByText(PENDING_SALE_TITLE).length).toBeGreaterThanOrEqual(1)
-  expect(screen.getByText(PENDING_SALE_BODY)).toBeInTheDocument()
+function expectNetworkWarning(options?: { edited?: boolean; stillOffline?: boolean }) {
+  if (options?.edited) {
+    expect(screen.getByText(PENDING_SALE_EDITED_BODY)).toBeInTheDocument()
+    expect(screen.queryByText(/no se duplicará/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+  } else {
+    expect(screen.getByText(PENDING_SALE_BODY)).toBeInTheDocument()
+    const retry = screen.getByRole('button', { name: 'Reintentar' })
+    expect(retry).toHaveClass('min-h-12')
+  }
   if (options?.stillOffline) {
     expect(screen.getByText(PENDING_SALE_STILL_OFFLINE)).toBeInTheDocument()
   } else {
     expect(screen.queryByText(PENDING_SALE_STILL_OFFLINE)).not.toBeInTheDocument()
   }
-  expect(screen.getByText('Bloqueado')).toBeInTheDocument()
-  const retry = screen.getByRole('button', { name: 'Reintentar' })
-  expect(retry).toHaveClass('min-h-12')
-  const purchases = screen.getByRole('link', { name: 'Ver compras del cliente' })
-  expect(purchases).toHaveAttribute('href', '/clientes/cli-1/historial')
-  expect(purchases).toHaveClass('min-h-11')
-  expect(screen.queryByRole('button', { name: 'Confirmar venta' })).not.toBeInTheDocument()
-  expect(screen.getByLabelText('Artículo')).toBeDisabled()
-  expect(screen.getByLabelText('Precio')).toBeDisabled()
-  expect(screen.getByLabelText('Inicial')).toBeDisabled()
-  expect(screen.queryByRole('button', { name: 'Quitar una cuota' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Agregar una cuota' })).not.toBeInTheDocument()
-  expect(document.querySelector('input[type="date"]')).toBeNull()
+  expectPurchasesLink()
+  expect(screen.getByLabelText('Artículo')).toBeEnabled()
   expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeTruthy()
 }
 
@@ -372,12 +368,12 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user)
     await confirmSale(user)
-    expectLockedSaleState()
+    expectNetworkWarning()
     expect(screen.getByLabelText('Artículo')).toHaveValue('Nevera Mabe 14 pies')
 
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     await waitFor(() => expect(keys.length).toBe(2))
-    expectLockedSaleState({ stillOffline: true })
+    expectNetworkWarning({ stillOffline: true })
     expect(keys[0]).toBe(keys[1])
     expect(saleWrites[1]?.body).toEqual(saleWrites[0]?.body)
     expect(keys[0]).toMatch(
@@ -387,6 +383,31 @@ describe('CBF-206 ventas', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText('Listo, venta #44 registrada.')).toBeInTheDocument()
     expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+  })
+
+  it('si el formulario cambia se oculta Reintentar y el texto de no se duplicará', async () => {
+    loginCashier()
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        return HttpResponse.error()
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expectNetworkWarning()
+    await user.type(screen.getByLabelText('Artículo'), ' XL')
+    expectNetworkWarning({ edited: true })
+    expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeInTheDocument()
   })
 
   it('Reintentar con 200 replay llega a la misma venta y conserva la clave al cerrar la hoja', async () => {
@@ -424,7 +445,7 @@ describe('CBF-206 ventas', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await openConfirmSheet(user)
     await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
-    expectLockedSaleState()
+    expectNetworkWarning()
     const firstBody = saleWrites[0]?.body as Parameters<typeof salePayloadFingerprint>[0]
     expect(readIdempotencyKey(salePayloadFingerprint(firstBody))).toBe(keys[0])
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
@@ -465,7 +486,7 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user)
     await confirmSale(user)
-    expectLockedSaleState()
+    expectNetworkWarning()
     const firstKey = keys[0]
     const firstBody = saleWrites[0]?.body as Parameters<typeof salePayloadFingerprint>[0]
     expect(readIdempotencyKey(salePayloadFingerprint(firstBody))).toBe(firstKey)
@@ -474,7 +495,7 @@ describe('CBF-206 ventas', () => {
     window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
     renderApp()
     await goToNewSale()
-    expectLockedSaleState()
+    expectNetworkWarning()
     expect(screen.getByLabelText('Artículo')).toHaveValue('Nevera Mabe 14 pies')
     expect(readIdempotencyKey(salePayloadFingerprint(firstBody))).toBe(firstKey)
 
@@ -482,7 +503,7 @@ describe('CBF-206 ventas', () => {
     expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: /Nueva venta/ }))
     expect(await screen.findByRole('heading', { name: 'Nueva venta' })).toBeInTheDocument()
-    expectLockedSaleState()
+    expectNetworkWarning()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText('Listo, venta #91 registrada.')).toBeInTheDocument()
     expect(keys).toHaveLength(2)
@@ -521,7 +542,7 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user)
     await confirmSale(user)
-    expectLockedSaleState()
+    expectNetworkWarning()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText(PENDING_SALE_FAILED)).toBeInTheDocument()
     expect(keys[0]).toBe(keys[1])
@@ -566,11 +587,11 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user)
     await confirmSale(user)
-    expectLockedSaleState()
+    expectNetworkWarning()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText(PENDING_SALE_FAILED)).toBeInTheDocument()
     expect(screen.getByText('El artículo no es válido.')).toBeInTheDocument()
-    expect(screen.queryByText(PENDING_SALE_TITLE)).not.toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_BODY)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Artículo')).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Quitar una cuota' })).toBeInTheDocument()
@@ -610,11 +631,11 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user)
     await confirmSale(user)
-    expectLockedSaleState()
+    expectNetworkWarning()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText('Este cliente está bloqueado: Atraso de 3 cuotas.')).toBeInTheDocument()
     expect(screen.getByText('No se le puede vender a crédito.')).toBeInTheDocument()
-    expect(screen.queryByText(PENDING_SALE_TITLE)).not.toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_BODY)).not.toBeInTheDocument()
     expect(screen.queryByText(PENDING_SALE_FAILED)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Artículo')).toBeEnabled()
@@ -648,11 +669,11 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user)
     await confirmSale(user)
-    expectLockedSaleState()
+    expectNetworkWarning()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText(PENDING_SALE_FAILED)).toBeInTheDocument()
     expect(screen.queryByText('debug interno')).not.toBeInTheDocument()
-    expect(screen.queryByText(PENDING_SALE_TITLE)).not.toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_BODY)).not.toBeInTheDocument()
     expect(screen.getByLabelText('Artículo')).toBeEnabled()
     expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
   })
@@ -888,7 +909,7 @@ describe('CBF-206 ventas', () => {
     await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 3000 })
     await user.click(confirm)
     await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
-    expectLockedSaleState()
+    expectNetworkWarning()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText(IDEMPOTENCY_REUSED_TITLE)).toBeInTheDocument()

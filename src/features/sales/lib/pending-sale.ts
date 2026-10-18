@@ -2,9 +2,10 @@ import { readJson, removeKey, writeJson } from '@/features/shared/lib/session-st
 import type { SaleCreateRequest } from '@/features/sales/services/types'
 import type { SaleFormSnapshot } from '@/features/sales/lib/sale-payload'
 
-export const PENDING_SALE_TITLE = 'Venta por confirmar'
 export const PENDING_SALE_BODY =
-  'Se cayó la conexión y no sabemos si la venta se registró. Reintenta para confirmarlo; no se duplicará.'
+  'No pudimos confirmar si la venta se registró. Reintenta; no se duplicará.'
+export const PENDING_SALE_EDITED_BODY =
+  'No pudimos confirmar si la venta se registró. Revisa las compras del cliente antes de intentar de nuevo.'
 export const PENDING_SALE_STILL_OFFLINE =
   'Todavía sin conexión. Prueba de nuevo en un momento.'
 export const PENDING_SALE_FAILED =
