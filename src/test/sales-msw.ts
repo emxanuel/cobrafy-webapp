@@ -12,28 +12,35 @@ import {
   type DateParts,
 } from '@/features/sales/lib/calendar'
 
-function centsFromAmount(raw: string): number {
+function centsFromAmount(raw: string): bigint {
   const [whole = '0', frac = ''] = raw.replace(/,/g, '').split('.')
-  let pesos = 0
+  let pesos = 0n
   for (const ch of whole) {
     if (ch < '0' || ch > '9') continue
-    pesos = pesos * 10 + (ch.charCodeAt(0) - 48)
+    pesos = pesos * 10n + BigInt(ch)
   }
   const padded = `${frac}00`.slice(0, 2)
-  let cents = 0
+  let cents = 0n
   for (const ch of padded) {
-    cents = cents * 10 + (ch.charCodeAt(0) - 48)
+    cents = cents * 10n + BigInt(ch)
   }
-  return pesos * 100 + cents
+  return pesos * 100n + cents
 }
 
-function amountFromCents(cents: number): string {
-  const negative = cents < 0
+function amountFromCents(cents: bigint): string {
+  const negative = cents < 0n
   const abs = negative ? -cents : cents
-  const pesos = Math.trunc(abs / 100)
-  const rem = abs - pesos * 100
-  const frac = rem < 10 ? `0${rem}` : String(rem)
+  const pesos = abs / 100n
+  const rem = abs % 100n
+  const frac = rem < 10n ? `0${rem}` : `${rem}`
   return `${negative ? '-' : ''}${pesos}.${frac}`
+}
+
+/** Half-up integer division for non-negative cent amounts. */
+function divideRounded(numerator: bigint, denominator: bigint): bigint {
+  if (denominator <= 0n) return 0n
+  if (numerator >= 0n) return (numerator + denominator / 2n) / denominator
+  return -((-numerator + denominator / 2n) / denominator)
 }
 
 function addDays(parts: DateParts, days: number): DateParts {
@@ -108,11 +115,12 @@ export function buildPlan(input: {
   const down = centsFromAmount(input.down)
   const financed = price - down
   const pct = centsFromAmount(input.percent)
-  const surcharge = Math.round((financed * pct) / 10000)
+  const surcharge = divideRounded(financed * pct, 10000n)
   const total = financed + surcharge
   const n = input.n < 1 ? 1 : input.n
-  const base = Math.trunc(total / n)
-  const rem = total - base * n
+  const count = BigInt(n)
+  const base = total / count
+  const rem = total - base * count
   const amounts = Array.from({ length: n }, (_, index) =>
     index === n - 1 ? base + rem : base,
   )
@@ -143,7 +151,7 @@ export function buildPlan(input: {
     financed: amountFromCents(financed),
     surcharge: amountFromCents(surcharge),
     total: amountFromCents(total),
-    installment: amountFromCents(amounts[0] ?? 0),
+    installment: amountFromCents(amounts[0] ?? 0n),
     first: rows[0]?.due_date ?? toIsoDate(first),
     last: rows.at(-1)?.due_date ?? toIsoDate(first),
     rows,

@@ -280,12 +280,12 @@ function NewSaleForm({
 
   const formChangedSinceSubmit =
     lastSubmitted != null && saleFormFingerprint(lastSubmitted.snapshot) !== fingerprint
-  const registerNetwork =
+  const registerFailed =
     create.isError &&
     (createStatus === 0 || createStatus >= 500) &&
     createCode !== 'IDEMPOTENCY_KEY_REUSED' &&
-    lastSubmitted != null &&
-    !formChangedSinceSubmit
+    lastSubmitted != null
+  const canRetryNetwork = registerFailed && !formChangedSinceSubmit
 
   const banners: ReturnType<typeof simulatorWarningCopy>[] = []
   if (blockedFromSim) {
@@ -324,7 +324,6 @@ function NewSaleForm({
   const registerBanner =
     create.isError &&
     createStatus === 409 &&
-    !registerNetwork &&
     createCode !== 'IDEMPOTENCY_KEY_REUSED'
       ? saleErrorBanner(
           createCode,
@@ -365,6 +364,9 @@ function NewSaleForm({
     if (isApiError(error) && error.code === 'IDEMPOTENCY_KEY_REUSED') {
       idempotencyRef.current = null
       setIdempotencyReused(true)
+      if (!confirmOpen) {
+        queueMicrotask(() => bannerRef.current?.focus())
+      }
       return
     }
     setConfirmOpen(false)
@@ -475,21 +477,23 @@ function NewSaleForm({
         <Alert>No tienes permiso para registrar ventas.</Alert>
       ) : null}
 
-      {registerNetwork ? (
+      {registerFailed ? (
         <Alert
           tone="danger"
           icon="✕"
           title="No se pudo registrar la venta."
           action={
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={retryLastSubmitted}>
-                Reintentar
-              </Button>
+              {canRetryNetwork ? (
+                <Button variant="outline" onClick={retryLastSubmitted}>
+                  Reintentar
+                </Button>
+              ) : null}
               <Link
-                to={`/clientes/${clientId}/historial`}
+                to={`/clientes/${clientId}`}
                 className={`${buttonVariants({ variant: 'link' })} min-h-11`}
               >
-                Ver compras
+                Ver compras del cliente
               </Link>
             </div>
           }
@@ -497,6 +501,18 @@ function NewSaleForm({
           Revisa tu conexión. Antes de reintentar, mira las compras del cliente por si ya quedó
           registrada.
         </Alert>
+      ) : null}
+
+      {idempotencyReused && !confirmOpen ? (
+        <div ref={bannerRef} tabIndex={-1}>
+          <IdempotencyReusedNotice
+            onViewPurchases={() => {
+              setIdempotencyReused(false)
+              navigate(`/clientes/${clientId}`)
+            }}
+            onClose={() => setIdempotencyReused(false)}
+          />
+        </div>
       ) : null}
 
       <form
@@ -664,27 +680,13 @@ function NewSaleForm({
           </div>
           <CuotaDots count={planCuotaCount(plan)} />
           {idempotencyReused ? (
-            <>
-              <Alert
-                tone="warning"
-                icon="⚠"
-                title={IDEMPOTENCY_REUSED_TITLE}
-              >
-                {IDEMPOTENCY_REUSED_BODY}
-              </Alert>
-              <Button
-                className="min-h-11 w-full"
-                onClick={() => {
-                  closeConfirm()
-                  navigate(`/clientes/${clientId}`)
-                }}
-              >
-                Ver compras del cliente
-              </Button>
-              <Button variant="ghost" className="min-h-11 w-full" onClick={closeConfirm}>
-                Cerrar
-              </Button>
-            </>
+            <IdempotencyReusedNotice
+              onViewPurchases={() => {
+                closeConfirm()
+                navigate(`/clientes/${clientId}`)
+              }}
+              onClose={closeConfirm}
+            />
           ) : (
             <>
               <Button
@@ -707,6 +709,28 @@ function NewSaleForm({
         </BottomSheet>
       ) : null}
     </div>
+  )
+}
+
+function IdempotencyReusedNotice({
+  onViewPurchases,
+  onClose,
+}: {
+  onViewPurchases: () => void
+  onClose: () => void
+}) {
+  return (
+    <>
+      <Alert tone="warning" icon="⚠" title={IDEMPOTENCY_REUSED_TITLE}>
+        {IDEMPOTENCY_REUSED_BODY}
+      </Alert>
+      <Button className="min-h-11 w-full" onClick={onViewPurchases}>
+        Ver compras del cliente
+      </Button>
+      <Button variant="ghost" className="min-h-11 w-full" onClick={onClose}>
+        Cerrar
+      </Button>
+    </>
   )
 }
 

@@ -305,12 +305,16 @@ describe('CBF-206 ventas', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     await waitFor(() => expect(keys.length).toBe(2))
     expect(keys[0]).toBe(keys[1])
+    expect(saleWrites[1]?.body).toEqual(saleWrites[0]?.body)
     expect(keys[0]).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     )
 
     await user.type(screen.getByLabelText('Artículo'), ' XL')
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+    expect(screen.getByText('No se pudo registrar la venta.')).toBeInTheDocument()
+    expect(screen.getByText(/mira las compras del cliente/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver compras del cliente' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeEnabled(), {
       timeout: 3000,
     })
@@ -318,6 +322,39 @@ describe('CBF-206 ventas', () => {
     await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
     await waitFor(() => expect(keys.length).toBe(3))
     expect(keys[2]).not.toBe(keys[0])
+  })
+
+  it('después de un error de red, editar oculta solo Reintentar y deja el aviso de compras', async () => {
+    loginCashier()
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        return HttpResponse.error()
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    const confirm = await screen.findByRole('button', { name: 'Confirmar venta' })
+    await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 3000 })
+    await user.click(confirm)
+    await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
+    expect(await screen.findByText('No se pudo registrar la venta.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver compras del cliente' })).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Artículo'), ' XL')
+    expect(screen.getByText('No se pudo registrar la venta.')).toBeInTheDocument()
+    expect(screen.getByText(/mira las compras del cliente/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver compras del cliente' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
   })
 
   it('un monto inválido muestra Monto inválido y deshabilita Confirmar', async () => {
@@ -392,7 +429,7 @@ describe('CBF-206 ventas', () => {
     release?.()
     expect(await screen.findByText(/Listo, venta #/)).toBeInTheDocument()
     expect(saleWrites).toHaveLength(1)
-    expect(keys[0]).toBe(keys[0])
+    expect(keys).toHaveLength(1)
   })
 
   it('una simulación vieja o fuera de orden no habilita Confirmar', async () => {
@@ -513,6 +550,53 @@ describe('CBF-206 ventas', () => {
     await waitFor(() => expect(keys.length).toBe(2))
     expect(keys[1]).not.toBe(keys[0])
     expect(await screen.findByText(/Listo, venta #/)).toBeInTheDocument()
+  })
+
+  it('409 IDEMPOTENCY_KEY_REUSED desde Reintentar se muestra fuera de la hoja', async () => {
+    loginCashier()
+    let attempt = 0
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        attempt += 1
+        if (attempt === 1) return HttpResponse.error()
+        return HttpResponse.json(
+          {
+            detail: [
+              {
+                field: null,
+                code: 'IDEMPOTENCY_KEY_REUSED',
+                message: 'esa clave de idempotencia ya se usó con otro cuerpo',
+              },
+            ],
+          },
+          { status: 409 },
+        )
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    const confirm = await screen.findByRole('button', { name: 'Confirmar venta' })
+    await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 3000 })
+    await user.click(confirm)
+    await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
+    expect(await screen.findByText('No se pudo registrar la venta.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByText(IDEMPOTENCY_REUSED_TITLE)).toBeInTheDocument()
+    expect(screen.getByText(IDEMPOTENCY_REUSED_BODY)).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ver compras del cliente' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
   })
 
   it('recargo fijo muestra Recargo (monto fijo)', async () => {
