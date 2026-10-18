@@ -185,11 +185,18 @@ export async function createSale(
   payload: SaleCreateRequest,
   idempotencyKey: string,
 ): Promise<SaleDetail> {
-  const { data } = await api.post<unknown>('/sales', payload, {
-    headers: { 'Idempotency-Key': idempotencyKey },
-    timeout: CREATE_SALE_TIMEOUT_MS,
-  })
-  return normalizeSaleDetail(data)
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), CREATE_SALE_TIMEOUT_MS)
+  try {
+    const { data } = await api.post<unknown>('/sales', payload, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+      timeout: CREATE_SALE_TIMEOUT_MS,
+      signal: controller.signal,
+    })
+    return normalizeSaleDetail(data)
+  } finally {
+    window.clearTimeout(timer)
+  }
 }
 
 export async function listSales(params?: {

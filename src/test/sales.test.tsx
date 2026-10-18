@@ -812,6 +812,8 @@ describe('CBF-206 ventas', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(CREATE_SALE_TIMEOUT_MS)
     })
+    vi.useRealTimers()
+    await waitFor(() => expect(screen.getAllByText(PENDING_SALE_TITLE).length).toBeGreaterThanOrEqual(2))
     expect(keys).toHaveLength(1)
     expectNetworkWarning()
     expect(pendingSaleKey()).toBe(keys[0])
