@@ -45,7 +45,130 @@ export const saleWrites: Array<{
 }> = []
 const revokedTokens = new Set<string>()
 const sales = new Map<string, Record<string, unknown>>()
+const salesByIdempotencyKey = new Map<string, Record<string, unknown>>()
 let saleCount = 0
+
+/** Backend PR #22 CORS expose-headers. */
+export const CORS_EXPOSE_HEADERS = 'Content-Disposition, Idempotent-Replayed'
+
+function corsExpose(headers: Record<string, string> = {}) {
+  return {
+    ...headers,
+    'Access-Control-Expose-Headers': CORS_EXPOSE_HEADERS,
+  }
+}
+
+type CreditSettingsState = {
+  interest_method: string
+  surcharge_kind: 'percent_of_financed' | 'fixed_amount'
+  surcharge_percent: string | null
+  surcharge_amount: string | null
+  allowed_frequencies: Array<'semanal' | 'quincenal' | 'mensual'>
+  max_installments: number
+  min_down_payment_percent: string | null
+  configured: boolean
+  /** false = no row → GET defaults + POST CREDIT_SETTINGS_MISSING */
+  hasRow: boolean
+}
+
+function defaultCreditSettings(): CreditSettingsState {
+  return {
+    interest_method: 'recargo_fijo',
+    surcharge_kind: 'percent_of_financed',
+    surcharge_percent: '20.00',
+    surcharge_amount: null,
+    allowed_frequencies: ['semanal', 'quincenal', 'mensual'],
+    max_installments: 24,
+    min_down_payment_percent: '10.00',
+    configured: true,
+    hasRow: true,
+  }
+}
+
+/** GET defaults when there is no credit-settings row (configured: false). */
+function unconfiguredCreditSettings() {
+  return {
+    interest_method: 'recargo_fijo',
+    surcharge_kind: 'percent_of_financed' as const,
+    surcharge_percent: '0',
+    surcharge_amount: null,
+    allowed_frequencies: ['semanal', 'quincenal', 'mensual'] as Array<
+      'semanal' | 'quincenal' | 'mensual'
+    >,
+    max_installments: 52,
+    min_down_payment_percent: null,
+    configured: false,
+  }
+}
+
+let creditSettingsState = defaultCreditSettings()
+
+type BusinessRecord = {
+  id: string
+  name: string
+  phone: string | null
+  rnc: string | null
+  address: string | null
+  currency: string
+  timezone: string
+}
+
+function defaultBusinessRecord(id: string): BusinessRecord {
+  const biz = id === businesses.sur.id ? businesses.sur : businesses.norte
+  return { ...biz, rnc: null, address: null }
+}
+
+const businessRecords = new Map<string, BusinessRecord>()
+
+export const voidWrites: Array<{ url: string; body: unknown }> = []
+export const creditSettingsWrites: Array<{ body: unknown }> = []
+export const businessWrites: Array<{ body: unknown }> = []
+
+export function seedCreditSettings(overrides: Partial<CreditSettingsState> = {}) {
+  creditSettingsState = { ...defaultCreditSettings(), ...overrides }
+}
+
+export function seedBusinessRecord(overrides: Partial<BusinessRecord> & { id: string }) {
+  const current = businessRecords.get(overrides.id) ?? defaultBusinessRecord(overrides.id)
+  businessRecords.set(overrides.id, { ...current, ...overrides })
+}
+
+function surchargeComplete(state: CreditSettingsState): boolean {
+  if (state.surcharge_kind === 'fixed_amount') {
+    return typeof state.surcharge_amount === 'string' && state.surcharge_amount.length > 0
+  }
+  return typeof state.surcharge_percent === 'string' && state.surcharge_percent.length > 0
+}
+
+/** GET /credit-settings always includes `configured: boolean` (backend PR #22). */
+function creditSettingsConfigured(state: CreditSettingsState): boolean {
+  return state.hasRow && state.configured && surchargeComplete(state)
+}
+
+function creditSettingsRead() {
+  if (!creditSettingsState.hasRow) return unconfiguredCreditSettings()
+  const { hasRow: _hasRow, configured: _configured, ...rest } = creditSettingsState
+  void _hasRow
+  void _configured
+  return { ...rest, configured: creditSettingsConfigured(creditSettingsState) }
+}
+
+function isZeroPaid(paid: unknown): boolean {
+  if (typeof paid !== 'string') return false
+  const trimmed = paid.trim()
+  const unsigned = trimmed.startsWith('-') ? trimmed.slice(1) : trimmed
+  const [whole = '', frac = ''] = unsigned.split('.')
+  const digits = `${whole}${frac}`.replace(/\D/g, '')
+  if (!digits) return false
+  for (const ch of digits) {
+    if (ch !== '0') return false
+  }
+  return true
+}
+
+function isVoidedStatus(status: unknown): boolean {
+  return status === 'voided' || status === 'anulada'
+}
 
 export function seedClient(client: ClientDetail) {
   clients.set(client.id, client)
@@ -121,8 +244,16 @@ export function resetData() {
   memberWrites.length = 0
   auditRequests.length = 0
   saleWrites.length = 0
+  voidWrites.length = 0
+  creditSettingsWrites.length = 0
+  businessWrites.length = 0
   sales.clear()
+  salesByIdempotencyKey.clear()
   saleCount = 0
+  creditSettingsState = defaultCreditSettings()
+  businessRecords.clear()
+  businessRecords.set(businesses.norte.id, defaultBusinessRecord(businesses.norte.id))
+  businessRecords.set(businesses.sur.id, defaultBusinessRecord(businesses.sur.id))
   revokedTokens.clear()
 }
 
@@ -1055,18 +1186,134 @@ export const handlers = [
     return HttpResponse.json({ email: payload.email, role: payload.role }, { status: 201 })
   }),
 
-  http.get('*/businesses/:id/credit-settings', ({ request }) => {
+  http.get('*/businesses/:id/credit-settings', ({ request, params }) => {
     const denied = requireAuth(request)
     if (denied) return denied
-    return HttpResponse.json({
-      interest_method: 'recargo_fijo',
-      surcharge_kind: 'percent_of_financed',
-      surcharge_percent: '20.00',
-      surcharge_amount: null,
-      allowed_frequencies: ['semanal', 'quincenal', 'mensual'],
-      max_installments: 24,
-      min_down_payment_percent: '10.00',
-    })
+    const id = String(params.id)
+    if (id !== businessFromToken(bearer(request))) {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    if (roleFromToken(bearer(request)) === 'cobrador') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    return HttpResponse.json(creditSettingsRead())
+  }),
+
+  http.put('*/businesses/:id/credit-settings', async ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    const id = String(params.id)
+    if (id !== businessFromToken(bearer(request))) {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    if (roleFromToken(bearer(request)) !== 'dueño') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    const body = (await request.json()) as Record<string, unknown>
+    creditSettingsWrites.push({ body })
+    const writeKeys = new Set([
+      'interest_method',
+      'surcharge_kind',
+      'surcharge_percent',
+      'surcharge_amount',
+      'allowed_frequencies',
+      'max_installments',
+      'min_down_payment_percent',
+    ])
+    const extra = Object.keys(body).filter((key) => !writeKeys.has(key))
+    if (extra.length) {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              loc: ['body', extra[0]],
+              msg: 'campos adicionales no permitidos',
+              type: 'extra_forbidden',
+            },
+          ],
+        },
+        { status: 422 },
+      )
+    }
+    if (body.surcharge_percent != null && typeof body.surcharge_percent !== 'string') {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              loc: ['body', 'surcharge_percent'],
+              msg: 'montos y porcentajes deben ser un string',
+              type: 'value_error',
+            },
+          ],
+        },
+        { status: 422 },
+      )
+    }
+    creditSettingsState = {
+      interest_method: String(body.interest_method ?? 'recargo_fijo'),
+      surcharge_kind:
+        body.surcharge_kind === 'fixed_amount' ? 'fixed_amount' : 'percent_of_financed',
+      surcharge_percent:
+        typeof body.surcharge_percent === 'string' ? body.surcharge_percent : null,
+      surcharge_amount:
+        typeof body.surcharge_amount === 'string' ? body.surcharge_amount : null,
+      allowed_frequencies: Array.isArray(body.allowed_frequencies)
+        ? (body.allowed_frequencies as CreditSettingsState['allowed_frequencies'])
+        : [...creditSettingsState.allowed_frequencies],
+      max_installments:
+        typeof body.max_installments === 'number' ? body.max_installments : 24,
+      min_down_payment_percent:
+        typeof body.min_down_payment_percent === 'string' ? body.min_down_payment_percent : null,
+      configured: true,
+      hasRow: true,
+    }
+    return HttpResponse.json(creditSettingsRead())
+  }),
+
+  http.get('*/businesses/:id', ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    const id = String(params.id)
+    if (id !== businessFromToken(bearer(request))) {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    const record = businessRecords.get(id) ?? defaultBusinessRecord(id)
+    return HttpResponse.json(record)
+  }),
+
+  http.patch('*/businesses/:id', async ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    const id = String(params.id)
+    if (id !== businessFromToken(bearer(request))) {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    if (roleFromToken(bearer(request)) !== 'dueño') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    const body = (await request.json()) as Record<string, unknown>
+    businessWrites.push({ body })
+    const keys = Object.keys(body)
+    if (!keys.length) {
+      return HttpResponse.json(
+        {
+          detail: [{ loc: ['body'], msg: 'campo obligatorio', type: 'value_error' }],
+        },
+        { status: 422 },
+      )
+    }
+    const current = businessRecords.get(id) ?? defaultBusinessRecord(id)
+    const next: BusinessRecord = {
+      ...current,
+      ...(typeof body.name === 'string' ? { name: body.name } : {}),
+      ...(body.phone === null || typeof body.phone === 'string' ? { phone: body.phone as string | null } : {}),
+      ...(body.rnc === null || typeof body.rnc === 'string' ? { rnc: body.rnc as string | null } : {}),
+      ...(body.address === null || typeof body.address === 'string'
+        ? { address: body.address as string | null }
+        : {}),
+    }
+    businessRecords.set(id, next)
+    return HttpResponse.json(next)
   }),
 
   http.post('*/sales/simulate', async ({ request }) => {
@@ -1114,13 +1361,14 @@ export const handlers = [
     const { buildPlan } = await import('./sales-msw')
     const n = body.installments ?? 12
     const frequency = (body.frequency ?? 'mensual') as 'semanal' | 'quincenal' | 'mensual'
+    const configured = creditSettingsConfigured(creditSettingsState)
     const plan = buildPlan({
       price: body.price ?? '0.00',
       down: body.down_payment ?? '0.00',
       n,
       frequency,
       firstDue: body.first_due_date,
-      percent: '20.00',
+      percent: configured ? (creditSettingsState.surcharge_percent ?? '0') : '0',
     })
     const warnings: Array<{ code: string; message: string }> = []
     if (body.client_id === 'cli-collector-off') {
@@ -1131,7 +1379,12 @@ export const handlers = [
       })
     }
     const { simulateResponse } = await import('./sales-msw')
-    return HttpResponse.json(simulateResponse(plan, { warnings }))
+    return HttpResponse.json(
+      simulateResponse(plan, {
+        warnings,
+        settings_configured: configured,
+      }),
+    )
   }),
 
   http.post('*/sales', async ({ request }) => {
@@ -1141,11 +1394,12 @@ export const handlers = [
       return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
     }
     const body = (await request.json()) as Record<string, unknown>
+    const idempotencyKey = request.headers.get('Idempotency-Key')
     saleWrites.push({
       method: request.method,
       url: request.url,
       body,
-      idempotencyKey: request.headers.get('Idempotency-Key'),
+      idempotencyKey,
     })
     if (body.client_id === 'cli-blocked') {
       return HttpResponse.json(
@@ -1160,6 +1414,43 @@ export const handlers = [
         },
         { status: 409 },
       )
+    }
+    if (!creditSettingsState.hasRow) {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              field: null,
+              code: 'CREDIT_SETTINGS_MISSING',
+              message: 'Configura el crédito del negocio antes de vender',
+            },
+          ],
+        },
+        { status: 409 },
+      )
+    }
+    if (!creditSettingsConfigured(creditSettingsState)) {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              field: null,
+              code: 'CREDIT_SETTINGS_INCOMPLETE',
+              message: 'La configuración de crédito del negocio está incompleta',
+            },
+          ],
+        },
+        { status: 409 },
+      )
+    }
+    if (idempotencyKey) {
+      const replayed = salesByIdempotencyKey.get(idempotencyKey)
+      if (replayed) {
+        return HttpResponse.json(replayed, {
+          status: 200,
+          headers: corsExpose({ 'Idempotent-Replayed': 'true' }),
+        })
+      }
     }
     saleCount += 1
     const { buildPlan } = await import('./sales-msw')
@@ -1194,7 +1485,8 @@ export const handlers = [
       balance: plan.total,
     })
     sales.set(sale.id, sale)
-    return HttpResponse.json(sale, { status: 201 })
+    if (idempotencyKey) salesByIdempotencyKey.set(idempotencyKey, sale)
+    return HttpResponse.json(sale, { status: 201, headers: corsExpose() })
   }),
 
   http.get('*/sales/:id/contract.pdf', ({ request, params }) => {
@@ -1204,16 +1496,136 @@ export const handlers = [
       return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
     }
     const id = String(params.id)
-    if (!sales.has(id) && id !== 'sale-1') {
+    const sale = sales.get(id)
+    if (!sale && id !== 'sale-1') {
       return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
     }
+    const number = typeof sale?.sale_number === 'number' ? sale.sale_number : id
+    const voided = isVoidedStatus(sale?.status)
+    const filename = voided
+      ? `contrato-venta-${number}-anulada.pdf`
+      : `contrato-venta-${number}.pdf`
     return new HttpResponse(new Blob(['%PDF-1.4 mock'], { type: 'application/pdf' }), {
       status: 200,
-      headers: {
+      headers: corsExpose({
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="contrato-venta-${id}.pdf"`,
-      },
+        'Cache-Control': 'no-store',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      }),
     })
+  }),
+
+  http.post('*/sales/:id/void', async ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    if (roleFromToken(bearer(request)) !== 'dueño') {
+      return HttpResponse.json({ detail: 'no autorizado' }, { status: 403 })
+    }
+    const body = (await request.json()) as Record<string, unknown>
+    voidWrites.push({ url: request.url, body })
+    const extra = Object.keys(body).filter((key) => key !== 'reason')
+    if (extra.length) {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              loc: ['body', extra[0]],
+              msg: 'campos adicionales no permitidos',
+              type: 'extra_forbidden',
+            },
+          ],
+        },
+        { status: 422 },
+      )
+    }
+    if (typeof body.reason !== 'string') {
+      return HttpResponse.json(
+        {
+          detail: [
+            { loc: ['body', 'reason'], msg: 'el motivo debe ser un string', type: 'value_error' },
+          ],
+        },
+        { status: 422 },
+      )
+    }
+    const reason = body.reason.trim()
+    if (!reason) {
+      return HttpResponse.json(
+        {
+          detail: [
+            { loc: ['body', 'reason'], msg: 'el motivo es obligatorio', type: 'value_error' },
+          ],
+        },
+        { status: 422 },
+      )
+    }
+    if (reason.length < 5 || reason.length > 500) {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              loc: ['body', 'reason'],
+              msg: 'el motivo debe tener entre 5 y 500 caracteres',
+              type: 'value_error',
+            },
+          ],
+        },
+        { status: 422 },
+      )
+    }
+    const id = String(params.id)
+    const sale = sales.get(id)
+    if (!sale) {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    if (isVoidedStatus(sale.status)) {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              field: null,
+              code: 'SALE_ALREADY_VOIDED',
+              message: 'esta venta ya está anulada',
+            },
+          ],
+        },
+        { status: 409 },
+      )
+    }
+    const installments = Array.isArray(sale.installments) ? sale.installments : []
+    const hasPayments = installments.some(
+      (row) => typeof row === 'object' && row != null && !isZeroPaid((row as { paid?: unknown }).paid),
+    )
+    if (hasPayments) {
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              field: null,
+              code: 'SALE_HAS_PAYMENTS',
+              message: 'no se puede anular una venta con pagos',
+            },
+          ],
+        },
+        { status: 409 },
+      )
+    }
+    const cancelled = installments.map((row) =>
+      typeof row === 'object' && row != null
+        ? { ...(row as Record<string, unknown>), status: 'cancelled' }
+        : row,
+    )
+    const voided = {
+      ...sale,
+      status: 'voided',
+      balance: '0.00',
+      voided_at: '2026-10-18T19:15:00.000Z',
+      void_reason: reason,
+      voided_by: { membership_id: ownerMember.id, name: users.owner.name },
+      installments: cancelled,
+    }
+    sales.set(id, voided)
+    return HttpResponse.json(voided)
   }),
 
   http.get('*/sales/:id', ({ request, params }) => {
@@ -1232,12 +1644,42 @@ export const handlers = [
   http.get('*/sales', ({ request }) => {
     const denied = requireAuth(request)
     if (denied) return denied
-    const items = [...sales.values()].map(saleReadFromStored)
+    const url = new URL(request.url)
+    const status = url.searchParams.get('status')
+    const clientId = url.searchParams.get('client_id')
+    const pageRaw = url.searchParams.get('page') ?? '1'
+    const sizeRaw = url.searchParams.get('page_size') ?? '50'
+    let page = 0
+    for (const ch of pageRaw) {
+      if (ch < '0' || ch > '9') continue
+      page = page * 10 + (ch.charCodeAt(0) - 48)
+    }
+    let pageSize = 0
+    for (const ch of sizeRaw) {
+      if (ch < '0' || ch > '9') continue
+      pageSize = pageSize * 10 + (ch.charCodeAt(0) - 48)
+    }
+    if (page < 1) page = 1
+    if (pageSize < 1) pageSize = 50
+    let rows = [...sales.values()]
+    if (roleFromToken(bearer(request)) === 'cobrador') {
+      rows = rows.filter((sale) => collectorCanSeeClient(String(sale.client_id ?? '')))
+    }
+    if (clientId) {
+      rows = rows.filter((sale) => sale.client_id === clientId)
+    }
+    if (status === 'voided') {
+      rows = rows.filter((sale) => isVoidedStatus(sale.status))
+    } else if (status === 'active') {
+      rows = rows.filter((sale) => !isVoidedStatus(sale.status))
+    }
+    rows.sort(compareSalesNewestFirst)
+    const start = (page - 1) * pageSize
     return HttpResponse.json({
-      items,
-      total: items.length,
-      page: 1,
-      page_size: 50,
+      items: rows.slice(start, start + pageSize).map(saleReadFromStored),
+      total: rows.length,
+      page,
+      page_size: pageSize,
     })
   }),
 ]

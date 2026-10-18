@@ -228,7 +228,12 @@ export function saleDetailFromPlan(
       late_fee: '0.00',
       status: 'pendiente',
     })),
-    contract: {},
+    contract: {
+      seller: {
+        membership_id: input.seller_membership_id ?? 'mem-user-cashier-biz-norte',
+        name: 'Carla Caja',
+      },
+    },
     warnings: input.warnings ?? [],
   }
 }
@@ -280,9 +285,42 @@ export function clientSaleDetailFixture(overrides: Partial<SaleDetail> = {}): Sa
         status: 'pendiente',
       },
     ],
-    contract: overrides.contract ?? {},
+    contract: overrides.contract ?? {
+      seller: { membership_id: read.seller_membership_id, name: 'Carla Caja' },
+    },
     warnings: overrides.warnings ?? [],
   }
+}
+
+export function voidedSaleDetailFixture(overrides: Partial<SaleDetail> = {}): SaleDetail {
+  const active = clientSaleDetailFixture({
+    id: 'sale-117',
+    sale_number: 117,
+    item_description: 'Abanico Royal',
+    price: '3000.00',
+    financed: '3000.00',
+    surcharge: '600.00',
+    total: '3600.00',
+    balance: '0.00',
+    frequency: 'semanal',
+    installments_count: 4,
+    status: 'voided',
+    voided_at: '2026-09-29T16:00:00.000Z',
+    void_reason: 'Se registró con el precio equivocado.',
+    voided_by: { membership_id: 'mem-owner', name: 'Ana Pérez' },
+    created_at: '2026-09-28T16:00:00.000Z',
+    installments: [
+      { number: 1, due_date: '2026-10-05', amount: '900.00', paid: '0.00', late_fee: '0.00', status: 'cancelled' },
+      { number: 2, due_date: '2026-10-12', amount: '900.00', paid: '0.00', late_fee: '0.00', status: 'cancelled' },
+      { number: 3, due_date: '2026-10-19', amount: '900.00', paid: '0.00', late_fee: '0.00', status: 'cancelled' },
+      { number: 4, due_date: '2026-10-26', amount: '900.00', paid: '0.00', late_fee: '0.00', status: 'cancelled' },
+    ],
+    contract: {
+      seller: { membership_id: 'mem-user-cashier-biz-norte', name: 'Carlos Núñez' },
+    },
+    ...overrides,
+  })
+  return active
 }
 
 export const handwrittenClientSales: SaleRead[] = [

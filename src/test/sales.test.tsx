@@ -1348,7 +1348,7 @@ describe('CBF-206 ventas', () => {
 
   it('409 de lista se enruta por código; 422 va al campo', async () => {
     loginOwner()
-    expect(CREDIT_SETTINGS_LINKS_ENABLED).toBe(false)
+    expect(CREDIT_SETTINGS_LINKS_ENABLED).toBe(true)
     server.use(
       http.post('*/sales/simulate', () =>
         HttpResponse.json(
@@ -1374,7 +1374,10 @@ describe('CBF-206 ventas', () => {
       () => expect(screen.getByText('La configuración de crédito está incompleta.')).toBeInTheDocument(),
       { timeout: 4000 },
     )
-    expect(screen.queryByRole('link', { name: 'Revisar configuración' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Revisar configuración' })).toHaveAttribute(
+      'href',
+      '/negocio',
+    )
 
     server.use(
       http.post('*/sales/simulate', () =>
