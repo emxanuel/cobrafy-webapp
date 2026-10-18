@@ -4,6 +4,7 @@ import { setSwitchingFromToken } from '@/features/auth/lib/switching-token'
 import type {
   AuthResponse,
   BusinessSummary,
+  MeResponse,
   Membership,
   Role,
   UserRead,
@@ -38,6 +39,7 @@ type SessionState = {
   locked: boolean
   hydrated: boolean
   applyAuth: (payload: AuthResponse, options?: { lockIfPin?: boolean }) => void
+  applyMe: (payload: MeResponse) => void
   setLocked: (locked: boolean) => void
   markPinOnActive: (hasPin: boolean) => void
   hydrate: () => void
@@ -84,6 +86,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       locked: options?.lockIfPin ? hasPin : false,
       hydrated: true,
     })
+  },
+  applyMe: (payload) => {
+    const current = get()
+    if (!current.accessToken || !current.user) return
+    const next = {
+      accessToken: current.accessToken,
+      user: payload.user,
+      memberships: payload.memberships,
+      activeBusiness: payload.active_business,
+      activeRole: payload.active_role,
+      needsBusinessSelection: current.needsBusinessSelection,
+    }
+    persist(next)
+    useBusinessStore.getState().setActiveBusinessId(payload.active_business?.id ?? null)
+    set(next)
   },
   setLocked: (locked) => set({ locked }),
   markPinOnActive: (hasPin) => {

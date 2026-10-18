@@ -96,6 +96,32 @@ describe('toApiError', () => {
     )
   })
 
+  it('mapea códigos de anulación y contrato de 207', () => {
+    expect(
+      toApiError(
+        axiosError(409, {
+          detail: [{ field: null, code: 'SALE_HAS_PAYMENTS', message: 'no se puede anular' }],
+        }),
+      ).message,
+    ).toBe('No se puede anular: la venta ya tiene pagos.')
+    expect(
+      toApiError(
+        axiosError(409, {
+          detail: [{ field: null, code: 'SALE_ALREADY_VOIDED', message: 'ya anulada' }],
+        }),
+      ).message,
+    ).toBe('Esta venta ya estaba anulada.')
+    expect(
+      toApiError(
+        axiosError(409, {
+          detail: [
+            { field: null, code: 'LEGACY_SALE_LEGAL_DATA_MISSING', message: 'sin rnc' },
+          ],
+        }),
+      ).message,
+    ).toBe('Esta venta se registró sin RNC ni dirección del negocio.')
+  })
+
   it('lee DOCUMENT_UNREADABLE_GUARANTOR por código', () => {
     const error = toApiError(
       axiosError(409, {

@@ -28,6 +28,7 @@ import type {
   ContactRead,
   ContactUpdate,
 } from '@/features/clients/services/types'
+import { isApiError } from '@/features/shared/lib/api-error'
 
 export function useClientSearch(query: string, status: 'active' | 'blocked' | '') {
   const businessId = useBusinessStore((s) => s.activeBusinessId)
@@ -94,6 +95,11 @@ export function useCreateClientMutation() {
     }) => createClientWithContacts(client, contacts),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: clientKeys.all })
+    },
+    onError: (error) => {
+      if (isApiError(error) && error.status === 0) {
+        void queryClient.invalidateQueries({ queryKey: clientKeys.all })
+      }
     },
   })
 }

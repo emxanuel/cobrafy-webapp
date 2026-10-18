@@ -1,5 +1,9 @@
 export const saleKeys = {
   all: ['sales'] as const,
+  list: (businessId: string | null, status: string) =>
+    [...saleKeys.all, businessId, { status }] as const,
+  detail: (businessId: string | null, saleId: string) =>
+    [...saleKeys.all, businessId, saleId] as const,
   simulate: (
     businessId: string | null,
     clientId: string,

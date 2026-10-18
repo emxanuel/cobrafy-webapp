@@ -3,6 +3,8 @@ const ALLOWED = [
   /^\/equipo$/,
   /^\/clave-rapida$/,
   /^\/negocios$/,
+  /^\/negocio$/,
+  /^\/ventas(\/.*)?$/,
   /^\/desbloquear$/,
 ]
 

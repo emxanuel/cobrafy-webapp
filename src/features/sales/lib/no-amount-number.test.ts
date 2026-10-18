@@ -26,6 +26,16 @@ const sources = {
     query: '?raw',
     import: 'default',
   }),
+  ...import.meta.glob('@/pages/business/**/*.{ts,tsx}', {
+    eager: true,
+    query: '?raw',
+    import: 'default',
+  }),
+  ...import.meta.glob('@/features/business/**/*.{ts,tsx}', {
+    eager: true,
+    query: '?raw',
+    import: 'default',
+  }),
 } as Record<string, string>
 
 describe('sales y shared/lib no convierten montos a number', () => {

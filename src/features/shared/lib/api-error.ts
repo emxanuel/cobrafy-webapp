@@ -85,6 +85,13 @@ const DOCUMENT_UNREADABLE_MESSAGE =
 const DOCUMENT_UNREADABLE_GUARANTOR_MESSAGE =
   'No pudimos leer el documento de un garante. Revisa los contactos del cliente y vuelve a guardarlo.'
 
+const LEGACY_SALE_LEGAL_DATA_MISSING_MESSAGE =
+  'Esta venta se registró sin RNC ni dirección del negocio.'
+
+const SALE_ALREADY_VOIDED_MESSAGE = 'Esta venta ya estaba anulada.'
+
+const SALE_HAS_PAYMENTS_MESSAGE = 'No se puede anular: la venta ya tiene pagos.'
+
 export const GENERIC_MESSAGE = 'No se pudo completar. Inténtalo de nuevo.'
 
 const TECHNICAL_DETAILS = new Set(
@@ -182,6 +189,9 @@ function messageForCode(code: string | undefined): string | undefined {
   if (code === 'invite_email_failed') return INVITE_EMAIL_FAILED
   if (code === 'DOCUMENT_UNREADABLE') return DOCUMENT_UNREADABLE_MESSAGE
   if (code === 'DOCUMENT_UNREADABLE_GUARANTOR') return DOCUMENT_UNREADABLE_GUARANTOR_MESSAGE
+  if (code === 'LEGACY_SALE_LEGAL_DATA_MISSING') return LEGACY_SALE_LEGAL_DATA_MISSING_MESSAGE
+  if (code === 'SALE_ALREADY_VOIDED') return SALE_ALREADY_VOIDED_MESSAGE
+  if (code === 'SALE_HAS_PAYMENTS') return SALE_HAS_PAYMENTS_MESSAGE
   return undefined
 }
 

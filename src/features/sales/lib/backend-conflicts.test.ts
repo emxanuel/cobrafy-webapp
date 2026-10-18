@@ -31,7 +31,13 @@ describe('contratos 409 de cobrafy-backend fa39236', () => {
       )
       expect(error.code).toBe(item.code)
       expect(error.fieldErrors).toEqual({})
-      if (item.code === 'DOCUMENT_UNREADABLE' || item.code === 'DOCUMENT_UNREADABLE_GUARANTOR') {
+      if (
+        item.code === 'DOCUMENT_UNREADABLE' ||
+        item.code === 'DOCUMENT_UNREADABLE_GUARANTOR' ||
+        item.code === 'LEGACY_SALE_LEGAL_DATA_MISSING' ||
+        item.code === 'SALE_ALREADY_VOIDED' ||
+        item.code === 'SALE_HAS_PAYMENTS'
+      ) {
         expect(error.message.length).toBeGreaterThan(0)
       } else {
         expect(error.message).toBe(item.message)

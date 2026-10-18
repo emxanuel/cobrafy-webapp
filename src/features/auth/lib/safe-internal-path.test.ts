@@ -7,6 +7,9 @@ describe('safeInternalPath', () => {
     expect(safeInternalPath('/clientes')).toBe('/clientes')
     expect(safeInternalPath('/clientes/cli-1')).toBe('/clientes/cli-1')
     expect(safeInternalPath('/equipo')).toBe('/equipo')
+    expect(safeInternalPath('/ventas')).toBe('/ventas')
+    expect(safeInternalPath('/ventas/sale-1')).toBe('/ventas/sale-1')
+    expect(safeInternalPath('/negocio')).toBe('/negocio')
   })
 
   it('rechaza externas, protocol-relative y el token de invitación', () => {

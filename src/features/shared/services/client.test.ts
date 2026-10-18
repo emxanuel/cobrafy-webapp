@@ -4,7 +4,7 @@ import { delay, http, HttpResponse } from 'msw'
 import { setSwitchingFromToken } from '@/features/auth/lib/switching-token'
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import { isApiError } from '@/features/shared/lib/api-error'
-import { GET_TIMEOUT_MS, api } from '@/features/shared/services/client'
+import { GET_TIMEOUT_MS, MUTATION_TIMEOUT_MS, api } from '@/features/shared/services/client'
 import { authResponse, businesses, membership, users } from '@/test/fixtures'
 import { server } from '@/test/server'
 
@@ -120,6 +120,26 @@ describe('api timeouts', () => {
         (error) => isApiError(error) && error.status === 0,
       )
       await vi.advanceTimersByTimeAsync(GET_TIMEOUT_MS)
+      await rejected
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('un POST que no fija timeout se cancela a los 20 s', async () => {
+    server.use(
+      http.post('*/clients', async () => {
+        await delay('infinite')
+        return HttpResponse.json({ id: 'cli-x' })
+      }),
+    )
+    vi.useFakeTimers()
+    try {
+      const pending = api.post('/clients', { name: 'Ana' })
+      const rejected = expect(pending).rejects.toSatisfy(
+        (error) => isApiError(error) && error.status === 0,
+      )
+      await vi.advanceTimersByTimeAsync(MUTATION_TIMEOUT_MS)
       await rejected
     } finally {
       vi.useRealTimers()
