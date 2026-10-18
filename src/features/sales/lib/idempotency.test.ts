@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  IDEMPOTENCY_STORAGE_PREFIX,
+  clearAllSaleIdempotencyKeys,
   clearIdempotencyKey,
   idempotencyForForm,
   idempotencyStorageKey,
@@ -39,5 +41,16 @@ describe('idempotencyForForm', () => {
     clearIdempotencyKey('body-1')
     const next = idempotencyForForm(null, 'body-1', () => 'new')
     expect(next.key).toBe('new')
+  })
+
+  it('clearAllSaleIdempotencyKeys borra cobrafy.saleIdempotency:*', () => {
+    idempotencyForForm(null, 'body-1', () => 'key-1')
+    idempotencyForForm(null, 'body-2', () => 'key-2')
+    sessionStorage.setItem('cobrafy.session', '{"token":"x"}')
+    clearAllSaleIdempotencyKeys()
+    expect(readIdempotencyKey('body-1')).toBeNull()
+    expect(readIdempotencyKey('body-2')).toBeNull()
+    expect(sessionStorage.getItem(`${IDEMPOTENCY_STORAGE_PREFIX}body-1`)).toBeNull()
+    expect(sessionStorage.getItem('cobrafy.session')).toBe('{"token":"x"}')
   })
 })

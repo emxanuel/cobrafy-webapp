@@ -14,6 +14,7 @@ import {
   DISCARD_SALE_LABEL,
   DISCARD_SALE_TITLE,
   DISCARD_SALE_TOAST,
+  DISCARD_SALE_TOAST_MS,
   PENDING_SALE_BODY,
   PENDING_SALE_EXPIRED_BODY,
   PENDING_SALE_EXPIRED_TITLE,
@@ -777,7 +778,11 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(PENDING_SALE_TTL_MS)
+      await vi.advanceTimersByTimeAsync(PENDING_SALE_TTL_MS - 60_000)
+    })
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
     })
     expect(screen.getByText(PENDING_SALE_EXPIRED_TITLE)).toBeInTheDocument()
     expect(screen.getByText(PENDING_SALE_EXPIRED_BODY)).toBeInTheDocument()
@@ -850,8 +855,14 @@ describe('CBF-206 ventas', () => {
     const firstKey = pendingSaleKey()
     await user.click(screen.getByRole('button', { name: DISCARD_SALE_LABEL }))
     const sheet = screen.getByRole('dialog')
-    await user.click(within(sheet).getByRole('button', { name: DISCARD_SALE_LABEL }))
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    fireEvent.click(within(sheet).getByRole('button', { name: DISCARD_SALE_LABEL }))
     expect(screen.getByText(DISCARD_SALE_TOAST)).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DISCARD_SALE_TOAST_MS)
+    })
+    expect(screen.queryByText(DISCARD_SALE_TOAST)).not.toBeInTheDocument()
+    vi.useRealTimers()
     expect(screen.getByLabelText('Artículo')).toHaveValue('')
     expect(screen.getByLabelText('Artículo')).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeInTheDocument()
@@ -978,6 +989,39 @@ describe('CBF-206 ventas', () => {
     expect(screen.queryByText(PENDING_SALE_BODY)).not.toBeInTheDocument()
     expect(screen.getByLabelText('Artículo')).toBeEnabled()
     expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+  })
+
+  it('un 422 de price se limpia al corregir el precio y Confirmar se habilita', async () => {
+    loginCashier()
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        return HttpResponse.json(
+          { detail: [{ field: 'price', code: 'AMOUNT_INVALID', message: 'monto inválido' }] },
+          { status: 422 },
+        )
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expect(await screen.findByText(MONEY_INVALID_MESSAGE)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeDisabled()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+    const price = screen.getByLabelText('Precio')
+    await user.clear(price)
+    await user.type(price, '3200')
+    const confirm = screen.getByRole('button', { name: 'Confirmar venta' })
+    await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 4000 })
+    expect(screen.queryByText(MONEY_INVALID_MESSAGE)).not.toBeInTheDocument()
   })
 
   it('un monto inválido muestra Monto inválido y deshabilita Confirmar', async () => {

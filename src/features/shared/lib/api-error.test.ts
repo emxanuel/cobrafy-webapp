@@ -170,7 +170,7 @@ describe('toApiError', () => {
       }),
     )
     expect(error.code).toBe('IDEMPOTENCY_KEY_REUSED')
-    expect(error.message).toBe('key reused')
+    expect(error.message).toBe(GENERIC_MESSAGE)
   })
 
   it('un código desconocido sin mensaje cae al genérico en español', () => {
@@ -215,6 +215,32 @@ describe('toApiError', () => {
     )
     expect(unblocked.fieldErrors).toEqual({})
     expect(unblocked.message).toBe('el cliente no está bloqueado')
+  })
+
+  it('un detail de lista en inglés se reemplaza por el genérico', () => {
+    const required = toApiError(
+      axiosError(422, {
+        detail: [{ loc: ['body', 'price'], msg: 'Field required', type: 'missing' }],
+      }),
+    )
+    expect(required.message).toBe(GENERIC_MESSAGE)
+    expect(required.fieldErrors).toEqual({})
+
+    const decode = toApiError(
+      axiosError(422, {
+        detail: [{ loc: ['body'], msg: 'JSON decode error', type: 'json_invalid' }],
+      }),
+    )
+    expect(decode.message).toBe(GENERIC_MESSAGE)
+    expect(decode.fieldErrors).toEqual({})
+
+    const spanish = toApiError(
+      axiosError(422, {
+        detail: [{ field: 'price', msg: 'el precio es obligatorio' }],
+      }),
+    )
+    expect(spanish.message).toBe('el precio es obligatorio')
+    expect(spanish.fieldErrors.price).toBe('el precio es obligatorio')
   })
 
   it('No permission no se trata como español', () => {

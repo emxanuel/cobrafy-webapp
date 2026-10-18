@@ -56,6 +56,7 @@ import {
   DISCARD_SALE_LABEL,
   DISCARD_SALE_TITLE,
   DISCARD_SALE_TOAST,
+  DISCARD_SALE_TOAST_MS,
   PENDING_SALE_BODY,
   PENDING_SALE_EXPIRED_BODY,
   PENDING_SALE_EXPIRED_TITLE,
@@ -240,12 +241,18 @@ function NewSaleForm({
   useEffect(() => {
     if (!pending) return
     const created = Date.parse(pending.created_at)
-    if (!Number.isFinite(created)) return
+    if (!Number.isFinite(created) || created > Date.now()) return
     const remaining = created + PENDING_SALE_TTL_MS - Date.now()
     if (remaining <= 0) return
     const timer = window.setTimeout(() => setExpiryTick((tick) => tick + 1), remaining)
     return () => window.clearTimeout(timer)
   }, [pending])
+
+  useEffect(() => {
+    if (!discardedToast) return
+    const timer = window.setTimeout(() => setDiscardedToast(false), DISCARD_SALE_TOAST_MS)
+    return () => window.clearTimeout(timer)
+  }, [discardedToast])
 
   const simulatePayload = debounced
     ? {
@@ -260,6 +267,13 @@ function NewSaleForm({
 
   const simulate = useSimulateSale(clientId, canSimulate ? simulatePayload : null)
   const create = useCreateSaleMutation(clientId)
+  const resetCreateRef = useRef(create.reset)
+  resetCreateRef.current = create.reset
+
+  useEffect(() => {
+    resetCreateRef.current()
+    setFailedAfterPending(false)
+  }, [fingerprint, simulate.dataUpdatedAt])
   const plan = simulate.data
   const simulating = simulate.isFetching || (canSimulate && debounced !== snapshot)
   const stale = !plan || saleFormFingerprint({

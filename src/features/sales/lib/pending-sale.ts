@@ -20,6 +20,7 @@ export const DISCARD_SALE_BODY =
   'Si ya se registró, la verás en las compras del cliente. Si no, tendrás que registrarla de nuevo.'
 export const DISCARD_SALE_BACK = 'Volver'
 export const DISCARD_SALE_TOAST = 'Venta descartada.'
+export const DISCARD_SALE_TOAST_MS = 4_000
 export const PENDING_SALE_PREFIX = 'cobrafy.pendingSale:'
 export const PENDING_SALE_TTL_MS = 23 * 60 * 60 * 1000
 
@@ -45,7 +46,7 @@ export function isPendingSaleExpired(
   now = Date.now(),
 ): boolean {
   const created = Date.parse(attempt.created_at)
-  if (!Number.isFinite(created)) return true
+  if (!Number.isFinite(created) || created > now) return true
   return now - created >= PENDING_SALE_TTL_MS
 }
 

@@ -99,6 +99,12 @@ describe('pending-sale storage', () => {
     expect(isPendingSaleExpired(invalid!)).toBe(true)
   })
 
+  it('un created_at en el futuro está vencido', () => {
+    expect(
+      isPendingSaleExpired({ created_at: new Date(Date.now() + 60_000).toISOString() }),
+    ).toBe(true)
+  })
+
   it('a las 23 h el pending está vencido', () => {
     vi.useFakeTimers()
     const created_at = new Date().toISOString()

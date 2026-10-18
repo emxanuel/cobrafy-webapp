@@ -24,6 +24,15 @@ export function clearIdempotencyKey(fingerprint: string) {
   removeKey(idempotencyStorageKey(fingerprint))
 }
 
+export function clearAllSaleIdempotencyKeys() {
+  const keys: string[] = []
+  for (let index = 0; index < sessionStorage.length; index += 1) {
+    const key = sessionStorage.key(index)
+    if (key?.startsWith(IDEMPOTENCY_STORAGE_PREFIX)) keys.push(key)
+  }
+  for (const key of keys) sessionStorage.removeItem(key)
+}
+
 /** Reuse the key for the same body; mint a new UUID only when the payload changed. */
 export function idempotencyForForm(
   current: IdempotencyState | null,

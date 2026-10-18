@@ -125,6 +125,10 @@ function isUnmappedEnglish(text: string): boolean {
   return /[A-Za-z]/.test(trimmed)
 }
 
+function isGenericDetail(text: string, status: number): boolean {
+  return status >= 500 || isTechnicalDetail(text) || isUnmappedEnglish(text)
+}
+
 function isClientCreateUrl(url = ''): boolean {
   const path = url.split('?')[0]?.replace(/\/$/, '') ?? ''
   return /\/clients$/.test(path)
@@ -193,17 +197,20 @@ export function parseMessage(
   const items = listItems(body)
   if (items?.[0]) {
     const first = items[0]
-    if (typeof first.message === 'string' && first.message.trim()) {
-      return first.message.trim()
-    }
-    if (typeof first.msg === 'string' && first.msg.trim()) {
-      return first.msg.trim()
+    const listMsg =
+      typeof first.message === 'string' && first.message.trim()
+        ? first.message.trim()
+        : typeof first.msg === 'string' && first.msg.trim()
+          ? first.msg.trim()
+          : ''
+    if (listMsg) {
+      return isGenericDetail(listMsg, status) ? GENERIC_MESSAGE : listMsg
     }
   }
 
   const raw = stringDetail(body)
   if (raw) {
-    if (status >= 500 || isTechnicalDetail(raw) || isUnmappedEnglish(raw)) return GENERIC_MESSAGE
+    if (isGenericDetail(raw, status)) return GENERIC_MESSAGE
     return raw
   }
 
@@ -224,17 +231,19 @@ export function parseFieldErrors(body: ErrorBody, status = 0, url = ''): Record<
     for (const row of items) {
       const field = detailField(row)
       const msg = (row.message ?? row.msg)?.trim()
-      if (field && msg && !errors[field]) errors[field] = msg
+      if (field && msg && !errors[field] && !isGenericDetail(msg, status)) {
+        errors[field] = msg
+      }
     }
   }
 
   if (typeof body.field === 'string' && typeof body.message === 'string') {
-    errors[body.field] = body.message
+    if (!isGenericDetail(body.message, status)) errors[body.field] = body.message
   }
 
   if (body.detail && typeof body.detail === 'object' && !Array.isArray(body.detail)) {
     const nested = body.detail as { field?: string; message?: string }
-    if (nested.field && nested.message) {
+    if (nested.field && nested.message && !isGenericDetail(nested.message, status)) {
       errors[nested.field] = nested.message
     }
   }
