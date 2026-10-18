@@ -60,6 +60,13 @@ async function waitForPlan() {
   })
 }
 
+function expectPurchasesLink() {
+  expect(screen.getByRole('link', { name: 'Ver compras del cliente' })).toHaveAttribute(
+    'href',
+    '/clientes/cli-1/historial',
+  )
+}
+
 function saleJson(overrides: Record<string, unknown> = {}) {
   return {
     id: 'sale-1',
@@ -314,7 +321,7 @@ describe('CBF-206 ventas', () => {
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
     expect(screen.getByText('No se pudo registrar la venta.')).toBeInTheDocument()
     expect(screen.getByText(/mira las compras del cliente/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Ver compras del cliente' })).toBeInTheDocument()
+    expectPurchasesLink()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeEnabled(), {
       timeout: 3000,
     })
@@ -348,12 +355,12 @@ describe('CBF-206 ventas', () => {
     await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
     expect(await screen.findByText('No se pudo registrar la venta.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Ver compras del cliente' })).toBeInTheDocument()
+    expectPurchasesLink()
 
     await user.type(screen.getByLabelText('Artículo'), ' XL')
     expect(screen.getByText('No se pudo registrar la venta.')).toBeInTheDocument()
     expect(screen.getByText(/mira las compras del cliente/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Ver compras del cliente' })).toBeInTheDocument()
+    expectPurchasesLink()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
   })
 
@@ -541,7 +548,7 @@ describe('CBF-206 ventas', () => {
     await user.click(await screen.findByRole('button', { name: 'Registrar venta' }))
     expect(await screen.findByText(IDEMPOTENCY_REUSED_TITLE)).toBeInTheDocument()
     expect(screen.getByText(IDEMPOTENCY_REUSED_BODY)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Ver compras del cliente' })).toBeEnabled()
+    expectPurchasesLink()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
     const closeButtons = screen.getAllByRole('button', { name: 'Cerrar' })
     await user.click(closeButtons[closeButtons.length - 1]!)
@@ -594,7 +601,7 @@ describe('CBF-206 ventas', () => {
     expect(await screen.findByText(IDEMPOTENCY_REUSED_TITLE)).toBeInTheDocument()
     expect(screen.getByText(IDEMPOTENCY_REUSED_BODY)).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Ver compras del cliente' })).toBeEnabled()
+    expectPurchasesLink()
     expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
   })

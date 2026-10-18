@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 
 import type { Role } from '@/features/auth/services/types'
 import { useSessionStore } from '@/features/auth/stores/session-store'
@@ -169,7 +169,6 @@ function NewSaleForm({
   const idempotencyRef = useRef<IdempotencyState | null>(null)
   const inFlightRef = useRef(false)
   const bannerRef = useRef<HTMLDivElement>(null)
-  const navigate = useNavigate()
 
   const snapshot: SaleFormSnapshot = useMemo(
     () => ({
@@ -490,7 +489,7 @@ function NewSaleForm({
                 </Button>
               ) : null}
               <Link
-                to={`/clientes/${clientId}`}
+                to={`/clientes/${clientId}/historial`}
                 className={`${buttonVariants({ variant: 'link' })} min-h-11`}
               >
                 Ver compras del cliente
@@ -506,10 +505,7 @@ function NewSaleForm({
       {idempotencyReused && !confirmOpen ? (
         <div ref={bannerRef} tabIndex={-1}>
           <IdempotencyReusedNotice
-            onViewPurchases={() => {
-              setIdempotencyReused(false)
-              navigate(`/clientes/${clientId}`)
-            }}
+            clientId={clientId}
             onClose={() => setIdempotencyReused(false)}
           />
         </div>
@@ -680,13 +676,7 @@ function NewSaleForm({
           </div>
           <CuotaDots count={planCuotaCount(plan)} />
           {idempotencyReused ? (
-            <IdempotencyReusedNotice
-              onViewPurchases={() => {
-                closeConfirm()
-                navigate(`/clientes/${clientId}`)
-              }}
-              onClose={closeConfirm}
-            />
+            <IdempotencyReusedNotice clientId={clientId} onClose={closeConfirm} />
           ) : (
             <>
               <Button
@@ -713,10 +703,10 @@ function NewSaleForm({
 }
 
 function IdempotencyReusedNotice({
-  onViewPurchases,
+  clientId,
   onClose,
 }: {
-  onViewPurchases: () => void
+  clientId: string
   onClose: () => void
 }) {
   return (
@@ -724,9 +714,12 @@ function IdempotencyReusedNotice({
       <Alert tone="warning" icon="⚠" title={IDEMPOTENCY_REUSED_TITLE}>
         {IDEMPOTENCY_REUSED_BODY}
       </Alert>
-      <Button className="min-h-11 w-full" onClick={onViewPurchases}>
+      <Link
+        to={`/clientes/${clientId}/historial`}
+        className={`${buttonVariants()} min-h-11 w-full no-underline`}
+      >
         Ver compras del cliente
-      </Button>
+      </Link>
       <Button variant="ghost" className="min-h-11 w-full" onClick={onClose}>
         Cerrar
       </Button>
