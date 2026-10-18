@@ -11,7 +11,9 @@ import {
 import {
   PENDING_SALE_BODY,
   PENDING_SALE_EDITED_BODY,
+  PENDING_SALE_EDITED_TITLE,
   PENDING_SALE_FAILED,
+  PENDING_SALE_SHEET_WARNING,
   PENDING_SALE_STILL_OFFLINE,
 } from '@/features/sales/lib/pending-sale'
 import { MONEY_INVALID_MESSAGE } from '@/features/sales/components/money-input'
@@ -93,11 +95,14 @@ async function openConfirmSheet(user: ReturnType<typeof userEvent.setup>) {
 
 function expectNetworkWarning(options?: { edited?: boolean; stillOffline?: boolean }) {
   if (options?.edited) {
+    expect(screen.getByText(PENDING_SALE_EDITED_TITLE)).toBeInTheDocument()
     expect(screen.getByText(PENDING_SALE_EDITED_BODY)).toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_BODY)).not.toBeInTheDocument()
     expect(screen.queryByText(/no se duplicará/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
   } else {
     expect(screen.getByText(PENDING_SALE_BODY)).toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_EDITED_TITLE)).not.toBeInTheDocument()
     const retry = screen.getByRole('button', { name: 'Reintentar' })
     expect(retry).toHaveClass('min-h-12')
   }
@@ -385,8 +390,9 @@ describe('CBF-206 ventas', () => {
     expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
   })
 
-  it('si el formulario cambia se oculta Reintentar y el texto de no se duplicará', async () => {
+  it('editar el formulario pasa al aviso de venta anterior y la hoja avisa sin bloquear', async () => {
     loginCashier()
+    let attempt = 0
     server.use(
       http.post('*/sales', async ({ request }) => {
         saleWrites.push({
@@ -395,7 +401,9 @@ describe('CBF-206 ventas', () => {
           body: await request.json(),
           idempotencyKey: request.headers.get('Idempotency-Key'),
         })
-        return HttpResponse.error()
+        attempt += 1
+        if (attempt === 1) return HttpResponse.error()
+        return HttpResponse.json(saleJson({ id: 'sale-after-edit', sale_number: 55 }), { status: 201 })
       }),
     )
     window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
@@ -405,9 +413,28 @@ describe('CBF-206 ventas', () => {
     await fillHappyPath(user)
     await confirmSale(user)
     expectNetworkWarning()
+    const bar = screen.getByLabelText('Barra fija inferior')
+    expect(within(bar).getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+    expect(within(bar).getByRole('button', { name: 'Confirmar venta' })).toBeInTheDocument()
+
     await user.type(screen.getByLabelText('Artículo'), ' XL')
     expectNetworkWarning({ edited: true })
-    expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeInTheDocument()
+    expect(within(bar).getByRole('link', { name: 'Ver compras del cliente' })).toHaveAttribute(
+      'href',
+      '/clientes/cli-1/historial',
+    )
+    const confirm = screen.getByRole('button', { name: 'Confirmar venta' })
+    await waitFor(() => expect(confirm).toBeEnabled(), { timeout: 3000 })
+    await user.click(confirm)
+    expect(await screen.findByText(PENDING_SALE_SHEET_WARNING)).toBeInTheDocument()
+    const registrar = screen.getByRole('button', { name: 'Registrar venta' })
+    expect(registrar).toBeEnabled()
+    await user.click(registrar)
+    expect(await screen.findByText('Listo, venta #55 registrada.')).toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_EDITED_TITLE)).not.toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_BODY)).not.toBeInTheDocument()
+    expect(screen.queryByText(PENDING_SALE_SHEET_WARNING)).not.toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
   })
 
   it('Reintentar con 200 replay llega a la misma venta y conserva la clave al cerrar la hoja', async () => {

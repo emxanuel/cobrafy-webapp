@@ -53,7 +53,9 @@ import {
 import {
   PENDING_SALE_BODY,
   PENDING_SALE_EDITED_BODY,
+  PENDING_SALE_EDITED_TITLE,
   PENDING_SALE_FAILED,
+  PENDING_SALE_SHEET_WARNING,
   PENDING_SALE_STILL_OFFLINE,
   clearPendingSale,
   readPendingSale,
@@ -491,51 +493,7 @@ function NewSaleForm({
           : 'result'
 
   return (
-    <div className="flex flex-col gap-5 pb-36">
-      {showPendingWarning ? (
-        <div
-          ref={bannerRef}
-          tabIndex={-1}
-          className="bg-bg sticky top-0 z-20 -mx-1 px-1 py-1"
-        >
-          <Alert
-            tone="warning"
-            icon="⚠"
-            action={
-              <div className="flex flex-col gap-2">
-                {canRetryPending ? (
-                  <Button
-                    className="min-h-12 w-full"
-                    disabled={create.isPending}
-                    onClick={retryPending}
-                  >
-                    {create.isPending ? (
-                      <>
-                        <Loader2 className="size-4 animate-spin" aria-hidden />
-                        Confirmando…
-                      </>
-                    ) : (
-                      'Reintentar'
-                    )}
-                  </Button>
-                ) : null}
-                <Link
-                  to={`/clientes/${clientId}/historial`}
-                  className={`${buttonVariants({ variant: 'link' })} min-h-11 w-full`}
-                >
-                  Ver compras del cliente
-                </Link>
-              </div>
-            }
-          >
-            <p className="m-0">{canRetryPending ? PENDING_SALE_BODY : PENDING_SALE_EDITED_BODY}</p>
-            {retryOffline && canRetryPending ? (
-              <p className="m-0 mt-1.5">{PENDING_SALE_STILL_OFFLINE}</p>
-            ) : null}
-          </Alert>
-        </div>
-      ) : null}
-
+    <div className="flex flex-col gap-5 pb-56">
       <div>
         <Link
           to={`/clientes/${clientId}`}
@@ -729,6 +687,46 @@ function NewSaleForm({
         total={ready && plan ? formatMoney(plan.total) : simulating && !simulate.isError ? '…' : '—'}
         hint={!confirmDisabled ? undefined : confirmHint}
       >
+        {showPendingWarning ? (
+          <div ref={bannerRef} tabIndex={-1} className="mb-3">
+            <Alert
+              tone="warning"
+              icon="⚠"
+              title={canRetryPending ? undefined : PENDING_SALE_EDITED_TITLE}
+              action={
+                <div className="flex flex-col gap-2">
+                  {canRetryPending ? (
+                    <Button
+                      className="min-h-12 w-full"
+                      disabled={create.isPending}
+                      onClick={retryPending}
+                    >
+                      {create.isPending ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin" aria-hidden />
+                          Confirmando…
+                        </>
+                      ) : (
+                        'Reintentar'
+                      )}
+                    </Button>
+                  ) : null}
+                  <Link
+                    to={`/clientes/${clientId}/historial`}
+                    className={`${buttonVariants({ variant: 'link' })} min-h-11 w-full`}
+                  >
+                    Ver compras del cliente
+                  </Link>
+                </div>
+              }
+            >
+              <p className="m-0">{canRetryPending ? PENDING_SALE_BODY : PENDING_SALE_EDITED_BODY}</p>
+              {retryOffline && canRetryPending ? (
+                <p className="m-0 mt-1.5">{PENDING_SALE_STILL_OFFLINE}</p>
+              ) : null}
+            </Alert>
+          </div>
+        ) : null}
         <Button
           className="min-h-12 w-full"
           disabled={confirmDisabled}
@@ -745,6 +743,11 @@ function NewSaleForm({
           onClose={closeConfirm}
           closeDisabled={create.isPending}
         >
+          {showPendingWarning && !canRetryPending ? (
+            <Alert tone="warning" icon="⚠">
+              {PENDING_SALE_SHEET_WARNING}
+            </Alert>
+          ) : null}
           <div>
             <ConfirmRow label="Cliente" value={clientName} />
             <ConfirmRow label="Artículo" value={article.trim()} />
