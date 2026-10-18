@@ -367,12 +367,13 @@ function SaleFigures({ sale, dim }: { sale: SaleDetail; dim: boolean }) {
           })}
           value={formatMoney(sale.surcharge)}
         />
-        <FigureRow label="Total a pagar" value={formatMoney(sale.total)} strong />
+        <FigureRow label="Total a pagar" value={formatMoney(sale.total)} strong last />
         <FigureRow
           label="Saldo pendiente"
           value={voided ? `${balance} · anulada` : balance}
           strong={!voided}
           muted={voided}
+          solidTop
         />
         <FigureRow label="Método" value="Recargo fijo" last />
       </div>
@@ -386,18 +387,22 @@ function FigureRow({
   strong = false,
   last = false,
   muted = false,
+  solidTop = false,
 }: {
   label: string
   value: string
   strong?: boolean
   last?: boolean
   muted?: boolean
+  solidTop?: boolean
 }) {
   return (
     <div
       className={cn(
         'flex justify-between py-1.5 text-[15px]',
-        !last && 'border-border border-b border-dashed',
+        solidTop && 'border-border mt-3 border-t pt-2.5',
+        !last &&
+          (solidTop ? 'border-border border-b border-b-dashed' : 'border-border border-b border-dashed'),
       )}
     >
       <span>{label}</span>

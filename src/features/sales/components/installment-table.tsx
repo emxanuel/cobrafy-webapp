@@ -13,17 +13,26 @@ import { formatMoney } from '@/features/shared/lib/format-money'
 
 const PREVIEW_ROWS = 6
 
+function installmentHeaderSummary(sale: SaleDetail): string {
+  const n = sale.installments.length || sale.installments_count
+  const paid = sale.installments.filter((row) => installmentStatusKind(row.status) === 'paid').length
+  if (paid > 0) return `${paid} de ${n} pagadas`
+  const pending = sale.installments.filter(
+    (row) => installmentStatusKind(row.status) === 'pending',
+  ).length
+  const shown = pending > 0 ? pending : n
+  return shown === 1 ? '1 pendiente' : `${shown} pendientes`
+}
+
 export function InstallmentTable({ sale }: { sale: SaleDetail }) {
   const [expanded, setExpanded] = useState(false)
   const voided = isSaleVoided(sale.status)
   const rows = expanded ? sale.installments : sale.installments.slice(0, PREVIEW_ROWS)
-  const kind = sale.installments[0] ? installmentStatusKind(sale.installments[0].status) : 'pending'
-  const summary =
-    voided || kind === 'cancelled' ? (
-      <InstallmentStatusLabel status="cancelled" />
-    ) : (
-      <InstallmentStatusLabel status={sale.installments[0]?.status ?? 'pending'} />
-    )
+  const summary = voided ? (
+    <InstallmentStatusLabel status="cancelled" />
+  ) : (
+    installmentHeaderSummary(sale)
+  )
 
   return (
     <section className="flex flex-col gap-2">

@@ -98,6 +98,22 @@ function paidSale() {
   })
 }
 
+function rowsForStatuses(statuses: string[]) {
+  return statuses.map((status, index) => ({
+    number: index + 1,
+    due_date: '2026-11-17',
+    amount: '1500.00',
+    paid:
+      status === 'paid' || status === 'pagada'
+        ? '1500.00'
+        : status === 'partial' || status === 'parcial'
+          ? '100.00'
+          : '0.00',
+    late_fee: '0.00',
+    status,
+  }))
+}
+
 const VOID_REASON = 'Se registró con el precio equivocado.'
 const VOID_NOT_SAVED_TITLE = 'No se guardó la anulación.'
 const VOID_NOT_SAVED_BODY = 'Se cortó la conexión. Puedes intentar de nuevo.'
@@ -181,6 +197,52 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     expect(await screen.findByRole('heading', { name: 'Venta #128' })).toBeInTheDocument()
     expectFigure('Saldo pendiente', formatMoney('7425.50'))
     expect(screen.queryByText(`${formatMoney('7425.50')} · anulada`)).not.toBeInTheDocument()
+  })
+
+  it('el saldo pendiente se separa con un divisor sólido', async () => {
+    loginOwner()
+    seedSale(clientSaleDetailFixture({ balance: '7425.50' }))
+    window.history.pushState({}, '', '/ventas/sale-128')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Venta #128' })).toBeInTheDocument()
+    const saldo = screen.getByText('Saldo pendiente').closest('div')
+    expect(saldo).toHaveClass('border-t', 'border-border', 'mt-3')
+    expect(saldo).not.toHaveClass('border-dashed')
+    const total = screen.getByText('Total a pagar').closest('div')
+    expect(total).not.toHaveClass('border-b')
+  })
+
+  it('el encabezado de cuotas resume por conteo y el aria-label incluye atrasadas y parciales', async () => {
+    loginOwner()
+    seedSale(
+      clientSaleDetailFixture({
+        installments_count: 12,
+        installments: rowsForStatuses([
+          'paid',
+          'paid',
+          'paid',
+          'overdue',
+          'partial',
+          'pending',
+          'pending',
+          'pending',
+          'pending',
+          'pending',
+          'pending',
+          'pending',
+        ]),
+      }),
+    )
+    window.history.pushState({}, '', '/ventas/sale-128')
+    renderApp()
+    const heading = await screen.findByRole('heading', { name: 'Cuotas' })
+    const header = heading.parentElement
+    expect(header).not.toBeNull()
+    expect(within(header as HTMLElement).getByText('3 de 12 pagadas')).toBeInTheDocument()
+    expect(within(header as HTMLElement).queryByText('Pagada')).not.toBeInTheDocument()
+    expect(
+      screen.getByLabelText('12 cuotas: 3 pagadas, 1 atrasada, 1 parcial, 7 pendientes'),
+    ).toBeInTheDocument()
   })
 
   it('una venta activa sin balance muestra — en saldo pendiente', async () => {
@@ -628,6 +690,18 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     expect(screen.queryByText('Aún no has configurado el crédito.')).not.toBeInTheDocument()
   })
 
+  it('el cajero ve el aviso de crédito sin configurar dirigido a él', async () => {
+    loginCashier()
+    await resetAppQueryClient()
+    seedCreditSettings({ configured: false, hasRow: false, surcharge_percent: '0' })
+    window.history.pushState({}, '', '/negocio')
+    renderApp()
+    expect(
+      await screen.findByText('El crédito aún no está configurado. Pídele al dueño que lo configure.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Aún no has configurado el crédito.')).not.toBeInTheDocument()
+  })
+
   it('el cajero ve el crédito en solo lectura y el cobrador recibe No autorizado', async () => {
     loginCashier()
     seedBusinessRecord({ id: businesses.norte.id, rnc: null, address: null })
@@ -733,5 +807,56 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     renderApp()
     expect(await screen.findByText('Ventas de los clientes que cobras.')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Nueva venta/ })).not.toBeInTheDocument()
+  })
+
+  it('si falla Ver más conserva las ventas cargadas y permite reintentar', async () => {
+    loginOwner()
+    await resetAppQueryClient()
+    let pageTwoCalls = 0
+    server.use(
+      http.get('*/sales', ({ request }) => {
+        const url = new URL(request.url)
+        const page = Number(url.searchParams.get('page') ?? '1')
+        if (page <= 1) {
+          return HttpResponse.json({
+            items: [clientSaleFixture()],
+            total: 2,
+            page: 1,
+            page_size: 1,
+          })
+        }
+        pageTwoCalls += 1
+        if (pageTwoCalls <= 2) {
+          return HttpResponse.json(
+            { detail: [{ field: null, code: 'INTERNAL', message: 'falló la página' }] },
+            { status: 500 },
+          )
+        }
+        return HttpResponse.json({
+          items: [
+            clientSaleFixture({
+              id: 'sale-121',
+              sale_number: 121,
+              item_description: 'Televisor Samsung 50”',
+            }),
+          ],
+          total: 2,
+          page: 2,
+          page_size: 1,
+        })
+      }),
+    )
+    window.history.pushState({}, '', '/ventas')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Ver más' }))
+    expect(
+      await screen.findByText('No pudimos cargar más ventas.', {}, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
+    expect(screen.queryByText('No se pudieron cargar las ventas.')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByText('#121 · Televisor Samsung 50”')).toBeInTheDocument()
   })
 })

@@ -35,6 +35,8 @@ export function SalesListPage() {
   )
   const total = list.data?.pages[0]?.total ?? 0
   const isCollector = role === 'cobrador'
+  const hasItems = items.length > 0
+  const showFullError = list.isError && !list.data
 
   function setStatus(next: SalesStatusFilter) {
     const copy = new URLSearchParams(params)
@@ -65,13 +67,13 @@ export function SalesListPage() {
 
       <FilterChips value={status} onChange={setStatus} />
 
-      {!list.isLoading && !list.isError && items.length > 0 ? (
+      {hasItems ? (
         <p className="m-0 text-sm tabular-nums">
           Mostrando {items.length} de {total} ventas
         </p>
       ) : null}
 
-      {list.isError ? (
+      {showFullError ? (
         <Alert
           icon="✕"
           title="No se pudieron cargar las ventas."
@@ -85,7 +87,7 @@ export function SalesListPage() {
         </Alert>
       ) : null}
 
-      {list.isLoading ? (
+      {list.isLoading && !hasItems ? (
         <div aria-busy="true" className="flex flex-col gap-2">
           <span className="sr-only">Cargando…</span>
           <SaleCardSkeleton />
@@ -93,7 +95,7 @@ export function SalesListPage() {
         </div>
       ) : null}
 
-      {!list.isLoading && !list.isError && items.length === 0 ? (
+      {!list.isLoading && !showFullError && items.length === 0 ? (
         status ? (
           <EmptyState
             title={status === 'active' ? 'No hay ventas activas.' : 'No hay ventas anuladas.'}
@@ -124,7 +126,7 @@ export function SalesListPage() {
         )
       ) : null}
 
-      {!list.isLoading && !list.isError && items.length > 0 ? (
+      {hasItems ? (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {items.map((sale) => (
             <li key={sale.id}>
@@ -143,6 +145,18 @@ export function SalesListPage() {
         >
           {list.isFetchingNextPage ? 'Cargando…' : 'Ver más'}
         </Button>
+      ) : null}
+
+      {list.isFetchNextPageError ? (
+        <Alert
+          icon="✕"
+          title="No pudimos cargar más ventas."
+          action={
+            <Button variant="outline" onClick={() => void list.fetchNextPage()}>
+              Reintentar
+            </Button>
+          }
+        />
       ) : null}
     </div>
   )

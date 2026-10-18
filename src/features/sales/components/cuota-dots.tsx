@@ -1,6 +1,10 @@
 import { cn } from '@/features/shared/lib/cn'
 
-export type DotStatus = 'pending' | 'paid' | 'late' | 'cancelled'
+export type DotStatus = 'pending' | 'paid' | 'late' | 'partial' | 'cancelled'
+
+function statusCountLabel(count: number, one: string, many: string): string {
+  return count === 1 ? `1 ${one}` : `${count} ${many}`
+}
 
 const MAX_DOTS = 12
 
@@ -15,13 +19,22 @@ export function CuotaDots({
 }) {
   const visible = count > MAX_DOTS ? MAX_DOTS : count
   const extra = count > MAX_DOTS ? count - MAX_DOTS : 0
-  const paid = (statuses ?? []).filter((item) => item === 'paid').length
-  const cancelled = (statuses ?? []).filter((item) => item === 'cancelled').length
+  const list = statuses ?? []
+  const paid = list.filter((item) => item === 'paid').length
+  const late = list.filter((item) => item === 'late').length
+  const partial = list.filter((item) => item === 'partial').length
+  const cancelled = list.filter((item) => item === 'cancelled').length
   const allCancelled = count > 0 && cancelled === count
-  const pending = count - paid
+  const pending = count - paid - late - partial - cancelled
+  const parts = [
+    paid ? statusCountLabel(paid, 'pagada', 'pagadas') : null,
+    late ? statusCountLabel(late, 'atrasada', 'atrasadas') : null,
+    partial ? statusCountLabel(partial, 'parcial', 'parciales') : null,
+    pending ? statusCountLabel(pending, 'pendiente', 'pendientes') : null,
+  ].filter(Boolean)
   const label = allCancelled
     ? `${count} cuotas canceladas`
-    : `${count} cuotas: ${paid} pagadas, ${pending} pendientes`
+    : `${count} cuotas: ${parts.join(', ')}`
 
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="img" aria-label={label}>
@@ -34,7 +47,7 @@ export function CuotaDots({
               'inline-block size-3.5 rounded-full border-2',
               status === 'paid' && 'border-success bg-success',
               status === 'late' && 'border-danger bg-danger',
-              status === 'pending' && 'border-heading opacity-55',
+              (status === 'pending' || status === 'partial') && 'border-heading opacity-55',
               status === 'cancelled' && 'cuota-dot-cancelled',
               dim && 'opacity-25',
             )}

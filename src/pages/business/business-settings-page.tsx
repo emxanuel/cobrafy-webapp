@@ -180,7 +180,11 @@ export function BusinessSettingsPage() {
         <Alert
           tone="warning"
           icon="⚠"
-          title="Aún no has configurado el crédito."
+          title={
+            canEdit
+              ? 'Aún no has configurado el crédito.'
+              : 'El crédito aún no está configurado. Pídele al dueño que lo configure.'
+          }
         >
           Mientras tanto, el simulador usa recargo 0 % y no se pueden registrar ventas.
         </Alert>

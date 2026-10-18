@@ -7,6 +7,7 @@ function toDotStatus(status: string): DotStatus {
   const kind = installmentStatusKind(status)
   if (kind === 'paid') return 'paid'
   if (kind === 'overdue') return 'late'
+  if (kind === 'partial') return 'partial'
   if (kind === 'cancelled') return 'cancelled'
   return 'pending'
 }
