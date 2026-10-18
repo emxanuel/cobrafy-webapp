@@ -142,13 +142,6 @@ export function ClientHistoryPage() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-heading m-0 text-lg">Compras</h2>
-        <EmptyState className="py-4 text-left">
-          Aún no hay compras registradas para este cliente.
-        </EmptyState>
-      </section>
-
-      <section className="flex flex-col gap-2">
         <h2 className="text-heading m-0 text-lg">Pagos</h2>
         <EmptyState className="py-4 text-left">
           Aún no hay pagos registrados para este cliente.

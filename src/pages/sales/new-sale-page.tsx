@@ -44,7 +44,12 @@ import {
   simulatorWarningCopy,
   surchargeLabel,
 } from '@/features/sales/lib/copy'
-import { idempotencyForForm, type IdempotencyState } from '@/features/sales/lib/idempotency'
+import {
+  clearIdempotencyKey,
+  idempotencyForForm,
+  writeIdempotencyKey,
+  type IdempotencyState,
+} from '@/features/sales/lib/idempotency'
 import {
   PENDING_SALE_BODY,
   PENDING_SALE_FAILED,
@@ -66,6 +71,7 @@ import { planCuotaCount, planFirstDue, planLastDue } from '@/features/sales/lib/
 import {
   FREQUENCIES,
   type Frequency,
+  type SaleCreateRequest,
   type SaleDetail,
 } from '@/features/sales/services/types'
 import { SaleRegistered } from '@/pages/sales/sale-registered'
@@ -178,11 +184,13 @@ function NewSaleForm({
   const [retryOffline, setRetryOffline] = useState(false)
   const [failedAfterPending, setFailedAfterPending] = useState(false)
   const locked = pending != null
-  const idempotencyRef = useRef<IdempotencyState | null>(
-    storedPending
-      ? { fingerprint: salePayloadFingerprint(storedPending.payload), key: storedPending.key }
-      : null,
-  )
+  const [idempotency, setIdempotency] = useState<IdempotencyState | null>(() => {
+    if (!storedPending) return null
+    const fingerprint = salePayloadFingerprint(storedPending.payload)
+    writeIdempotencyKey(fingerprint, storedPending.key)
+    return { fingerprint, key: storedPending.key }
+  })
+  const idempotencyRef = useRef<IdempotencyState | null>(idempotency)
   const inFlightRef = useRef(false)
   const bannerRef = useRef<HTMLDivElement>(null)
 
@@ -357,6 +365,21 @@ function NewSaleForm({
     }
   }
 
+  function rememberIdempotency(payload: SaleCreateRequest): IdempotencyState {
+    const payloadFingerprint = salePayloadFingerprint(payload)
+    const next = idempotencyForForm(idempotencyRef.current ?? idempotency, payloadFingerprint)
+    idempotencyRef.current = next
+    setIdempotency(next)
+    return next
+  }
+
+  function forgetIdempotency(fingerprint?: string) {
+    const target = fingerprint ?? idempotencyRef.current?.fingerprint
+    if (target) clearIdempotencyKey(target)
+    idempotencyRef.current = null
+    setIdempotency(null)
+  }
+
   function closeConfirm() {
     if (create.isPending) return
     setConfirmOpen(false)
@@ -365,6 +388,7 @@ function NewSaleForm({
 
   function openConfirm() {
     if (confirmDisabled || !plan) return
+    rememberIdempotency(buildSaleCreateBody(snapshot, plan))
     setIdempotencyReused(false)
     setConfirmOpen(true)
   }
@@ -372,7 +396,7 @@ function NewSaleForm({
   function persistPending(attempt: PendingSaleAttempt) {
     writePendingSale(clientId, attempt)
     setPending(attempt)
-    idempotencyRef.current = { fingerprint: salePayloadFingerprint(attempt.payload), key: attempt.key }
+    rememberIdempotency(attempt.payload)
   }
 
   function releasePending() {
@@ -385,6 +409,7 @@ function NewSaleForm({
     inFlightRef.current = false
     setFailedAfterPending(false)
     setRetryOffline(false)
+    forgetIdempotency()
     releasePending()
     setConfirmOpen(false)
     setCreated(sale)
@@ -397,7 +422,7 @@ function NewSaleForm({
     const code = isApiError(error) ? error.code : undefined
     if (code === 'IDEMPOTENCY_KEY_REUSED') {
       releasePending()
-      idempotencyRef.current = null
+      forgetIdempotency(salePayloadFingerprint(attempt.payload))
       setFailedAfterPending(false)
       setIdempotencyReused(true)
       if (!confirmOpen) {
@@ -405,6 +430,7 @@ function NewSaleForm({
       }
       return
     }
+    rememberIdempotency(attempt.payload)
     if (status === 0 || status >= 500) {
       setRetryOffline(pending != null)
       setFailedAfterPending(false)
@@ -414,7 +440,6 @@ function NewSaleForm({
       return
     }
     releasePending()
-    idempotencyRef.current = null
     setFailedAfterPending(true)
     setConfirmOpen(false)
     queueMicrotask(() => bannerRef.current?.focus())
@@ -423,9 +448,7 @@ function NewSaleForm({
   function submitSale() {
     if (locked || confirmDisabled || !plan || !ready || create.isPending || inFlightRef.current) return
     const payload = buildSaleCreateBody(snapshot, plan)
-    const payloadFingerprint = salePayloadFingerprint(payload)
-    const next = idempotencyForForm(idempotencyRef.current, payloadFingerprint)
-    idempotencyRef.current = next
+    const next = rememberIdempotency(payload)
     const attempt = { payload, key: next.key, snapshot }
     setIdempotencyReused(false)
     setFailedAfterPending(false)
