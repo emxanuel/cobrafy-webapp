@@ -673,6 +673,7 @@ describe('CBF-206 ventas', () => {
 
   it('a las 23 h oculta Reintentar y deja Ver compras y Descartar', async () => {
     loginCashier()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     writePendingSale('cli-1', {
       key: 'expired-key',
       payload: {
@@ -699,12 +700,10 @@ describe('CBF-206 ventas', () => {
     renderApp()
     await goToNewSale()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
-    vi.useFakeTimers()
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PENDING_SALE_TTL_MS)
     })
-    vi.useRealTimers()
-    expect(await screen.findByText(PENDING_SALE_EXPIRED_TITLE)).toBeInTheDocument()
+    expect(screen.getByText(PENDING_SALE_EXPIRED_TITLE)).toBeInTheDocument()
     expect(screen.getByText(PENDING_SALE_EXPIRED_BODY)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Ver compras del cliente' })).toHaveClass('min-h-12')
