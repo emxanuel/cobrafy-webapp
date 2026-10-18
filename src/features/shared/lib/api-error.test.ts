@@ -559,6 +559,8 @@ describe('contrato 210-A {field, code, message}', () => {
     ['Field required', 'sí'],
     ['too long', 'sí'],
     ['Invalid input', 'sí'],
+    ['Value must not be negative', 'sí'],
+    ['Extra inputs are not permitted', 'sí'],
   ] as const)(
     'el detalle viejo "%s" %s cae en GENERIC_MESSAGE',
     (message, falls) => {
