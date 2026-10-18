@@ -2,6 +2,7 @@ import type {
   Frequency,
   InstallmentPreview,
   SaleDetail,
+  SaleRead,
   SimulateSaleResponse,
 } from '@/features/sales/services/types'
 import {
@@ -191,6 +192,7 @@ export function saleDetailFromPlan(
     anchor_offset?: number
     seller_membership_id?: string
     warnings?: SaleDetail['warnings']
+    balance?: string
   },
 ): SaleDetail {
   return {
@@ -205,6 +207,7 @@ export function saleDetailFromPlan(
     financed: plan.financed,
     surcharge: plan.surcharge,
     total: plan.total,
+    balance: input.balance ?? plan.total,
     surcharge_kind: 'percent_of_financed',
     surcharge_percent: '20.00',
     surcharge_amount: null,
@@ -229,3 +232,70 @@ export function saleDetailFromPlan(
     warnings: input.warnings ?? [],
   }
 }
+
+/** Hand-written SaleRead fixtures. `balance` is a literal, never computed. */
+export function clientSaleFixture(overrides: Partial<SaleRead> = {}): SaleRead {
+  return {
+    id: 'sale-128',
+    sale_number: 128,
+    client_id: 'cli-1',
+    client: { id: 'cli-1', name: 'Ana Pérez' },
+    seller_membership_id: 'mem-user-cashier-biz-norte',
+    item_description: 'Nevera Mabe 14 pies',
+    price: '15000.00',
+    down_payment: '0.00',
+    financed: '15000.00',
+    surcharge: '3000.00',
+    total: '18000.00',
+    balance: '18000.00',
+    surcharge_kind: 'percent_of_financed',
+    surcharge_percent: '20.00',
+    surcharge_amount: null,
+    interest_method: 'recargo_fijo',
+    frequency: 'mensual',
+    installments_count: 12,
+    anchor_date: '2026-11-17',
+    anchor_offset: 0,
+    first_due_date: '2026-11-17',
+    status: 'activa',
+    voided_at: null,
+    void_reason: null,
+    voided_by: null,
+    created_at: '2026-10-17T16:00:00.000Z',
+    ...overrides,
+  }
+}
+
+export const handwrittenClientSales: SaleRead[] = [
+  clientSaleFixture(),
+  clientSaleFixture({
+    id: 'sale-121',
+    sale_number: 121,
+    item_description: 'Televisor Samsung 50”',
+    price: '9375.00',
+    financed: '9375.00',
+    surcharge: '1875.00',
+    total: '11250.00',
+    balance: '11250.00',
+    frequency: 'quincenal',
+    installments_count: 7,
+    created_at: '2026-10-02T16:00:00.000Z',
+  }),
+  clientSaleFixture({
+    id: 'sale-117',
+    sale_number: 117,
+    item_description: 'Abanico Royal',
+    price: '3000.00',
+    financed: '3000.00',
+    surcharge: '600.00',
+    total: '3600.00',
+    balance: '0.00',
+    frequency: 'semanal',
+    installments_count: 4,
+    status: 'anulada',
+    voided_at: '2026-09-29T16:00:00.000Z',
+    void_reason: 'Error de registro',
+    voided_by: { membership_id: 'mem-owner', name: 'Ana Pérez' },
+    created_at: '2026-09-28T16:00:00.000Z',
+  }),
+]

@@ -37,8 +37,8 @@ describe('historial del cliente', () => {
     expect(screen.getByText(/mora reiterada/)).toBeInTheDocument()
     expect(screen.getByText(/Alguien del negocio/)).toBeInTheDocument()
     expect(
-      screen.queryByText('Aún no hay compras registradas para este cliente.'),
-    ).not.toBeInTheDocument()
+      await screen.findByText('Aún no hay compras registradas para este cliente.'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Aún no hay pagos registrados para este cliente.')).toBeInTheDocument()
     const more = await screen.findByRole('button', { name: 'Ver más' })
     expect(more).toBeEnabled()
@@ -167,8 +167,8 @@ describe('historial del cliente', () => {
     renderApp()
     expect(await screen.findByText('Aún no hay movimientos en esta ficha.')).toBeInTheDocument()
     expect(
-      screen.queryByText('Aún no hay compras registradas para este cliente.'),
-    ).not.toBeInTheDocument()
+      screen.getByText('Aún no hay compras registradas para este cliente.'),
+    ).toBeInTheDocument()
   })
 
   it('muestra error y permite reintentar', async () => {

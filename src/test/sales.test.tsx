@@ -129,6 +129,7 @@ function saleJson(overrides: Record<string, unknown> = {}) {
     financed: '18500.00',
     surcharge: '3700.00',
     total: '22200.00',
+    balance: '22200.00',
     surcharge_kind: 'percent_of_financed',
     surcharge_percent: '20.00',
     surcharge_amount: null,

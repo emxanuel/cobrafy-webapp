@@ -39,6 +39,7 @@ describe('normalizeSimulation / normalizeSaleDetail vs fa39236', () => {
       financed: '999.99',
       surcharge: '0.00',
       total: '999.99',
+      balance: '999.99',
       surcharge_kind: 'percent_of_financed',
       surcharge_percent: '0.00',
       surcharge_amount: null,
@@ -67,11 +68,27 @@ describe('normalizeSimulation / normalizeSaleDetail vs fa39236', () => {
       warnings: [],
     })
     expect(sale.financed).toBe('999.99')
+    expect(sale.balance).toBe('999.99')
     expect(sale.installments_count).toBe(1)
     expect(sale.void_reason).toBeNull()
     expect(sale.voided_by).toEqual({ membership_id: 'mem-owner', name: 'Olivia Dueña' })
     expect(sale.installments[0]?.paid).toBe('0.00')
     expect(sale).not.toHaveProperty('financed_balance')
     expect(sale).not.toHaveProperty('voided_reason')
+  })
+
+  it('SaleRead.balance es string y cae a 0.00 si falta', () => {
+    const sale = normalizeSaleDetail({
+      id: 'sale-2',
+      sale_number: 2,
+      client_id: 'cli-1',
+      client: { id: 'cli-1', name: 'Ana Pérez' },
+      item_description: 'Radio',
+      total: '100.00',
+      status: 'activa',
+    })
+    expect(sale.balance).toBe('0.00')
+    expect(typeof sale.balance).toBe('string')
+    expect(sale.total).toBe('100.00')
   })
 })

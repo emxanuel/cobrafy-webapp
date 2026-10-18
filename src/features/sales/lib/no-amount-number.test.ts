@@ -11,6 +11,16 @@ const sources = {
     query: '?raw',
     import: 'default',
   }),
+  ...import.meta.glob('@/pages/clients/**/*.{ts,tsx}', {
+    eager: true,
+    query: '?raw',
+    import: 'default',
+  }),
+  ...import.meta.glob('@/features/clients/**/*.{ts,tsx}', {
+    eager: true,
+    query: '?raw',
+    import: 'default',
+  }),
   ...import.meta.glob('@/features/shared/lib/**/*.{ts,tsx}', {
     eager: true,
     query: '?raw',

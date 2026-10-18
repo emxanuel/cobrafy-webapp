@@ -6,4 +6,5 @@ export const clientKeys = {
     [...clientKeys.all, 'detail', businessId, id] as const,
   history: (businessId: string | null, id: string) =>
     [...clientKeys.all, 'history', businessId, id] as const,
+  sales: (id: string) => [...clientKeys.all, id, 'sales'] as const,
 }

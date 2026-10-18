@@ -13,6 +13,8 @@ import {
   useClientHistory,
   useLoadMoreHistory,
 } from '@/features/clients/hooks/use-clients-queries'
+import { ClientPurchases } from '@/features/sales/components/client-purchases'
+import { useClientSales } from '@/features/sales/hooks/use-sales-queries'
 import type { HistoryEvent, HistoryEventType } from '@/features/clients/services/types'
 import { useMembersQuery } from '@/features/members/hooks/use-members-queries'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -42,6 +44,7 @@ export function ClientHistoryPage() {
   const { clientId = '' } = useParams()
   const client = useClient(clientId)
   const history = useClientHistory(clientId)
+  const sales = useClientSales(clientId)
   const more = useLoadMoreHistory(clientId)
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
@@ -77,7 +80,8 @@ export function ClientHistoryPage() {
 
   const notFound =
     (isApiError(client.error) && client.error.status === 404) ||
-    (isApiError(history.error) && history.error.status === 404)
+    (isApiError(history.error) && history.error.status === 404) ||
+    (isApiError(sales.error) && sales.error.status === 404)
 
   if (notFound) {
     return (
@@ -140,6 +144,12 @@ export function ClientHistoryPage() {
           </Button>
         ) : null}
       </section>
+
+      <ClientPurchases
+        clientId={clientId}
+        role={role}
+        blocked={Boolean(client.data && (client.data.is_blocked || client.data.status === 'blocked'))}
+      />
 
       <section className="flex flex-col gap-2">
         <h2 className="text-heading m-0 text-lg">Pagos</h2>

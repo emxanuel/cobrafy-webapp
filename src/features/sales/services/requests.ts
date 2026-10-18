@@ -140,6 +140,7 @@ export function normalizeSale(data: unknown): SaleRead {
     financed: asString(row.financed, '0.00'),
     surcharge: asString(row.surcharge, '0.00'),
     total: asString(row.total, '0.00'),
+    balance: asString(row.balance, '0.00'),
     surcharge_kind: asSurchargeKind(row.surcharge_kind),
     surcharge_percent: asNullableString(row.surcharge_percent),
     surcharge_amount: asNullableString(row.surcharge_amount),
@@ -200,6 +201,16 @@ export async function listSales(params?: {
     ...data,
     items: (data.items ?? []).map(normalizeSale),
   }
+}
+
+export async function listClientSales(clientId: string): Promise<SaleRead[]> {
+  const { data } = await api.get<unknown>(`/clients/${clientId}/sales`)
+  const items = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { items?: unknown }).items)
+      ? ((data as { items: unknown[] }).items)
+      : []
+  return items.map(normalizeSale)
 }
 
 function filenameFromDisposition(header: string): string | null {

@@ -22,6 +22,7 @@ import {
   parseContactsSaveNotice,
 } from '@/features/clients/lib/failed-contacts-notice'
 import { blockSchema, type BlockFormValues } from '@/features/clients/schemas'
+import { ClientPurchases } from '@/features/sales/components/client-purchases'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { LoadingState } from '@/features/shared/components/ui/loading-state'
 import { Button, buttonVariants } from '@/features/shared/components/ui/button'
@@ -131,6 +132,8 @@ export function ClientDetailPage() {
       {forbiddenUnblock ? (
         <Alert>No tienes permiso para desbloquear.</Alert>
       ) : null}
+
+      <ClientPurchases clientId={client.id} role={role} blocked={blocked} preview />
 
       <dl className="m-0 grid gap-3 sm:grid-cols-2">
         <div>

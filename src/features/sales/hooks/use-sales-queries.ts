@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { useSwitchingFromToken } from '@/features/auth/lib/switching-token'
 import { useBusinessStore } from '@/features/business/stores/business-store'
 import { clientKeys } from '@/features/clients/query-keys'
 import { creditSettingsKeys, saleKeys } from '@/features/sales/query-keys'
@@ -7,6 +8,7 @@ import {
   createSale,
   downloadSaleContract,
   getCreditSettings,
+  listClientSales,
   simulateSale,
 } from '@/features/sales/services/requests'
 import type { SaleCreateRequest, SimulateSaleRequest } from '@/features/sales/services/types'
@@ -39,6 +41,16 @@ export function useSimulateSale(clientId: string, payload: SimulateSaleRequest |
   })
 }
 
+export function useClientSales(clientId: string | undefined) {
+  const businessId = useBusinessStore((s) => s.activeBusinessId)
+  const switchingFrom = useSwitchingFromToken()
+  return useQuery({
+    queryKey: clientKeys.sales(clientId ?? ''),
+    queryFn: () => listClientSales(clientId!),
+    enabled: Boolean(clientId) && Boolean(businessId) && !switchingFrom,
+  })
+}
+
 export function useCreateSaleMutation(clientId: string) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -52,7 +64,7 @@ export function useCreateSaleMutation(clientId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: saleKeys.all })
       void queryClient.invalidateQueries({ queryKey: clientKeys.history(null, clientId) })
-      void queryClient.invalidateQueries({ queryKey: [...clientKeys.all, 'sales'] })
+      void queryClient.invalidateQueries({ queryKey: clientKeys.sales(clientId) })
     },
   })
 }

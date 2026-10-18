@@ -51,6 +51,27 @@ export function seedClient(client: ClientDetail) {
   clients.set(client.id, client)
 }
 
+export function seedSale(sale: Record<string, unknown>) {
+  sales.set(String(sale.id), sale)
+}
+
+function saleReadFromStored(sale: Record<string, unknown>) {
+  const read = { ...sale }
+  delete read.installments
+  delete read.contract
+  delete read.warnings
+  return read
+}
+
+function compareSalesNewestFirst(left: Record<string, unknown>, right: Record<string, unknown>) {
+  const leftCreated = String(left.created_at ?? '')
+  const rightCreated = String(right.created_at ?? '')
+  if (leftCreated !== rightCreated) return leftCreated < rightCreated ? 1 : -1
+  const leftNumber = typeof left.sale_number === 'number' ? left.sale_number : 0
+  const rightNumber = typeof right.sale_number === 'number' ? right.sale_number : 0
+  return rightNumber - leftNumber
+}
+
 const MAX_PIN_ATTEMPTS = 5
 const PIN_LOCKED = 'demasiados intentos; entra con contraseña'
 
@@ -533,6 +554,25 @@ export const handlers = [
       is_blocked: found?.is_blocked ?? false,
       blocked_reason: found?.blocked_reason ?? null,
       client_id: found?.id ?? (duplicate ? 'cli-dup' : null),
+    })
+  }),
+
+  http.get('*/clients/:id/sales', ({ request, params }) => {
+    const denied = requireAuth(request)
+    if (denied) return denied
+    const id = String(params.id)
+    if (id === 'cli-missing') {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
+    }
+    const items = [...sales.values()]
+      .filter((sale) => sale.client_id === id)
+      .sort(compareSalesNewestFirst)
+      .map(saleReadFromStored)
+    return HttpResponse.json({
+      items,
+      total: items.length,
+      page: 1,
+      page_size: items.length || 50,
     })
   }),
 
@@ -1153,13 +1193,7 @@ export const handlers = [
   http.get('*/sales', ({ request }) => {
     const denied = requireAuth(request)
     if (denied) return denied
-    const items = [...sales.values()].map((sale) => {
-      const read = { ...sale }
-      delete read.installments
-      delete read.contract
-      delete read.warnings
-      return read
-    })
+    const items = [...sales.values()].map(saleReadFromStored)
     return HttpResponse.json({
       items,
       total: items.length,
