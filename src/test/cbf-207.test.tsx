@@ -142,6 +142,25 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     expect(screen.queryByText(`${formatMoney('7425.50')} · anulada`)).not.toBeInTheDocument()
   })
 
+  it('una venta activa sin balance muestra — en saldo pendiente', async () => {
+    loginOwner()
+    seedSale(clientSaleDetailFixture({ balance: null }))
+    window.history.pushState({}, '', '/ventas/sale-128')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Venta #128' })).toBeInTheDocument()
+    expectFigure('Saldo pendiente', '—')
+  })
+
+  it('una venta anulada sin balance muestra — · anulada', async () => {
+    loginOwner()
+    seedSale(voidedSaleDetailFixture({ down_payment: '500.00', balance: null }))
+    window.history.pushState({}, '', '/ventas/sale-117')
+    renderApp()
+    expect(await screen.findByText('⊘ Venta anulada')).toBeInTheDocument()
+    expectFigure('Saldo pendiente', '— · anulada')
+    expect(screen.queryByText(`${formatMoney('0.00')} · anulada`)).not.toBeInTheDocument()
+  })
+
   it('el cajero no ve Anular y el cobrador no ve Contrato', async () => {
     loginCashier()
     seedSale(clientSaleDetailFixture())

@@ -216,12 +216,12 @@ export async function createSale(
   }
 }
 
-/** CreditSettingsWrite only. Never forward GET `configured` — extra keys 422. */
 function trimCreditAmount(value: string | null): string | null {
   if (value == null) return null
   return value.trim()
 }
 
+/** CreditSettingsWrite only. Never forward GET `configured` — extra keys 422. */
 export function toCreditSettingsWrite(
   payload: CreditSettings | CreditSettingsWrite,
 ): CreditSettingsWrite {

@@ -338,7 +338,7 @@ export function SaleDetailPage() {
 
 function SaleFigures({ sale, dim }: { sale: SaleDetail; dim: boolean }) {
   const voided = isSaleVoided(sale.status)
-  const balance = formatMoney(sale.balance ?? '0.00')
+  const balance = sale.balance == null ? '—' : formatMoney(sale.balance)
   return (
     <section
       className={cn(
