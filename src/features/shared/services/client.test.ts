@@ -116,10 +116,11 @@ describe('api timeouts', () => {
     vi.useFakeTimers()
     try {
       const pending = api.get('/clients')
-      await vi.advanceTimersByTimeAsync(GET_TIMEOUT_MS)
-      await expect(pending).rejects.toSatisfy(
+      const rejected = expect(pending).rejects.toSatisfy(
         (error) => isApiError(error) && error.status === 0,
       )
+      await vi.advanceTimersByTimeAsync(GET_TIMEOUT_MS)
+      await rejected
     } finally {
       vi.useRealTimers()
     }

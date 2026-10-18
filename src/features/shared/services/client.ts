@@ -67,9 +67,10 @@ function attachGetTimeout(config: StampedConfig) {
   if (config.timeout != null && config.timeout !== 0) return
   config.timeout = GET_TIMEOUT_MS
   const controller = new AbortController()
-  if (config.signal) {
-    if (config.signal.aborted) controller.abort()
-    else config.signal.addEventListener('abort', () => controller.abort())
+  const existing = config.signal
+  if (existing?.aborted) controller.abort()
+  else if (typeof existing?.addEventListener === 'function') {
+    existing.addEventListener('abort', () => controller.abort())
   }
   config.cobrafyTimeoutId = window.setTimeout(() => controller.abort(), GET_TIMEOUT_MS)
   config.signal = controller.signal
