@@ -144,6 +144,8 @@ describe('CBF-210-A UI', () => {
 
     await user.click(within(card as HTMLElement).getByText('Ver cambios'))
     expect(within(card as HTMLElement).getByText('Método de cálculo')).toBeInTheDocument()
+    expect(within(card as HTMLElement).getAllByText('Recargo fijo').length).toBeGreaterThan(0)
+    expect(within(card as HTMLElement).queryByText('recargo_fijo')).not.toBeInTheDocument()
     expect(within(card as HTMLElement).getByText('Recargo (%)')).toBeInTheDocument()
     expect(within(card as HTMLElement).queryByText(/inter[eé]s/i)).not.toBeInTheDocument()
     expect(document.body.textContent ?? '').not.toMatch(/inter[eé]s/i)

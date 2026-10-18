@@ -49,6 +49,15 @@ const STATUS_LABELS: Record<string, string> = {
   blocked: 'Bloqueado',
 }
 
+const CREDIT_ENUM_LABELS: Record<string, string> = {
+  recargo_fijo: 'Recargo fijo',
+  percent_of_financed: 'Porcentaje',
+  fixed_amount: 'Monto fijo',
+  semanal: 'Semanal',
+  quincenal: 'Quincenal',
+  mensual: 'Mensual',
+}
+
 export function entityBadgeLabel(entity: string): string {
   return ENTITY_BADGE[entity] ?? entity
 }
@@ -133,8 +142,14 @@ export function formatAuditValue(
   }
   if (field === 'doc_type' && value === 'cedula') return 'Cédula'
   if (field === 'doc_type' && value === 'pasaporte') return 'Pasaporte'
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => formatAuditValue(field, item, namesById))
+      .join(', ')
+  }
   if (typeof value === 'boolean') return value ? 'Sí' : 'No'
-  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  if (typeof value === 'string') return CREDIT_ENUM_LABELS[value] ?? value
+  if (typeof value === 'number') return String(value)
   return JSON.stringify(value)
 }
 

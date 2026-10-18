@@ -5,6 +5,7 @@ import {
   ENTITY_BADGE,
   ENTITY_OPTIONS,
   fieldLabel,
+  formatAuditValue,
 } from './labels'
 import type { AuditRead } from '@/features/audit/services/types'
 
@@ -65,5 +66,17 @@ describe('auditActionTitle', () => {
       auditActionTitle(event({ action: 'update', entity: 'credit_settings' })),
     ].join(' ')
     expect(visible.toLowerCase()).not.toMatch(/inter[eé]s/)
+  })
+
+  it('mapea los enums de crédito y deja el valor crudo si no lo conoce', () => {
+    const names = new Map<string, string>()
+    expect(formatAuditValue('interest_method', 'recargo_fijo', names)).toBe('Recargo fijo')
+    expect(formatAuditValue('surcharge_kind', 'percent_of_financed', names)).toBe('Porcentaje')
+    expect(formatAuditValue('surcharge_kind', 'fixed_amount', names)).toBe('Monto fijo')
+    expect(formatAuditValue('allowed_frequencies', ['semanal', 'quincenal', 'mensual'], names)).toBe(
+      'Semanal, Quincenal, Mensual',
+    )
+    expect(formatAuditValue('interest_method', 'otro_metodo', names)).toBe('otro_metodo')
+    expect(formatAuditValue('surcharge_kind', 'desconocido', names)).toBe('desconocido')
   })
 })

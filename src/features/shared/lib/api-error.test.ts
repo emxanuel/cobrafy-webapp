@@ -309,6 +309,33 @@ describe('toApiError', () => {
   })
 })
 
+const BACKEND_A_SPANISH_MESSAGES = [
+  'Campo obligatorio',
+  'Campos adicionales no permitidos',
+  'Debe ser texto',
+  'Debe tener al menos 1 caracteres',
+  'Debe tener como máximo 500 caracteres',
+  'Debe ser un número entero',
+  'Debe ser verdadero o falso',
+  'Identificador inválido',
+  'Valor no permitido',
+  'Fecha inválida (usa AAAA-MM-DD)',
+  'Fecha y hora inválidas',
+  'Debe ser mayor o igual a 1',
+  'Debe ser menor o igual a 10',
+  'Debe ser mayor que 0',
+  'Debe ser menor que 100',
+  'Debe ser una lista',
+  'Debe tener al menos 1 elementos',
+  'Debe tener como máximo 50 elementos',
+  'El cuerpo debe ser un objeto',
+  'El cuerpo no es un JSON válido',
+  'Correo inválido',
+  'Dato inválido',
+  'Debe ser un número',
+  'Monto inválido',
+] as const
+
 describe('contrato 210-A {field, code, message}', () => {
   it('un 422 con varios items llena fieldErrors y el mensaje es el del primero', () => {
     const error = toApiError(
@@ -488,4 +515,36 @@ describe('contrato 210-A {field, code, message}', () => {
     expect(error.fieldErrors.down_payment).toBe('La inicial es inválida')
     expect(error.fieldErrors.price).toBeUndefined()
   })
+
+  it('Campos adicionales no permitidos va al campo y no al genérico', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            field: 'status',
+            code: 'extra_forbidden',
+            message: 'Campos adicionales no permitidos',
+          },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.status).toBe('Campos adicionales no permitidos')
+    expect(error.message).toBe('Campos adicionales no permitidos')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+    expect(error.code).toBe('extra_forbidden')
+  })
+
+  it.each(BACKEND_A_SPANISH_MESSAGES)(
+    'el mensaje en español %s no cae en GENERIC_MESSAGE',
+    (message) => {
+      const error = toApiError(
+        axiosError(422, {
+          detail: [{ field: 'status', code: 'value_error', message }],
+        }),
+      )
+      expect(error.message).toBe(message)
+      expect(error.message).not.toBe(GENERIC_MESSAGE)
+      expect(error.fieldErrors.status).toBe(message)
+    },
+  )
 })

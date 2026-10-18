@@ -1402,16 +1402,11 @@ describe('CBF-206 ventas', () => {
     expect(screen.queryByText('Espera a que termine el cálculo.')).not.toBeInTheDocument()
   })
 
-  it('un 409 de texto plano y un código desconocido no rompen la pantalla', async () => {
+  it('un 409 de texto plano (forma vieja) no rompe la pantalla', async () => {
     loginCashier()
     server.use(
       http.post('*/sales/simulate', () =>
-        HttpResponse.json(
-          {
-            detail: [{ field: null, code: 'value_error', message: 'conflicto de crédito' }],
-          },
-          { status: 409 },
-        ),
+        HttpResponse.json({ detail: 'conflicto de crédito' }, { status: 409 }),
       ),
     )
     window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
@@ -1424,7 +1419,10 @@ describe('CBF-206 ventas', () => {
       { timeout: 4000 },
     )
     expect(screen.queryByText(GENERIC_SALE_ERROR)).not.toBeInTheDocument()
+  })
 
+  it('un 409 con código desconocido en la forma nueva no rompe la pantalla', async () => {
+    loginCashier()
     server.use(
       http.post('*/sales/simulate', () =>
         HttpResponse.json(
@@ -1433,8 +1431,11 @@ describe('CBF-206 ventas', () => {
         ),
       ),
     )
-    await user.clear(screen.getByLabelText('Precio'))
-    await user.type(screen.getByLabelText('Precio'), '19000.00')
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
     expect(await screen.findByText(GENERIC_SALE_ERROR)).toBeInTheDocument()
     expect(screen.queryByText('debug')).not.toBeInTheDocument()
   })
