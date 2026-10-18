@@ -51,8 +51,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 const CREDIT_ENUM_LABELS: Record<string, string> = {
   recargo_fijo: 'Recargo fijo',
-  percent_of_financed: 'Porcentaje',
-  fixed_amount: 'Monto fijo',
+  percent_of_financed: 'Porcentaje del financiado',
+  fixed_amount: 'Monto fijo (RD$)',
   semanal: 'Semanal',
   quincenal: 'Quincenal',
   mensual: 'Mensual',

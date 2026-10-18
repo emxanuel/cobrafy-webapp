@@ -71,8 +71,10 @@ describe('auditActionTitle', () => {
   it('mapea los enums de crédito y deja el valor crudo si no lo conoce', () => {
     const names = new Map<string, string>()
     expect(formatAuditValue('interest_method', 'recargo_fijo', names)).toBe('Recargo fijo')
-    expect(formatAuditValue('surcharge_kind', 'percent_of_financed', names)).toBe('Porcentaje')
-    expect(formatAuditValue('surcharge_kind', 'fixed_amount', names)).toBe('Monto fijo')
+    expect(formatAuditValue('surcharge_kind', 'percent_of_financed', names)).toBe(
+      'Porcentaje del financiado',
+    )
+    expect(formatAuditValue('surcharge_kind', 'fixed_amount', names)).toBe('Monto fijo (RD$)')
     expect(formatAuditValue('allowed_frequencies', ['semanal', 'quincenal', 'mensual'], names)).toBe(
       'Semanal, Quincenal, Mensual',
     )
