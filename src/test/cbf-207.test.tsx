@@ -10,6 +10,7 @@ import {
   createSale,
   downloadSaleContract,
   getCreditSettings,
+  buildCreditSettingsWrite,
   putCreditSettings,
   toCreditSettingsWrite,
 } from '@/features/sales/services/requests'
@@ -102,6 +103,12 @@ async function openVoidSheet(user: ReturnType<typeof userEvent.setup>) {
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
 }
 
+function expectFigure(label: string, value: string) {
+  const row = screen.getByText(label).closest('div')
+  expect(row).not.toBeNull()
+  expect(within(row as HTMLElement).getByText(value)).toBeInTheDocument()
+}
+
 describe('CBF-207 detalle, contrato, anulación y crédito', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -110,7 +117,7 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
 
   it('una venta anulada muestra motivo, quién, fecha, Cancelada en cada cuota y el balance 0.00', async () => {
     loginOwner()
-    seedSale(voidedSaleDetailFixture())
+    seedSale(voidedSaleDetailFixture({ down_payment: '500.00' }))
     window.history.pushState({}, '', '/ventas/sale-117')
     renderApp()
     expect(await screen.findByText('⊘ Venta anulada')).toBeInTheDocument()
@@ -118,8 +125,21 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     expect(screen.getByText(/Anulada por Ana Pérez/)).toBeInTheDocument()
     expect(screen.getByLabelText('4 cuotas canceladas')).toBeInTheDocument()
     expect(screen.getAllByText('Cancelada')).toHaveLength(5)
-    expect(screen.getAllByText(formatMoney('0.00')).length).toBeGreaterThan(0)
+    expectFigure('Saldo pendiente', `${formatMoney('0.00')} · anulada`)
+    const banner = screen.getByText('⊘ Venta anulada').closest('section')
+    expect(banner).not.toBeNull()
+    expect(within(banner as HTMLElement).queryByText('Saldo pendiente')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Anular venta' })).not.toBeInTheDocument()
+  })
+
+  it('una venta activa muestra el saldo pendiente que manda el servidor', async () => {
+    loginOwner()
+    seedSale(clientSaleDetailFixture({ balance: '7425.50' }))
+    window.history.pushState({}, '', '/ventas/sale-128')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Venta #128' })).toBeInTheDocument()
+    expectFigure('Saldo pendiente', formatMoney('7425.50'))
+    expect(screen.queryByText(`${formatMoney('7425.50')} · anulada`)).not.toBeInTheDocument()
   })
 
   it('el cajero no ve Anular y el cobrador no ve Contrato', async () => {
@@ -208,6 +228,31 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     expect(body).not.toHaveProperty('configured')
   })
 
+  it('el PUT de crédito recorta espacios de porcentaje y monto', async () => {
+    loginOwner()
+    const percent = buildCreditSettingsWrite({
+      surcharge_kind: 'percent_of_financed',
+      surcharge_percent: ' 12.5',
+      surcharge_amount: ' 80.00',
+      allowed_frequencies: ['mensual'],
+      max_installments: 12,
+      min_down_payment_percent: '0',
+    })
+    expect(percent.surcharge_percent).toBe('12.5')
+    const amount = buildCreditSettingsWrite({
+      surcharge_kind: 'fixed_amount',
+      surcharge_percent: ' 12.5',
+      surcharge_amount: ' 80.00',
+      allowed_frequencies: ['mensual'],
+      max_installments: 12,
+      min_down_payment_percent: '0',
+    })
+    expect(amount.surcharge_amount).toBe('80.00')
+    await putCreditSettings(businesses.norte.id, percent)
+    const body = creditSettingsWrites.at(-1)?.body as Record<string, unknown>
+    expect(body.surcharge_percent).toBe('12.5')
+  })
+
   it('el PUT de crédito no manda configured aunque el GET lo traiga', async () => {
     loginOwner()
     const settings = await getCreditSettings(businesses.norte.id)
@@ -240,7 +285,7 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     ).toBeInTheDocument()
   })
 
-  it('un 409 SALE_ALREADY_VOIDED se toma como éxito', async () => {
+  it('un 409 SALE_ALREADY_VOIDED cierra, refresca y muestra el aviso muted de Design', async () => {
     loginOwner()
     seedSale(clientSaleDetailFixture())
     const voided = voidedSaleDetailFixture({
@@ -274,7 +319,9 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
       'Se registró con el precio equivocado.',
     )
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Anular venta' }))
-    expect(await screen.findByText('Venta #128 anulada.')).toBeInTheDocument()
+    expect(await screen.findByText('Esta venta ya estaba anulada.')).toBeInTheDocument()
+    expect(screen.getByText('Actualizamos la pantalla con los datos de la anulación.')).toBeInTheDocument()
+    expect(screen.queryByText('Venta #128 anulada.')).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByText('⊘ Venta anulada')).toBeInTheDocument()
   })
@@ -313,6 +360,7 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     })
     vi.useRealTimers()
     expect(await screen.findByText('Venta #128 anulada.')).toBeInTheDocument()
+    expect(screen.queryByText(UNCONFIRMED_MUTATION_MESSAGE)).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(voidCalls).toBe(1)
   })
@@ -349,6 +397,7 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     })
     vi.useRealTimers()
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(await screen.findByText(UNCONFIRMED_MUTATION_MESSAGE)).toBeInTheDocument()
     expect(screen.getByLabelText('Motivo de la anulación')).toHaveValue(
       'Se registró con el precio equivocado.',
     )
@@ -366,6 +415,56 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     await user.click(retry)
     expect(await screen.findByText('Venta #128 anulada.')).toBeInTheDocument()
     expect(voidCalls).toBe(2)
+  })
+
+  it('un timeout al anular cuyo refresco falla deja la hoja con el aviso y permite reintentar', async () => {
+    loginOwner()
+    seedSale(clientSaleDetailFixture())
+    let voidCalls = 0
+    server.use(
+      http.post('*/sales/:id/void', async () => {
+        voidCalls += 1
+        await delay('infinite')
+        return HttpResponse.json(clientSaleDetailFixture())
+      }),
+      http.get('*/sales/:id', () => {
+        if (voidCalls > 0) {
+          return HttpResponse.json(
+            { detail: [{ field: null, code: 'FORBIDDEN', message: 'falló el refresco' }] },
+            { status: 403 },
+          )
+        }
+        return HttpResponse.json(clientSaleDetailFixture())
+      }),
+    )
+    window.history.pushState({}, '', '/ventas/sale-128')
+    const user = userEvent.setup()
+    renderApp()
+    await openVoidSheet(user)
+    await user.type(
+      screen.getByLabelText('Motivo de la anulación'),
+      'Se registró con el precio equivocado.',
+    )
+    vi.useFakeTimers()
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Anular venta' }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MUTATION_TIMEOUT_MS)
+    })
+    vi.useRealTimers()
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(await screen.findByText(UNCONFIRMED_MUTATION_MESSAGE)).toBeInTheDocument()
+    expect(screen.getByLabelText('Motivo de la anulación')).toHaveValue(
+      'Se registró con el precio equivocado.',
+    )
+    await waitFor(
+      () => {
+        expect(
+          within(screen.getByRole('dialog')).getByRole('button', { name: 'Anular venta' }),
+        ).toBeEnabled()
+      },
+      { timeout: 4000 },
+    )
+    expect(voidCalls).toBe(1)
   })
 
   it('un timeout al crear cliente muestra el aviso y no reintenta', async () => {

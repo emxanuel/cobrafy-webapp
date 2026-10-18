@@ -49,6 +49,7 @@ export function usePutCreditSettingsMutation() {
       putCreditSettings(businessId!, payload),
     onSuccess: (data) => {
       queryClient.setQueryData(creditSettingsKeys.detail(businessId), data)
+      void queryClient.invalidateQueries({ queryKey: [...saleKeys.all, 'simulate'] })
     },
   })
 }

@@ -217,14 +217,19 @@ export async function createSale(
 }
 
 /** CreditSettingsWrite only. Never forward GET `configured` — extra keys 422. */
+function trimCreditAmount(value: string | null): string | null {
+  if (value == null) return null
+  return value.trim()
+}
+
 export function toCreditSettingsWrite(
   payload: CreditSettings | CreditSettingsWrite,
 ): CreditSettingsWrite {
   return {
     interest_method: payload.interest_method,
     surcharge_kind: payload.surcharge_kind,
-    surcharge_percent: payload.surcharge_percent,
-    surcharge_amount: payload.surcharge_amount,
+    surcharge_percent: trimCreditAmount(payload.surcharge_percent),
+    surcharge_amount: trimCreditAmount(payload.surcharge_amount),
     allowed_frequencies: payload.allowed_frequencies,
     max_installments: payload.max_installments,
     min_down_payment_percent: payload.min_down_payment_percent,

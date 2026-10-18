@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { BottomSheet } from '@/features/sales/components/bottom-sheet'
 import { VOID_NETWORK_BODY, VOID_NETWORK_TITLE } from '@/features/sales/lib/copy'
+import { UNCONFIRMED_MUTATION_MESSAGE } from '@/features/shared/services/client'
 import {
   VOID_REASON_MAX,
   isVoidReasonValid,
@@ -21,6 +22,7 @@ export function VoidSaleSheet({
   pending,
   submitting,
   networkError,
+  unconfirmed,
   fieldError,
   onSubmit,
   onClose,
@@ -32,6 +34,7 @@ export function VoidSaleSheet({
   pending: boolean
   submitting: boolean
   networkError: boolean
+  unconfirmed: boolean
   fieldError: string | null
   onSubmit: () => void
   onClose: () => void
@@ -61,7 +64,9 @@ export function VoidSaleSheet({
         Las {installmentsCount} cuotas quedan canceladas y la venta deja de contar en la cartera.
       </Alert>
 
-      {networkError ? (
+      {unconfirmed ? (
+        <Alert tone="warning" icon="⚠" title={UNCONFIRMED_MUTATION_MESSAGE} />
+      ) : networkError ? (
         <Alert tone="danger" icon="✕" title={VOID_NETWORK_TITLE}>
           {VOID_NETWORK_BODY}
         </Alert>

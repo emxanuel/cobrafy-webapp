@@ -62,6 +62,7 @@ export function SaleDetailPage() {
   const [reason, setReason] = useState('')
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [networkError, setNetworkError] = useState(false)
+  const [unconfirmed, setUnconfirmed] = useState(false)
   const [voidForbidden, setVoidForbidden] = useState(false)
   const [voidBusy, setVoidBusy] = useState(false)
   const businessId = activeBusinessId
@@ -83,7 +84,7 @@ export function SaleDetailPage() {
     )
   }
 
-  if (saleQuery.isError) {
+  if (saleQuery.isError && !sale) {
     const status = isApiError(saleQuery.error) ? saleQuery.error.status : 0
     if (status === 404) {
       return (
@@ -121,6 +122,7 @@ export function SaleDetailPage() {
   function closeSheet() {
     setSheetOpen(false)
     setNetworkError(false)
+    setUnconfirmed(false)
     setFieldError(null)
   }
 
@@ -136,32 +138,29 @@ export function SaleDetailPage() {
       markSuccess(next)
       return
     }
-    if (result.error) {
-      setNetworkError(true)
-      return
-    }
-    setNetworkError(false)
-    setFieldError(null)
+    setUnconfirmed(true)
   }
 
   async function submitVoid() {
     if (!isVoidReasonValid(reason) || !sale || voidBusy) return
     setFieldError(null)
     setNetworkError(false)
+    setUnconfirmed(false)
     setVoidBusy(true)
     try {
       const updated = await voidMutation.mutateAsync(reason.trim())
       markSuccess(updated)
     } catch (error) {
       if (isApiError(error) && error.status === 0) {
-        setVoidBusy(false)
         voidMutation.reset()
         await afterTimeout()
         return
       }
       if (isApiError(error) && error.code === 'SALE_ALREADY_VOIDED') {
-        const result = await saleQuery.refetch()
-        markSuccess(result.data ?? sale)
+        closeSheet()
+        await saleQuery.refetch()
+        const copy = saleErrorBanner(error.code, role, sale.client_id, error.message)
+        setNotice({ tone: copy.tone, title: copy.title, body: copy.body || undefined })
         return
       }
       if (isApiError(error) && error.code === 'SALE_HAS_PAYMENTS') {
@@ -304,6 +303,7 @@ export function SaleDetailPage() {
             onClick={() => {
               setSheetOpen(true)
               setNetworkError(false)
+              setUnconfirmed(false)
               setFieldError(null)
             }}
           >
@@ -324,6 +324,7 @@ export function SaleDetailPage() {
           pending={voidBusy}
           submitting={voidBusy}
           networkError={networkError}
+          unconfirmed={unconfirmed}
           fieldError={fieldError}
           onSubmit={() => {
             void submitVoid()
@@ -336,6 +337,8 @@ export function SaleDetailPage() {
 }
 
 function SaleFigures({ sale, dim }: { sale: SaleDetail; dim: boolean }) {
+  const voided = isSaleVoided(sale.status)
+  const balance = formatMoney(sale.balance ?? '0.00')
   return (
     <section
       className={cn(
@@ -361,6 +364,12 @@ function SaleFigures({ sale, dim }: { sale: SaleDetail; dim: boolean }) {
           value={formatMoney(sale.surcharge)}
         />
         <FigureRow label="Total a pagar" value={formatMoney(sale.total)} strong />
+        <FigureRow
+          label="Saldo pendiente"
+          value={voided ? `${balance} · anulada` : balance}
+          strong={!voided}
+          muted={voided}
+        />
         <FigureRow label="Método" value="Recargo fijo" last />
       </div>
     </section>
@@ -372,11 +381,13 @@ function FigureRow({
   value,
   strong = false,
   last = false,
+  muted = false,
 }: {
   label: string
   value: string
   strong?: boolean
   last?: boolean
+  muted?: boolean
 }) {
   return (
     <div
@@ -386,7 +397,15 @@ function FigureRow({
       )}
     >
       <span>{label}</span>
-      <b className={cn('text-heading tabular-nums', strong ? 'font-bold' : 'font-medium')}>{value}</b>
+      <b
+        className={cn(
+          'tabular-nums',
+          muted ? 'font-medium' : 'text-heading',
+          strong && !muted ? 'font-bold' : 'font-medium',
+        )}
+      >
+        {value}
+      </b>
     </div>
   )
 }
