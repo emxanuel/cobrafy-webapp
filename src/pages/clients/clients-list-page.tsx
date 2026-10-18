@@ -14,7 +14,7 @@ import { SelectInput, TextInput } from '@/features/shared/components/ui/field'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { LoadingState } from '@/features/shared/components/ui/loading-state'
 import { cn } from '@/features/shared/lib/cn'
-import { canCreateClients } from '@/features/shared/lib/roles'
+import { canCreateClients, canSell } from '@/features/shared/lib/roles'
 import { getApiErrorMessage } from '@/features/shared/lib/api-error'
 
 const EMPTY_COPY = 'Aún no tienes clientes…'
@@ -42,10 +42,21 @@ export function ClientsListPage() {
             >
               Verificar bloqueo
             </Link>
+            {canSell(role) ? (
+              <Link
+                to="/ventas/nueva"
+                className={cn(buttonVariants({ variant: 'primary' }), 'w-full no-underline sm:w-auto')}
+              >
+                ＋ Nueva venta
+              </Link>
+            ) : null}
             {canCreateClients(role) ? (
               <Link
                 to="/clientes/nuevo"
-                className={cn(buttonVariants({ variant: 'primary' }), 'w-full no-underline sm:w-auto')}
+                className={cn(
+                  buttonVariants({ variant: canSell(role) ? 'outline' : 'primary' }),
+                  'w-full no-underline sm:w-auto',
+                )}
               >
                 Nuevo cliente
               </Link>

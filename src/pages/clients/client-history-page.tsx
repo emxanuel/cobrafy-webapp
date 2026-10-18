@@ -13,6 +13,7 @@ import {
   useClientHistory,
   useLoadMoreHistory,
 } from '@/features/clients/hooks/use-clients-queries'
+import { ClientPurchases } from '@/features/sales/components/client-purchases'
 import type { HistoryEvent, HistoryEventType } from '@/features/clients/services/types'
 import { useMembersQuery } from '@/features/members/hooks/use-members-queries'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -141,12 +142,11 @@ export function ClientHistoryPage() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-heading m-0 text-lg">Compras</h2>
-        <EmptyState className="py-4 text-left">
-          Aún no hay compras registradas para este cliente.
-        </EmptyState>
-      </section>
+      <ClientPurchases
+        clientId={clientId}
+        role={role}
+        blocked={Boolean(client.data && (client.data.is_blocked || client.data.status === 'blocked'))}
+      />
 
       <section className="flex flex-col gap-2">
         <h2 className="text-heading m-0 text-lg">Pagos</h2>

@@ -1,20 +1,26 @@
 import axios from 'axios'
 import { describe, expect, it } from 'vitest'
 
-import { ApiError, isPinLockedError, PIN_LOCKED_DETAIL, toApiError } from './api-error'
+import {
+  ApiError,
+  GENERIC_MESSAGE,
+  isPinLockedError,
+  PIN_LOCKED_DETAIL,
+  toApiError,
+} from './api-error'
 
-function axiosError(status: number, data: unknown) {
+function axiosError(status: number, data: unknown, url = '') {
   return new axios.AxiosError(
     'Request failed',
     String(status),
-    undefined,
+    { headers: new axios.AxiosHeaders(), url },
     undefined,
     {
       status,
       data,
       statusText: '',
       headers: {},
-      config: { headers: new axios.AxiosHeaders() },
+      config: { headers: new axios.AxiosHeaders(), url },
     },
   )
 }
@@ -37,14 +43,144 @@ describe('toApiError', () => {
     expect(error.message).toBe('El formato de la cédula no es válido.')
   })
 
-  it('mapea 409 de documento duplicado al campo document', () => {
+  it('mapea 422 con field al campo, no al texto', () => {
     const error = toApiError(
-      axiosError(409, {
-        detail: 'ya existe un cliente con este documento',
+      axiosError(422, {
+        detail: [
+          {
+            field: 'down_payment',
+            code: 'DOWN_PAYMENT_INVALID',
+            message: 'La inicial debe ser menor que el precio.',
+          },
+        ],
       }),
     )
-    expect(error.fieldErrors.document).toBe('ya existe un cliente con este documento')
-    expect(error.message).toBe('ya existe un cliente con este documento')
+    expect(error.code).toBe('DOWN_PAYMENT_INVALID')
+    expect(error.fieldErrors.down_payment).toBe('La inicial debe ser menor que el precio.')
+    expect(error.message).toBe('La inicial debe ser menor que el precio.')
+  })
+
+  it('un 409 en lista con field null va al banner, no a un campo', () => {
+    const error = toApiError(
+      axiosError(409, {
+        detail: [
+          {
+            field: null,
+            code: 'CREDIT_SETTINGS_MISSING',
+            message: 'Configura el crédito del negocio antes de vender',
+          },
+        ],
+      }),
+    )
+    expect(error.code).toBe('CREDIT_SETTINGS_MISSING')
+    expect(error.fieldErrors).toEqual({})
+    expect(error.message).toBe('Configura el crédito del negocio antes de vender')
+  })
+
+  it('lee DOCUMENT_UNREADABLE por código, no por texto', () => {
+    const error = toApiError(
+      axiosError(409, {
+        detail: [
+          {
+            field: null,
+            code: 'DOCUMENT_UNREADABLE',
+            message: 'no se pudo descifrar',
+          },
+        ],
+      }),
+    )
+    expect(error.code).toBe('DOCUMENT_UNREADABLE')
+    expect(error.fieldErrors).toEqual({})
+    expect(error.message).toBe(
+      'No pudimos leer el documento del cliente. Revisa la ficha y vuelve a guardar el documento. Si sigue pasando, avísanos.',
+    )
+  })
+
+  it('lee DOCUMENT_UNREADABLE_GUARANTOR por código', () => {
+    const error = toApiError(
+      axiosError(409, {
+        detail: [{ field: null, code: 'DOCUMENT_UNREADABLE_GUARANTOR', message: 'crypto' }],
+      }),
+    )
+    expect(error.code).toBe('DOCUMENT_UNREADABLE_GUARANTOR')
+    expect(error.message).toBe(
+      'No pudimos leer el documento de un garante. Revisa los contactos del cliente y vuelve a guardarlo.',
+    )
+  })
+
+  it('un detail string en español se muestra tal cual', () => {
+    const login401 = toApiError(axiosError(401, { detail: 'credenciales inválidas' }))
+    expect(login401.message).toBe('credenciales inválidas')
+    expect(login401.message).not.toBe('Tu sesión caducó. Entra de nuevo.')
+
+    const invite = toApiError(axiosError(400, { detail: 'invitación inválida' }))
+    expect(invite.message).toBe('invitación inválida')
+
+    const contacts = toApiError(
+      axiosError(409, { detail: 'el cliente ya tiene el máximo de 50 contactos' }),
+    )
+    expect(contacts.message).toBe('el cliente ya tiene el máximo de 50 contactos')
+
+    const plain409 = toApiError(
+      axiosError(
+        409,
+        {
+          detail: 'ya existe un cliente con este documento',
+        },
+        '/clients',
+      ),
+    )
+    expect(plain409.fieldErrors.document).toBe('ya existe un cliente con este documento')
+    expect(plain409.code).toBeUndefined()
+    expect(plain409.message).toBe('ya existe un cliente con este documento')
+  })
+
+  it('un detail técnico en inglés se reemplaza por el genérico', () => {
+    const notFound = toApiError(axiosError(404, { detail: 'Not Found' }))
+    expect(notFound.fieldErrors).toEqual({})
+    expect(notFound.code).toBeUndefined()
+    expect(notFound.message).toBe(GENERIC_MESSAGE)
+    expect(notFound.message).not.toBe('Not Found')
+
+    const method = toApiError(axiosError(405, { detail: 'Method Not Allowed' }))
+    expect(method.message).toBe(GENERIC_MESSAGE)
+
+    const duplicate = toApiError(
+      axiosError(409, { detail: 'Duplicate key value violates unique constraint' }, '/sales'),
+    )
+    expect(duplicate.message).toBe(GENERIC_MESSAGE)
+    expect(duplicate.fieldErrors).toEqual({})
+
+    const serverError = toApiError(axiosError(500, { detail: 'se rompió el servidor' }))
+    expect(serverError.message).toBe(GENERIC_MESSAGE)
+  })
+
+  it('un 409 con lista vacía usa el mensaje genérico', () => {
+    const error = toApiError(axiosError(409, { detail: [] }))
+    expect(error.code).toBeUndefined()
+    expect(error.fieldErrors).toEqual({})
+    expect(error.message).toBe(GENERIC_MESSAGE)
+    expect(error.message).not.toBe('Ese dato ya está registrado.')
+  })
+
+  it('IDEMPOTENCY_KEY_REUSED conserva el código para el aviso de la hoja', () => {
+    const error = toApiError(
+      axiosError(409, {
+        detail: [{ field: null, code: 'IDEMPOTENCY_KEY_REUSED', message: 'key reused' }],
+      }),
+    )
+    expect(error.code).toBe('IDEMPOTENCY_KEY_REUSED')
+    expect(error.message).toBe(GENERIC_MESSAGE)
+  })
+
+  it('un código desconocido sin mensaje cae al genérico en español', () => {
+    const error = toApiError(
+      axiosError(409, {
+        detail: [{ field: null, code: 'SOME_NEW_CODE' }],
+      }),
+    )
+    expect(error.code).toBe('SOME_NEW_CODE')
+    expect(error.message).toBe('No se pudo completar. Inténtalo de nuevo.')
   })
 
   it('detecta el bloqueo de PIN del backend', () => {
@@ -67,13 +203,82 @@ describe('toApiError', () => {
     )
   })
 
-  it('deja los 409 de bloqueo como mensaje, no como campo', () => {
-    const blocked = toApiError(axiosError(409, { detail: 'el cliente ya está bloqueado' }))
+  it('deja los 409 de bloqueo como banner, no como campo', () => {
+    const blocked = toApiError(
+      axiosError(409, { detail: 'el cliente ya está bloqueado' }, '/clients/cli-1/block'),
+    )
     expect(blocked.fieldErrors).toEqual({})
     expect(blocked.message).toBe('el cliente ya está bloqueado')
 
-    const unblocked = toApiError(axiosError(409, { detail: 'el cliente no está bloqueado' }))
+    const unblocked = toApiError(
+      axiosError(409, { detail: 'el cliente no está bloqueado' }, '/clients/cli-1/unblock'),
+    )
     expect(unblocked.fieldErrors).toEqual({})
     expect(unblocked.message).toBe('el cliente no está bloqueado')
+  })
+
+  it('un detail de lista en inglés se reemplaza por el genérico', () => {
+    const required = toApiError(
+      axiosError(422, {
+        detail: [{ loc: ['body', 'price'], msg: 'Field required', type: 'missing' }],
+      }),
+    )
+    expect(required.message).toBe(GENERIC_MESSAGE)
+    expect(required.fieldErrors).toEqual({})
+
+    const decode = toApiError(
+      axiosError(422, {
+        detail: [{ loc: ['body'], msg: 'JSON decode error', type: 'json_invalid' }],
+      }),
+    )
+    expect(decode.message).toBe(GENERIC_MESSAGE)
+    expect(decode.fieldErrors).toEqual({})
+
+    const spanish = toApiError(
+      axiosError(422, {
+        detail: [{ field: 'price', msg: 'el precio es obligatorio' }],
+      }),
+    )
+    expect(spanish.message).toBe('el precio es obligatorio')
+    expect(spanish.fieldErrors.price).toBe('el precio es obligatorio')
+
+    const blocked = toApiError(axiosError(409, { detail: 'Atraso de 3 cuotas' }))
+    expect(blocked.message).toBe('Atraso de 3 cuotas')
+  })
+
+  it('No permission no se trata como español', () => {
+    const error = toApiError(axiosError(403, { detail: 'No permission' }))
+    expect(error.message).toBe(GENERIC_MESSAGE)
+    expect(error.message).not.toBe('No permission')
+  })
+
+  it('un 409 de PATCH /clients/:id sin código no va a document', () => {
+    const general = toApiError(
+      axiosError(409, { detail: 'este cliente ya está en otro negocio' }, '/clients/cli-1'),
+    )
+    expect(general.fieldErrors).toEqual({})
+    expect(general.message).toBe('este cliente ya está en otro negocio')
+
+    const duplicate = toApiError(
+      axiosError(
+        409,
+        { detail: 'ya existe un cliente con este documento', code: 'DOCUMENT_DUPLICATE' },
+        '/clients/cli-1',
+      ),
+    )
+    expect(duplicate.fieldErrors.document).toBe('ya existe un cliente con este documento')
+    expect(duplicate.code).toBe('DOCUMENT_DUPLICATE')
+  })
+
+  it('un 409 de garante no va al campo document', () => {
+    const guarantor = toApiError(
+      axiosError(
+        409,
+        { detail: 'el documento del garante no se pudo leer' },
+        '/clients/cli-1/contacts',
+      ),
+    )
+    expect(guarantor.fieldErrors).toEqual({})
+    expect(guarantor.message).toBe('el documento del garante no se pudo leer')
   })
 })

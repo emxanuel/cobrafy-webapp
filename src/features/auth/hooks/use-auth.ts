@@ -13,6 +13,8 @@ import { safeInternalPath } from '@/features/auth/lib/safe-internal-path'
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import { useBusinessStore } from '@/features/business/stores/business-store'
 import { switchBusiness } from '@/features/business/lib/switch-business'
+import { clearAllSaleIdempotencyKeys } from '@/features/sales/lib/idempotency'
+import { clearAllPendingSales } from '@/features/sales/lib/pending-sale'
 import { isPinLockedError } from '@/features/shared/lib/api-error'
 import { LOGIN_NOTICE_KEY } from '@/features/shared/lib/session-storage'
 import { queryClient, resetQueryCache } from '@/query-client'
@@ -70,6 +72,8 @@ export function useLogoutMutation() {
     onSettled: async () => {
       await queryClient.cancelQueries()
       queryClient.clear()
+      clearAllPendingSales()
+      clearAllSaleIdempotencyKeys()
       clearSession()
       navigate('/login', { replace: true })
     },
@@ -99,6 +103,8 @@ export function useUnlockPinMutation() {
       await resetQueryCache()
       sessionStorage.setItem(LOGIN_NOTICE_KEY, 'pin-locked')
       navigate('/login', { replace: true, state: { pinLocked: true } })
+      clearAllPendingSales()
+      clearAllSaleIdempotencyKeys()
       clearSession()
     },
   })

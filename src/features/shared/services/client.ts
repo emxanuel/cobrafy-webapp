@@ -7,10 +7,14 @@ import { logHttpError } from '@/features/shared/lib/logger'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
 
+export const GET_TIMEOUT_MS = 15_000
+export const CREATE_SALE_TIMEOUT_MS = 30_000
+
 export const SELECT_BUSINESS_EVENT = 'cobrafy:select-business'
 
 type StampedConfig = InternalAxiosRequestConfig & {
   cobrafyAccessToken?: string | null
+  cobrafyTimeoutId?: number
 }
 
 function bearerFromHeader(header: unknown): string | null {
@@ -46,6 +50,32 @@ export const api = axios.create({
   },
 })
 
+function isGet(config: InternalAxiosRequestConfig): boolean {
+  return (config.method ?? 'get').toLowerCase() === 'get'
+}
+
+function clearRequestTimer(config?: InternalAxiosRequestConfig) {
+  const stamped = config as StampedConfig | undefined
+  if (stamped?.cobrafyTimeoutId != null) {
+    window.clearTimeout(stamped.cobrafyTimeoutId)
+    stamped.cobrafyTimeoutId = undefined
+  }
+}
+
+function attachGetTimeout(config: StampedConfig) {
+  if (!isGet(config)) return
+  if (config.timeout != null && config.timeout !== 0) return
+  config.timeout = GET_TIMEOUT_MS
+  const controller = new AbortController()
+  const existing = config.signal
+  if (existing?.aborted) controller.abort()
+  else if (typeof existing?.addEventListener === 'function') {
+    existing.addEventListener('abort', () => controller.abort())
+  }
+  config.cobrafyTimeoutId = window.setTimeout(() => controller.abort(), GET_TIMEOUT_MS)
+  config.signal = controller.signal
+}
+
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const stamped = config as StampedConfig
   const token = useSessionStore.getState().accessToken
@@ -53,12 +83,25 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     stamped.headers.Authorization = `Bearer ${token}`
   }
+  attachGetTimeout(stamped)
   return stamped
 })
 
 api.interceptors.response.use(
-  (response) => response,
-  (error: AxiosError) => {
+  (response) => {
+    clearRequestTimer(response.config)
+    return response
+  },
+  async (error: AxiosError) => {
+    clearRequestTimer(error.config)
+    if (error.response?.data instanceof Blob) {
+      const text = await error.response.data.text()
+      try {
+        error.response.data = JSON.parse(text)
+      } catch {
+        /* keep the blob when the body is not JSON */
+      }
+    }
     const apiError = toApiError(error)
     logHttpError({
       method: error.config?.method?.toUpperCase(),

@@ -7,6 +7,7 @@ const TONES = {
   accent: 'bg-accent-bg text-accent',
   danger: 'bg-danger-bg text-danger',
   success: 'bg-success-bg text-success',
+  warning: 'bg-warning-bg text-warning',
 } as const
 
 export function Badge({

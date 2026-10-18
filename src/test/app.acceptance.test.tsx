@@ -74,6 +74,30 @@ describe('CBF-110 aceptación', () => {
     expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
   })
 
+  it('Salir borra todas las cobrafy.pendingSale:*', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await loginAs(users.cashier.email)
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    sessionStorage.setItem(
+      'cobrafy.pendingSale:cli-1',
+      JSON.stringify({ key: 'pending-1', payload: {}, snapshot: {} }),
+    )
+    sessionStorage.setItem(
+      'cobrafy.pendingSale:cli-2',
+      JSON.stringify({ key: 'pending-2', payload: {}, snapshot: {} }),
+    )
+    sessionStorage.setItem(
+      'cobrafy.saleIdempotency:nevera|18500.00',
+      JSON.stringify({ key: 'idemp-1' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Salir' }))
+    expect(await screen.findByRole('heading', { name: 'Entra a tu negocio' })).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-2')).toBeNull()
+    expect(sessionStorage.getItem('cobrafy.saleIdempotency:nevera|18500.00')).toBeNull()
+  })
+
   it('cambiar de negocio limpia la caché de TanStack Query', async () => {
     const user = userEvent.setup()
     const clear = vi.spyOn(getQueryClient(), 'clear')
@@ -317,6 +341,10 @@ describe('CBF-110 aceptación', () => {
     window.history.pushState({}, '', '/clientes')
     renderApp()
     expect(await screen.findByRole('heading', { name: 'Clave rápida' })).toBeInTheDocument()
+    sessionStorage.setItem(
+      'cobrafy.saleIdempotency:nevera|18500.00',
+      JSON.stringify({ key: 'idemp-pin' }),
+    )
     await user.type(screen.getByLabelText('Clave rápida'), '0000')
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await user.click(screen.getByRole('button', { name: 'Continuar' }))
@@ -333,6 +361,7 @@ describe('CBF-110 aceptación', () => {
       ),
     ).toBeInTheDocument()
     expect(sessionStorage.getItem('cobrafy.session')).toBeNull()
+    expect(sessionStorage.getItem('cobrafy.saleIdempotency:nevera|18500.00')).toBeNull()
     expect(window.location.pathname).toBe('/login')
     expect(logoutRequests.some((item) => item.token?.includes('token-pin'))).toBe(true)
   })

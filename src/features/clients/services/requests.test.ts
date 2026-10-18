@@ -15,6 +15,7 @@ import {
   getClient,
   saveContactsDiff,
   searchClients,
+  updateClient,
   updateClientWithContacts,
 } from './requests'
 
@@ -406,6 +407,38 @@ describe('client requests', () => {
     ])
     const patch = contactWrites.find((item) => item.method === 'PATCH')
     expect(patch?.body).toEqual({ address: null, document: null })
+  })
+
+  it('PATCH /clients/:id 409 sin código no va a document; con DOCUMENT_DUPLICATE sí', async () => {
+    server.use(
+      http.patch('*/clients/:id', () =>
+        HttpResponse.json({ detail: 'este cliente ya está en otro negocio' }, { status: 409 }),
+      ),
+    )
+    try {
+      await updateClient('cli-1', { phone: '8095550000' })
+      throw new Error('debía fallar')
+    } catch (error) {
+      expect(isApiError(error)).toBe(true)
+      expect(getFieldErrors(error)).toEqual({})
+      expect((error as Error).message).toBe('este cliente ya está en otro negocio')
+    }
+
+    server.use(
+      http.patch('*/clients/:id', () =>
+        HttpResponse.json(
+          { detail: 'ya existe un cliente con este documento', code: 'DOCUMENT_DUPLICATE' },
+          { status: 409 },
+        ),
+      ),
+    )
+    try {
+      await updateClient('cli-1', { document: '001-0000000-0' })
+      throw new Error('debía fallar')
+    } catch (error) {
+      expect(isApiError(error)).toBe(true)
+      expect(getFieldErrors(error).document).toBe('ya existe un cliente con este documento')
+    }
   })
 
   it('al editar solo el teléfono del cliente el PATCH no manda document', async () => {

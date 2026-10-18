@@ -33,3 +33,11 @@ export function canSeeHistoryActor(role: Role | null): boolean {
 export function canViewAudit(role: Role | null): boolean {
   return role === 'dueño'
 }
+
+export function canSell(role: Role | null): boolean {
+  return role === 'dueño' || role === 'cajero'
+}
+
+export function canConfigureCredit(role: Role | null): boolean {
+  return role === 'dueño'
+}

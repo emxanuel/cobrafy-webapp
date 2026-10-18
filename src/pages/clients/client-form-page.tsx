@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import {
@@ -19,6 +19,8 @@ import { canManageMembers } from '@/features/shared/lib/roles'
 
 export function ClientFormPage() {
   const { clientId } = useParams()
+  const [searchParams] = useSearchParams()
+  const fromVenta = searchParams.get('from') === 'venta'
   const isEdit = Boolean(clientId)
   const navigate = useNavigate()
   const existing = useClient(clientId)
@@ -69,13 +71,23 @@ export function ClientFormPage() {
                 previousClient: existing.data,
               },
               {
-                onSuccess: (result) => navigate(`/clientes/${result.client.id}`),
+                onSuccess: (result) =>
+                  navigate(
+                    fromVenta
+                      ? `/clientes/${result.client.id}/ventas/nueva`
+                      : `/clientes/${result.client.id}`,
+                  ),
               },
             )
             return
           }
           create.mutate(payload, {
-            onSuccess: (result) => navigate(`/clientes/${result.client.id}`),
+            onSuccess: (result) =>
+              navigate(
+                fromVenta
+                  ? `/clientes/${result.client.id}/ventas/nueva`
+                  : `/clientes/${result.client.id}`,
+              ),
           })
         }}
       />

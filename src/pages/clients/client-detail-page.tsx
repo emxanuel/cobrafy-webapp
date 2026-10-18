@@ -22,6 +22,7 @@ import {
   parseContactsSaveNotice,
 } from '@/features/clients/lib/failed-contacts-notice'
 import { blockSchema, type BlockFormValues } from '@/features/clients/schemas'
+import { ClientPurchases } from '@/features/sales/components/client-purchases'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { LoadingState } from '@/features/shared/components/ui/loading-state'
 import { Button, buttonVariants } from '@/features/shared/components/ui/button'
@@ -31,6 +32,7 @@ import { FAILED_CONTACTS_KEY } from '@/features/shared/lib/session-storage'
 import {
   canBlockClients,
   canEditClients,
+  canSell,
   canUnblockClients,
 } from '@/features/shared/lib/roles'
 
@@ -93,14 +95,30 @@ export function ClientDetailPage() {
   return (
     <>
       <ClientRecordHeader client={client} role={role} />
-      {canEditClients(role) ? (
-        <Link
-          to={`/clientes/${client.id}/editar`}
-          className={`${buttonVariants({ variant: 'outline' })} self-start no-underline`}
-        >
-          Editar
-        </Link>
-      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {canSell(role) ? (
+          blocked ? (
+            <Button disabled>
+              Cliente bloqueado: no se le puede vender
+            </Button>
+          ) : (
+            <Link
+              to={`/clientes/${client.id}/ventas/nueva`}
+              className={`${buttonVariants({ variant: 'primary' })} self-start no-underline`}
+            >
+              ＋ Nueva venta
+            </Link>
+          )
+        ) : null}
+        {canEditClients(role) ? (
+          <Link
+            to={`/clientes/${client.id}/editar`}
+            className={`${buttonVariants({ variant: 'outline' })} self-start no-underline`}
+          >
+            Editar
+          </Link>
+        ) : null}
+      </div>
 
       {failedNotice ? <Alert>{failedNotice}</Alert> : null}
 
@@ -114,6 +132,8 @@ export function ClientDetailPage() {
       {forbiddenUnblock ? (
         <Alert>No tienes permiso para desbloquear.</Alert>
       ) : null}
+
+      <ClientPurchases clientId={client.id} role={role} blocked={blocked} preview />
 
       <dl className="m-0 grid gap-3 sm:grid-cols-2">
         <div>

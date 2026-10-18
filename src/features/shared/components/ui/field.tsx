@@ -39,7 +39,7 @@ export function Field({
 }
 
 const controlClass =
-  'w-full rounded-md border border-border bg-bg px-3 py-2.5 text-heading outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 aria-invalid:border-danger'
+  'w-full rounded-md border border-border bg-bg px-3 py-2.5 text-heading outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 aria-invalid:border-danger disabled:cursor-default disabled:bg-muted disabled:text-heading disabled:opacity-100'
 
 export function TextInput({
   error,
