@@ -38,12 +38,12 @@ export const SALE_CONFLICTS = [
   {
     code: 'SALE_ALREADY_VOIDED',
     field: null,
-    message: 'esta venta ya está anulada',
+    message: 'Esta venta ya está anulada',
   },
   {
     code: 'SALE_HAS_PAYMENTS',
     field: null,
-    message: 'no se puede anular una venta con pagos',
+    message: 'No se puede anular una venta con pagos',
   },
 ] as const
 

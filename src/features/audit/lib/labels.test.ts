@@ -80,5 +80,7 @@ describe('auditActionTitle', () => {
     )
     expect(formatAuditValue('interest_method', 'otro_metodo', names)).toBe('otro_metodo')
     expect(formatAuditValue('surcharge_kind', 'desconocido', names)).toBe('desconocido')
+    expect(formatAuditValue('name', 'mensual', names)).toBe('mensual')
+    expect(formatAuditValue('allowed_frequencies', [], names)).toBe('—')
   })
 })

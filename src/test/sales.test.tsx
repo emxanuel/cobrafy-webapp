@@ -723,7 +723,7 @@ describe('CBF-206 ventas', () => {
               {
                 field: 'item_description',
                 code: 'ITEM_DESCRIPTION_INVALID',
-                message: 'el artículo no es válido',
+                message: 'El artículo no es válido',
               },
             ],
           },
@@ -1003,7 +1003,7 @@ describe('CBF-206 ventas', () => {
           idempotencyKey: request.headers.get('Idempotency-Key'),
         })
         return HttpResponse.json(
-          { detail: [{ field: 'price', code: 'AMOUNT_INVALID', message: 'monto inválido' }] },
+          { detail: [{ field: 'price', code: 'AMOUNT_INVALID', message: 'Monto inválido' }] },
           { status: 422 },
         )
       }),
@@ -1189,7 +1189,7 @@ describe('CBF-206 ventas', () => {
                 {
                   field: null,
                   code: 'IDEMPOTENCY_KEY_REUSED',
-                  message: 'esa clave de idempotencia ya se usó con otro cuerpo',
+                  message: 'Esa clave de idempotencia ya se usó con otro cuerpo',
                 },
               ],
             },
@@ -1240,7 +1240,7 @@ describe('CBF-206 ventas', () => {
               {
                 field: null,
                 code: 'IDEMPOTENCY_KEY_REUSED',
-                message: 'esa clave de idempotencia ya se usó con otro cuerpo',
+                message: 'Esa clave de idempotencia ya se usó con otro cuerpo',
               },
             ],
           },
@@ -1387,7 +1387,7 @@ describe('CBF-206 ventas', () => {
               {
                 field: 'down_payment',
                 code: 'DOWN_PAYMENT_INVALID',
-                message: 'la inicial debe ser menor que el precio',
+                message: 'La inicial debe ser menor que el precio',
               },
             ],
           },
@@ -1406,7 +1406,7 @@ describe('CBF-206 ventas', () => {
     loginCashier()
     server.use(
       http.post('*/sales/simulate', () =>
-        HttpResponse.json({ detail: 'conflicto de crédito' }, { status: 409 }),
+        HttpResponse.json({ detail: 'Conflicto de crédito' }, { status: 409 }),
       ),
     )
     window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
@@ -1415,7 +1415,7 @@ describe('CBF-206 ventas', () => {
     await goToNewSale()
     await fillHappyPath(user)
     await waitFor(
-      () => expect(screen.getByText('conflicto de crédito')).toBeInTheDocument(),
+      () => expect(screen.getByText('Conflicto de crédito')).toBeInTheDocument(),
       { timeout: 4000 },
     )
     expect(screen.queryByText(GENERIC_SALE_ERROR)).not.toBeInTheDocument()

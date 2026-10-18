@@ -123,7 +123,7 @@ const TECHNICAL_DETAILS = new Set(
 )
 
 const SPANISH_DETAIL_WORD =
-  /\b(?:ya|este|esta|esto|estos|estas|para|está|están|debe|tienen?|existe|formato|revisa|inténtalo|sesión|permiso|bloqueo|bloqueado|anterior|motivo|correo|contraseña|cuotas?|atraso|venta|negocio|garante|cliente|documento|invitación|credenciales|válid\w*|inválid\w*|autorizado|autenticado|encontrado|recurso|conflicto|crédito|máximo|contactos|obligatorio|demasiados|intentos|pudimos|pudo|pudieron|completar|conexión|permitid\w*)\b/i
+  /\b(?:ya|este|esta|esto|estos|estas|para|está|están|debe|tienen?|existe|formato|revisa|inténtalo|sesión|permiso|bloqueo|bloqueado|anterior|motivo|correo|contraseña|cuotas?|atraso|venta|negocio|garante|cliente|documento|invitación|credenciales|válid\w*|inválid\w*|autorizado|autenticado|encontrado|recurso|conflicto|crédito|máximo|contactos|obligatorio|demasiados|intentos|pudimos|pudo|pudieron|completar|conexión|permitid\w*|indica|demasiad\w*|negativ\w*|admite|recargo|monto|nombre)\b/i
 
 function isTechnicalDetail(text: string): boolean {
   return TECHNICAL_DETAILS.has(text.trim().toLowerCase())
@@ -316,10 +316,11 @@ export function parseFieldErrors(body: ErrorBody, status = 0, url = ''): Record<
       return errors
     }
     if (isDocumentConflictCode(code) || isClientCreateUrl(url)) {
-      errors.document =
+      const raw =
         typeof body.detail === 'string' && body.detail.trim()
-          ? body.detail
-          : 'ya existe un cliente con este documento'
+          ? body.detail.trim()
+          : 'Ya existe un cliente con este documento'
+      if (!isGenericDetail(raw, status)) errors.document = raw
     }
   }
 

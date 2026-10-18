@@ -59,7 +59,7 @@ describe('client requests', () => {
       throw new Error('debía fallar')
     } catch (error) {
       expect(isApiError(error)).toBe(true)
-      expect(getFieldErrors(error).document).toBe('ya existe un cliente con este documento')
+      expect(getFieldErrors(error).document).toBe('Ya existe un cliente con este documento')
     }
   })
 
@@ -412,7 +412,7 @@ describe('client requests', () => {
   it('PATCH /clients/:id 409 de texto plano (forma vieja) no va a document', async () => {
     server.use(
       http.patch('*/clients/:id', () =>
-        HttpResponse.json({ detail: 'este cliente ya está en otro negocio' }, { status: 409 }),
+        HttpResponse.json({ detail: 'Este cliente ya está en otro negocio' }, { status: 409 }),
       ),
     )
     try {
@@ -421,7 +421,7 @@ describe('client requests', () => {
     } catch (error) {
       expect(isApiError(error)).toBe(true)
       expect(getFieldErrors(error)).toEqual({})
-      expect((error as Error).message).toBe('este cliente ya está en otro negocio')
+      expect((error as Error).message).toBe('Este cliente ya está en otro negocio')
     }
   })
 
@@ -434,7 +434,7 @@ describe('client requests', () => {
               {
                 field: null,
                 code: 'CLIENT_DOCUMENT_EXISTS',
-                message: 'ya existe un cliente con este documento',
+                message: 'Ya existe un cliente con este documento',
               },
             ],
           },
@@ -447,7 +447,7 @@ describe('client requests', () => {
       throw new Error('debía fallar')
     } catch (error) {
       expect(isApiError(error)).toBe(true)
-      expect(getFieldErrors(error).document).toBe('ya existe un cliente con este documento')
+      expect(getFieldErrors(error).document).toBe('Ya existe un cliente con este documento')
     }
   })
 

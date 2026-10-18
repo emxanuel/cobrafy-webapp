@@ -58,7 +58,7 @@ describe('CBF-210-A UI', () => {
               {
                 field: null,
                 code: 'INVITATION_NOT_REVOCABLE',
-                message: 'la invitación no se puede revocar',
+                message: 'La invitación no se puede revocar',
               },
             ],
           },
@@ -72,7 +72,7 @@ describe('CBF-210-A UI', () => {
     expect(await screen.findByRole('heading', { name: 'Equipo' })).toBeInTheDocument()
     expect(await screen.findByText('nuevo@negocio.com')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cancelar' }))
-    expect(await screen.findByText('la invitación no se puede revocar')).toBeInTheDocument()
+    expect(await screen.findByText('La invitación no se puede revocar')).toBeInTheDocument()
   })
 
   it('bloquear un cliente ya bloqueado muestra el aviso en la alerta, no en documento', async () => {
@@ -85,7 +85,7 @@ describe('CBF-210-A UI', () => {
               {
                 field: null,
                 code: 'CLIENT_ALREADY_BLOCKED',
-                message: 'el cliente ya está bloqueado',
+                message: 'El cliente ya está bloqueado',
               },
             ],
           },
@@ -99,7 +99,7 @@ describe('CBF-210-A UI', () => {
     await user.click(await screen.findByRole('button', { name: 'Bloquear' }))
     await user.type(screen.getByLabelText('Motivo del bloqueo'), 'Atraso de 3 cuotas')
     await user.click(screen.getByRole('button', { name: 'Confirmar bloqueo' }))
-    expect(await screen.findByText('el cliente ya está bloqueado')).toBeInTheDocument()
+    expect(await screen.findByText('El cliente ya está bloqueado')).toBeInTheDocument()
     expect(screen.queryByLabelText('Número de documento')).not.toBeInTheDocument()
   })
 

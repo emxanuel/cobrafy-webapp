@@ -964,7 +964,7 @@ export const handlers = [
     const current = clients.get(String(params.id))
     if (current?.is_blocked) {
       return contractError(409, [
-        { field: null, code: 'CLIENT_ALREADY_BLOCKED', message: 'el cliente ya está bloqueado' },
+        { field: null, code: 'CLIENT_ALREADY_BLOCKED', message: 'El cliente ya está bloqueado' },
       ])
     }
     return HttpResponse.json(
@@ -1025,7 +1025,7 @@ export const handlers = [
         {
           field: null,
           code: 'CLIENT_DOCUMENT_EXISTS',
-          message: 'ya existe un cliente con este documento',
+          message: 'Ya existe un cliente con este documento',
         },
       ])
     }
@@ -1154,7 +1154,7 @@ export const handlers = [
         {
           field: null,
           code: 'LAST_ACTIVE_OWNER',
-          message: 'el negocio debe tener al menos un dueño activo',
+          message: 'El negocio debe tener al menos un dueño activo',
         },
       ])
     }
@@ -1539,7 +1539,7 @@ export const handlers = [
             {
               field: null,
               code: 'SALE_ALREADY_VOIDED',
-              message: 'esta venta ya está anulada',
+              message: 'Esta venta ya está anulada',
             },
           ],
         },
@@ -1557,7 +1557,7 @@ export const handlers = [
             {
               field: null,
               code: 'SALE_HAS_PAYMENTS',
-              message: 'no se puede anular una venta con pagos',
+              message: 'No se puede anular una venta con pagos',
             },
           ],
         },

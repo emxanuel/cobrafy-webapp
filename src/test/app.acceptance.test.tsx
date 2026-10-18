@@ -192,7 +192,7 @@ describe('CBF-110 aceptación', () => {
     await user.type(screen.getByLabelText('Número de documento'), 'duplicado')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
     expect(
-      await screen.findByText('ya existe un cliente con este documento'),
+      await screen.findByText('Ya existe un cliente con este documento'),
     ).toBeInTheDocument()
   })
 

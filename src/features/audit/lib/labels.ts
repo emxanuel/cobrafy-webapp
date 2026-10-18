@@ -49,6 +49,8 @@ const STATUS_LABELS: Record<string, string> = {
   blocked: 'Bloqueado',
 }
 
+const CREDIT_ENUM_FIELDS = new Set(['interest_method', 'surcharge_kind', 'allowed_frequencies'])
+
 const CREDIT_ENUM_LABELS: Record<string, string> = {
   recargo_fijo: 'Recargo fijo',
   percent_of_financed: 'Porcentaje del financiado',
@@ -143,12 +145,16 @@ export function formatAuditValue(
   if (field === 'doc_type' && value === 'cedula') return 'Cédula'
   if (field === 'doc_type' && value === 'pasaporte') return 'Pasaporte'
   if (Array.isArray(value)) {
+    if (!value.length) return '—'
     return value
       .map((item) => formatAuditValue(field, item, namesById))
       .join(', ')
   }
   if (typeof value === 'boolean') return value ? 'Sí' : 'No'
-  if (typeof value === 'string') return CREDIT_ENUM_LABELS[value] ?? value
+  if (typeof value === 'string') {
+    if (CREDIT_ENUM_FIELDS.has(field)) return CREDIT_ENUM_LABELS[value] ?? value
+    return value
+  }
   if (typeof value === 'number') return String(value)
   return JSON.stringify(value)
 }
