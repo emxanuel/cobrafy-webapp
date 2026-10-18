@@ -247,7 +247,7 @@ export function clientSaleFixture(overrides: Partial<SaleRead> = {}): SaleRead {
     financed: '15000.00',
     surcharge: '3000.00',
     total: '18000.00',
-    balance: '18000.00',
+    balance: '15000.00',
     surcharge_kind: 'percent_of_financed',
     surcharge_percent: '20.00',
     surcharge_amount: null,
