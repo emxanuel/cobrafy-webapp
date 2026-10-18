@@ -143,22 +143,22 @@ describe('toApiError', () => {
     expect(invite.message).toBe('invitación inválida')
 
     const contacts = toApiError(
-      axiosError(409, { detail: 'el cliente ya tiene el máximo de 50 contactos' }),
+      axiosError(409, { detail: 'El cliente ya tiene el máximo de 50 contactos' }),
     )
-    expect(contacts.message).toBe('el cliente ya tiene el máximo de 50 contactos')
+    expect(contacts.message).toBe('El cliente ya tiene el máximo de 50 contactos')
 
     const plain409 = toApiError(
       axiosError(
         409,
         {
-          detail: 'ya existe un cliente con este documento',
+          detail: 'Ya existe un cliente con este documento',
         },
         '/clients',
       ),
     )
-    expect(plain409.fieldErrors.document).toBe('ya existe un cliente con este documento')
+    expect(plain409.fieldErrors.document).toBe('Ya existe un cliente con este documento')
     expect(plain409.code).toBeUndefined()
-    expect(plain409.message).toBe('ya existe un cliente con este documento')
+    expect(plain409.message).toBe('Ya existe un cliente con este documento')
   })
 
   it('un detail técnico en inglés se reemplaza por el genérico', () => {
@@ -231,16 +231,16 @@ describe('toApiError', () => {
 
   it('deja los 409 de bloqueo como banner, no como campo', () => {
     const blocked = toApiError(
-      axiosError(409, { detail: 'el cliente ya está bloqueado' }, '/clients/cli-1/block'),
+      axiosError(409, { detail: 'El cliente ya está bloqueado' }, '/clients/cli-1/block'),
     )
     expect(blocked.fieldErrors).toEqual({})
-    expect(blocked.message).toBe('el cliente ya está bloqueado')
+    expect(blocked.message).toBe('El cliente ya está bloqueado')
 
     const unblocked = toApiError(
-      axiosError(409, { detail: 'el cliente no está bloqueado' }, '/clients/cli-1/unblock'),
+      axiosError(409, { detail: 'El cliente no está bloqueado' }, '/clients/cli-1/unblock'),
     )
     expect(unblocked.fieldErrors).toEqual({})
-    expect(unblocked.message).toBe('el cliente no está bloqueado')
+    expect(unblocked.message).toBe('El cliente no está bloqueado')
   })
 
   it('un detail de lista en inglés se reemplaza por el genérico', () => {
@@ -262,11 +262,11 @@ describe('toApiError', () => {
 
     const spanish = toApiError(
       axiosError(422, {
-        detail: [{ field: 'price', msg: 'el precio es obligatorio' }],
+        detail: [{ field: 'price', msg: 'El precio es obligatorio' }],
       }),
     )
-    expect(spanish.message).toBe('el precio es obligatorio')
-    expect(spanish.fieldErrors.price).toBe('el precio es obligatorio')
+    expect(spanish.message).toBe('El precio es obligatorio')
+    expect(spanish.fieldErrors.price).toBe('El precio es obligatorio')
 
     const blocked = toApiError(axiosError(409, { detail: 'Atraso de 3 cuotas' }))
     expect(blocked.message).toBe('Atraso de 3 cuotas')
@@ -280,19 +280,19 @@ describe('toApiError', () => {
 
   it('un 409 de PATCH /clients/:id sin código no va a document', () => {
     const general = toApiError(
-      axiosError(409, { detail: 'este cliente ya está en otro negocio' }, '/clients/cli-1'),
+      axiosError(409, { detail: 'Este cliente ya está en otro negocio' }, '/clients/cli-1'),
     )
     expect(general.fieldErrors).toEqual({})
-    expect(general.message).toBe('este cliente ya está en otro negocio')
+    expect(general.message).toBe('Este cliente ya está en otro negocio')
 
     const duplicate = toApiError(
       axiosError(
         409,
-        { detail: 'ya existe un cliente con este documento', code: 'DOCUMENT_DUPLICATE' },
+        { detail: 'Ya existe un cliente con este documento', code: 'DOCUMENT_DUPLICATE' },
         '/clients/cli-1',
       ),
     )
-    expect(duplicate.fieldErrors.document).toBe('ya existe un cliente con este documento')
+    expect(duplicate.fieldErrors.document).toBe('Ya existe un cliente con este documento')
     expect(duplicate.code).toBe('DOCUMENT_DUPLICATE')
   })
 
@@ -300,11 +300,292 @@ describe('toApiError', () => {
     const guarantor = toApiError(
       axiosError(
         409,
-        { detail: 'el documento del garante no se pudo leer' },
+        { detail: 'El documento del garante no se pudo leer' },
         '/clients/cli-1/contacts',
       ),
     )
     expect(guarantor.fieldErrors).toEqual({})
-    expect(guarantor.message).toBe('el documento del garante no se pudo leer')
+    expect(guarantor.message).toBe('El documento del garante no se pudo leer')
+  })
+})
+
+const BACKEND_A_SPANISH_MESSAGES = [
+  'Campo obligatorio',
+  'Campos adicionales no permitidos',
+  'Debe ser texto',
+  'Debe tener al menos 1 caracteres',
+  'Debe tener como máximo 500 caracteres',
+  'Debe ser un número entero',
+  'Debe ser verdadero o falso',
+  'Identificador inválido',
+  'Valor no permitido',
+  'Fecha inválida (usa AAAA-MM-DD)',
+  'Fecha y hora inválidas',
+  'Debe ser mayor o igual a 1',
+  'Debe ser menor o igual a 10',
+  'Debe ser mayor que 0',
+  'Debe ser menor que 100',
+  'Debe ser una lista',
+  'Debe tener al menos 1 elementos',
+  'Debe tener como máximo 50 elementos',
+  'El cuerpo debe ser un objeto',
+  'El cuerpo no es un JSON válido',
+  'Correo inválido',
+  'Dato inválido',
+  'Debe ser un número',
+  'Monto inválido',
+  'RNC inválido',
+] as const
+
+describe('contrato 210-A {field, code, message}', () => {
+  it('un 422 con varios items llena fieldErrors y el mensaje es el del primero', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          { field: 'price', code: 'value_error', message: 'El precio debe ser mayor que cero' },
+          { field: 'installments', code: 'int_type', message: 'Dato inválido' },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.price).toBe('El precio debe ser mayor que cero')
+    expect(error.fieldErrors.installments).toBe('Dato inválido')
+    expect(error.message).toBe('El precio debe ser mayor que cero')
+    expect(error.code).toBe('value_error')
+    expect(error.codes).toEqual(['value_error', 'int_type'])
+  })
+
+  it('un item con field null va al mensaje, no a un campo', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: null, code: 'AMOUNT_OVER_MAX', message: 'El monto supera el máximo' }],
+      }),
+    )
+    expect(error.fieldErrors).toEqual({})
+    expect(error.message).toBe('El monto supera el máximo')
+    expect(error.code).toBe('AMOUNT_OVER_MAX')
+  })
+
+  it('acepta Idempotency-Key como field', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            field: 'Idempotency-Key',
+            code: 'uuid_type',
+            message: 'La clave de idempotencia no es válida',
+          },
+        ],
+      }),
+    )
+    expect(error.fieldErrors['Idempotency-Key']).toBe('La clave de idempotencia no es válida')
+    expect(error.code).toBe('uuid_type')
+  })
+
+  it('lee los 6 códigos 409 nuevos con el mensaje del backend', () => {
+    const cases = [
+      ['CLIENT_ALREADY_BLOCKED', 'El cliente ya está bloqueado'],
+      ['CLIENT_NOT_BLOCKED', 'El cliente no está bloqueado'],
+      ['CLIENT_DOCUMENT_EXISTS', 'Ya existe un cliente con este documento'],
+      ['LAST_ACTIVE_OWNER', 'El negocio debe tener al menos un dueño activo'],
+      ['INVITATION_ACCEPT_CONFLICT', 'No se pudo completar la invitación'],
+      ['INVITATION_NOT_REVOCABLE', 'La invitación no se puede revocar'],
+    ] as const
+
+    for (const [code, message] of cases) {
+      const error = toApiError(
+        axiosError(409, { detail: [{ field: null, code, message }] }, '/users/mem-1'),
+      )
+      expect(error.code).toBe(code)
+      expect(error.message).toBe(message)
+    }
+  })
+
+  it('CLIENT_DOCUMENT_EXISTS llena fieldErrors.document', () => {
+    const error = toApiError(
+      axiosError(
+        409,
+        {
+          detail: [
+            {
+              field: null,
+              code: 'CLIENT_DOCUMENT_EXISTS',
+              message: 'Ya existe un cliente con este documento',
+            },
+          ],
+        },
+        '/clients',
+      ),
+    )
+    expect(error.fieldErrors.document).toBe('Ya existe un cliente con este documento')
+    expect(error.code).toBe('CLIENT_DOCUMENT_EXISTS')
+  })
+
+  it('CLIENT_ALREADY_BLOCKED en /clients/{id}/block no llena document', () => {
+    const error = toApiError(
+      axiosError(
+        409,
+        {
+          detail: [
+            {
+              field: null,
+              code: 'CLIENT_ALREADY_BLOCKED',
+              message: 'El cliente ya está bloqueado',
+            },
+          ],
+        },
+        '/clients/cli-1/block',
+      ),
+    )
+    expect(error.fieldErrors).toEqual({})
+    expect(error.fieldErrors.document).toBeUndefined()
+    expect(error.message).toBe('El cliente ya está bloqueado')
+    expect(error.code).toBe('CLIENT_ALREADY_BLOCKED')
+  })
+
+  it('los códigos existentes siguen usando messageForCode', () => {
+    expect(
+      toApiError(
+        axiosError(409, {
+          detail: [{ field: null, code: 'DOCUMENT_UNREADABLE', message: 'crypto' }],
+        }),
+      ).message,
+    ).toBe(
+      'No pudimos leer el documento del cliente. Revisa la ficha y vuelve a guardar el documento. Si sigue pasando, avísanos.',
+    )
+    expect(
+      toApiError(
+        axiosError(409, {
+          detail: [{ field: null, code: 'SALE_HAS_PAYMENTS', message: 'no se puede anular' }],
+        }),
+      ).message,
+    ).toBe('No se puede anular: la venta ya tiene pagos.')
+  })
+
+  it('la forma vieja string, loc/msg/type y el dict 502 siguen funcionando', () => {
+    const string409 = toApiError(
+      axiosError(409, { detail: 'Ya existe un cliente con este documento' }, '/clients'),
+    )
+    expect(string409.fieldErrors.document).toBe('Ya existe un cliente con este documento')
+    expect(string409.code).toBeUndefined()
+
+    const locType = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            loc: ['body', 'document'],
+            msg: 'El formato de la cédula no es válido.',
+            type: 'value_error',
+          },
+        ],
+      }),
+    )
+    expect(locType.fieldErrors.document).toBe('El formato de la cédula no es válido.')
+    expect(locType.message).toBe('El formato de la cédula no es válido.')
+
+    const invite502 = toApiError(
+      axiosError(502, { detail: { code: 'invite_email_failed', message: 'smtp timeout' } }),
+    )
+    expect(invite502.code).toBe('invite_email_failed')
+    expect(invite502.message).toBe(
+      'No se pudo enviar el correo de invitación; puedes reenviarla.',
+    )
+  })
+
+  it('un message en inglés en la forma nueva cae al genérico', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: 'price', code: 'missing', message: 'Field required' }],
+      }),
+    )
+    expect(error.message).toBe(GENERIC_MESSAGE)
+    expect(error.fieldErrors).toEqual({})
+    expect(error.code).toBe('missing')
+  })
+
+  it('si hay items nuevos y viejos, gana el contrato nuevo', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          { loc: ['body', 'price'], msg: 'Field required', type: 'missing' },
+          { field: 'down_payment', code: 'value_error', message: 'La inicial es inválida' },
+        ],
+      }),
+    )
+    expect(error.code).toBe('value_error')
+    expect(error.message).toBe('La inicial es inválida')
+    expect(error.fieldErrors.down_payment).toBe('La inicial es inválida')
+    expect(error.fieldErrors.price).toBeUndefined()
+  })
+
+  it('Campos adicionales no permitidos va al campo y no al genérico', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            field: 'status',
+            code: 'extra_forbidden',
+            message: 'Campos adicionales no permitidos',
+          },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.status).toBe('Campos adicionales no permitidos')
+    expect(error.message).toBe('Campos adicionales no permitidos')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+    expect(error.code).toBe('extra_forbidden')
+  })
+
+  it.each(BACKEND_A_SPANISH_MESSAGES)(
+    'el mensaje en español %s no cae en GENERIC_MESSAGE',
+    (message) => {
+      const error = toApiError(
+        axiosError(422, {
+          detail: [{ field: 'status', code: 'value_error', message }],
+        }),
+      )
+      expect(error.message).toBe(message)
+      expect(error.message).not.toBe(GENERIC_MESSAGE)
+      expect(error.fieldErrors.status).toBe(message)
+    },
+  )
+
+  it.each([
+    ['Indica al menos una frecuencia', 'no'],
+    ['demasiado largo', 'no'],
+    ['no puede ser negativa', 'no'],
+    ['no admite recargo', 'no'],
+    ['monto inválido', 'no'],
+    ['nombre obligatorio', 'no'],
+    ['Field required', 'sí'],
+    ['too long', 'sí'],
+    ['Invalid input', 'sí'],
+    ['Value must not be negative', 'sí'],
+    ['Extra inputs are not permitted', 'sí'],
+  ] as const)(
+    'el detalle viejo "%s" %s cae en GENERIC_MESSAGE',
+    (message, falls) => {
+      const error = toApiError(
+        axiosError(422, {
+          detail: [{ field: 'status', code: 'value_error', message }],
+        }),
+      )
+      if (falls === 'sí') {
+        expect(error.message).toBe(GENERIC_MESSAGE)
+        expect(error.fieldErrors).toEqual({})
+      } else {
+        expect(error.message).toBe(message)
+        expect(error.message).not.toBe(GENERIC_MESSAGE)
+        expect(error.fieldErrors.status).toBe(message)
+      }
+    },
+  )
+
+  it('un 409 string en inglés en POST /clients no va a document', () => {
+    const error = toApiError(
+      axiosError(409, { detail: 'Duplicate key value violates unique constraint' }, '/clients'),
+    )
+    expect(error.message).toBe(GENERIC_MESSAGE)
+    expect(error.fieldErrors).toEqual({})
+    expect(error.fieldErrors.document).toBeUndefined()
   })
 })

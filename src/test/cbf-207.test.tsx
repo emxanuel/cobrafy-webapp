@@ -305,7 +305,7 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
               {
                 field: null,
                 code: 'SALE_HAS_PAYMENTS',
-                message: 'no se puede anular una venta con pagos',
+                message: 'No se puede anular una venta con pagos',
               },
             ],
           },
@@ -422,7 +422,7 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
         return HttpResponse.json(
           {
             detail: [
-              { field: null, code: 'SALE_ALREADY_VOIDED', message: 'esta venta ya está anulada' },
+              { field: null, code: 'SALE_ALREADY_VOIDED', message: 'Esta venta ya está anulada' },
             ],
           },
           { status: 409 },

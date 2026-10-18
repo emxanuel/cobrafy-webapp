@@ -88,7 +88,7 @@ export function MembersPage() {
         ) : null}
         {patchMember.isError ? (
           <Alert>
-            {isApiError(patchMember.error) && patchMember.error.status === 409
+            {isApiError(patchMember.error) && patchMember.error.code === 'LAST_ACTIVE_OWNER'
               ? 'El negocio debe tener al menos un dueño activo.'
               : getApiErrorMessage(patchMember.error)}
           </Alert>
@@ -109,6 +109,7 @@ export function MembersPage() {
 
       <section>
         <h2 className="mt-0 mb-3 text-xl">Invitaciones pendientes</h2>
+        {revoke.isError ? <Alert>{getApiErrorMessage(revoke.error)}</Alert> : null}
         {pendingInvites.length === 0 ? (
           <p>No hay invitaciones en espera.</p>
         ) : (

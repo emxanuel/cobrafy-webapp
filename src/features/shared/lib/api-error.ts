@@ -1,5 +1,7 @@
 import axios from 'axios'
 
+type ErrorItem = { field: string | null; code: string; message: string }
+
 type FastApiDetailItem = {
   loc?: Array<string | number>
   msg?: string
@@ -22,18 +24,21 @@ export class ApiError extends Error {
   readonly status: number
   readonly fieldErrors: Record<string, string>
   readonly code?: string
+  readonly codes: string[]
 
   constructor(
     message: string,
     status: number,
     fieldErrors: Record<string, string> = {},
     code?: string,
+    codes?: string[],
   ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.fieldErrors = fieldErrors
     this.code = code
+    this.codes = codes ?? (code ? [code] : [])
   }
 }
 
@@ -72,9 +77,10 @@ export function toApiError(error: unknown): ApiError {
   const status = error.response?.status ?? 0
   const body = (error.response?.data ?? {}) as ErrorBody
   const fieldErrors = parseFieldErrors(body, status, error.config?.url)
-  const code = errorCode(body)
+  const codes = collectCodes(body)
+  const code = codes[0] ?? errorCode(body)
   const message = parseMessage(body, status, code, fieldErrors)
-  return new ApiError(message, status, fieldErrors, code)
+  return new ApiError(message, status, fieldErrors, code, codes)
 }
 
 const INVITE_EMAIL_FAILED = 'No se pudo enviar el correo de invitación; puedes reenviarla.'
@@ -117,7 +123,7 @@ const TECHNICAL_DETAILS = new Set(
 )
 
 const SPANISH_DETAIL_WORD =
-  /\b(?:ya|este|esta|esto|estos|estas|para|está|están|debe|tienen?|existe|formato|revisa|inténtalo|sesión|permiso|bloqueo|bloqueado|anterior|motivo|correo|contraseña|cuotas?|atraso|venta|negocio|garante|cliente|documento|invitación|credenciales|válid\w*|inválid\w*|autorizado|autenticado|encontrado|recurso|conflicto|crédito|máximo|contactos|obligatorio|demasiados|intentos|pudimos|pudo|pudieron|completar|conexión|permitido)\b/i
+  /\b(?:ya|este|esta|esto|estos|estas|para|está|están|debe|tienen?|existe|formato|revisa|inténtalo|sesión|permiso|bloqueo|bloqueado|anterior|motivo|correo|contraseña|cuotas?|atraso|venta|negocio|garante|cliente|documento|invitación|credenciales|válid\w*|inválid\w*|autorizado|autenticado|encontrado|recurso|conflicto|crédito|máximo|contactos|obligatorio|demasiados|intentos|pudimos|pudo|pudieron|completar|conexión|permitid[oa]s?|indica|demasiad\w*|negativ[oa]s?|admite|recargo|monto|nombre)\b/i
 
 function isTechnicalDetail(text: string): boolean {
   return TECHNICAL_DETAILS.has(text.trim().toLowerCase())
@@ -150,6 +156,13 @@ function isDocumentConflictCode(code?: string): boolean {
   )
 }
 
+function isNewContractItem(item: unknown): item is ErrorItem {
+  if (typeof item !== 'object' || item == null) return false
+  const row = item as Record<string, unknown>
+  const fieldOk = row.field === null || typeof row.field === 'string'
+  return fieldOk && typeof row.code === 'string' && typeof row.message === 'string'
+}
+
 function stringDetail(body: ErrorBody): string | null {
   if (typeof body.detail === 'string' && body.detail.trim()) return body.detail.trim()
   if (typeof body.message === 'string' && body.message.trim()) return body.message.trim()
@@ -162,14 +175,40 @@ function stringDetail(body: ErrorBody): string | null {
   return null
 }
 
+function rawDetailList(body: ErrorBody): unknown[] | null {
+  if (Array.isArray(body.detail)) return body.detail
+  if (Array.isArray(body.details)) return body.details
+  return null
+}
+
 function listItems(body: ErrorBody): FastApiDetailItem[] | null {
-  const raw = Array.isArray(body.detail)
-    ? body.detail
-    : Array.isArray(body.details)
-      ? body.details
-      : null
+  const raw = rawDetailList(body)
   if (!raw) return null
-  return raw.filter((item): item is FastApiDetailItem => typeof item === 'object' && item != null)
+  const objects = raw.filter(
+    (item): item is FastApiDetailItem => typeof item === 'object' && item != null,
+  )
+  const newest = objects.filter(isNewContractItem)
+  return newest.length ? newest : objects
+}
+
+function collectCodes(body: ErrorBody): string[] {
+  const items = listItems(body)
+  const fromItems: string[] = []
+  for (const item of items ?? []) {
+    if (typeof item.code === 'string' && item.code.trim()) fromItems.push(item.code)
+  }
+  if (fromItems.length) return fromItems
+  const fallback = fallbackCode(body)
+  return fallback ? [fallback] : []
+}
+
+function fallbackCode(body: ErrorBody): string | undefined {
+  if (typeof body.code === 'string' && body.code.trim()) return body.code
+  if (body.detail && typeof body.detail === 'object' && !Array.isArray(body.detail)) {
+    const nested = body.detail as { code?: unknown }
+    if (typeof nested.code === 'string') return nested.code
+  }
+  return undefined
 }
 
 export function errorCode(body: ErrorBody): string | undefined {
@@ -177,12 +216,7 @@ export function errorCode(body: ErrorBody): string | undefined {
   if (items?.[0] && typeof items[0].code === 'string' && items[0].code.trim()) {
     return items[0].code
   }
-  if (typeof body.code === 'string') return body.code
-  if (body.detail && typeof body.detail === 'object' && !Array.isArray(body.detail)) {
-    const nested = body.detail as { code?: unknown }
-    if (typeof nested.code === 'string') return nested.code
-  }
-  return undefined
+  return fallbackCode(body)
 }
 
 function messageForCode(code: string | undefined): string | undefined {
@@ -193,6 +227,20 @@ function messageForCode(code: string | undefined): string | undefined {
   if (code === 'SALE_ALREADY_VOIDED') return SALE_ALREADY_VOIDED_MESSAGE
   if (code === 'SALE_HAS_PAYMENTS') return SALE_HAS_PAYMENTS_MESSAGE
   return undefined
+}
+
+function itemMessage(item: FastApiDetailItem): string {
+  if (isNewContractItem(item)) return item.message.trim()
+  if (typeof item.message === 'string' && item.message.trim()) return item.message.trim()
+  if (typeof item.msg === 'string' && item.msg.trim()) return item.msg.trim()
+  return ''
+}
+
+function itemField(item: FastApiDetailItem): string | null {
+  if (isNewContractItem(item)) {
+    return typeof item.field === 'string' && item.field.trim() ? item.field : null
+  }
+  return detailField(item)
 }
 
 export function parseMessage(
@@ -206,13 +254,7 @@ export function parseMessage(
 
   const items = listItems(body)
   if (items?.[0]) {
-    const first = items[0]
-    const listMsg =
-      typeof first.message === 'string' && first.message.trim()
-        ? first.message.trim()
-        : typeof first.msg === 'string' && first.msg.trim()
-          ? first.msg.trim()
-          : ''
+    const listMsg = itemMessage(items[0])
     if (listMsg) {
       return isGenericDetail(listMsg, status) ? GENERIC_MESSAGE : listMsg
     }
@@ -236,11 +278,12 @@ export function parseMessage(
 export function parseFieldErrors(body: ErrorBody, status = 0, url = ''): Record<string, string> {
   const errors: Record<string, string> = {}
   const items = listItems(body)
+  const newest = (items ?? []).filter(isNewContractItem)
 
   if (items) {
     for (const row of items) {
-      const field = detailField(row)
-      const msg = (row.message ?? row.msg)?.trim()
+      const field = itemField(row)
+      const msg = itemMessage(row)
       if (field && msg && !errors[field] && !isGenericDetail(msg, status)) {
         errors[field] = msg
       }
@@ -259,15 +302,25 @@ export function parseFieldErrors(body: ErrorBody, status = 0, url = ''): Record<
   }
 
   if (status === 409 && !Object.keys(errors).length) {
+    if (newest.length) {
+      const documentItem = newest.find((item) => isDocumentConflictCode(item.code))
+      if (documentItem) {
+        const msg = documentItem.message.trim()
+        if (msg && !isGenericDetail(msg, status)) errors.document = msg
+      }
+      return errors
+    }
+
     const code = errorCode(body)
     if (code === 'DOCUMENT_UNREADABLE' || code === 'DOCUMENT_UNREADABLE_GUARANTOR') {
       return errors
     }
     if (isDocumentConflictCode(code) || isClientCreateUrl(url)) {
-      errors.document =
+      const raw =
         typeof body.detail === 'string' && body.detail.trim()
-          ? body.detail
-          : 'ya existe un cliente con este documento'
+          ? body.detail.trim()
+          : 'Ya existe un cliente con este documento'
+      if (!isGenericDetail(raw, status)) errors.document = raw
     }
   }
 
@@ -281,7 +334,9 @@ function detailField(row: FastApiDetailItem): string | null {
 
 function locToField(loc: FastApiDetailItem['loc']): string | null {
   if (!loc?.length) return null
-  const parts = loc.filter((part) => part !== 'body' && part !== 'query')
+  const parts = loc.filter(
+    (part) => part !== 'body' && part !== 'query' && part !== 'path' && part !== 'header',
+  )
   if (!parts.length) return null
   return parts.join('.')
 }
