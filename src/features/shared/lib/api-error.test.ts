@@ -308,3 +308,184 @@ describe('toApiError', () => {
     expect(guarantor.message).toBe('el documento del garante no se pudo leer')
   })
 })
+
+describe('contrato 210-A {field, code, message}', () => {
+  it('un 422 con varios items llena fieldErrors y el mensaje es el del primero', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          { field: 'price', code: 'value_error', message: 'El precio debe ser mayor que cero' },
+          { field: 'installments', code: 'int_type', message: 'Dato inválido' },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.price).toBe('El precio debe ser mayor que cero')
+    expect(error.fieldErrors.installments).toBe('Dato inválido')
+    expect(error.message).toBe('El precio debe ser mayor que cero')
+    expect(error.code).toBe('value_error')
+    expect(error.codes).toEqual(['value_error', 'int_type'])
+  })
+
+  it('un item con field null va al mensaje, no a un campo', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: null, code: 'AMOUNT_OVER_MAX', message: 'El monto supera el máximo' }],
+      }),
+    )
+    expect(error.fieldErrors).toEqual({})
+    expect(error.message).toBe('El monto supera el máximo')
+    expect(error.code).toBe('AMOUNT_OVER_MAX')
+  })
+
+  it('acepta Idempotency-Key como field', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            field: 'Idempotency-Key',
+            code: 'uuid_type',
+            message: 'La clave de idempotencia no es válida',
+          },
+        ],
+      }),
+    )
+    expect(error.fieldErrors['Idempotency-Key']).toBe('La clave de idempotencia no es válida')
+    expect(error.code).toBe('uuid_type')
+  })
+
+  it('lee los 6 códigos 409 nuevos con el mensaje del backend', () => {
+    const cases = [
+      ['CLIENT_ALREADY_BLOCKED', 'el cliente ya está bloqueado'],
+      ['CLIENT_NOT_BLOCKED', 'el cliente no está bloqueado'],
+      ['CLIENT_DOCUMENT_EXISTS', 'ya existe un cliente con este documento'],
+      ['LAST_ACTIVE_OWNER', 'el negocio debe tener al menos un dueño activo'],
+      ['INVITATION_ACCEPT_CONFLICT', 'no se pudo completar la invitación'],
+      ['INVITATION_NOT_REVOCABLE', 'la invitación no se puede revocar'],
+    ] as const
+
+    for (const [code, message] of cases) {
+      const error = toApiError(
+        axiosError(409, { detail: [{ field: null, code, message }] }, '/users/mem-1'),
+      )
+      expect(error.code).toBe(code)
+      expect(error.message).toBe(message)
+    }
+  })
+
+  it('CLIENT_DOCUMENT_EXISTS llena fieldErrors.document', () => {
+    const error = toApiError(
+      axiosError(
+        409,
+        {
+          detail: [
+            {
+              field: null,
+              code: 'CLIENT_DOCUMENT_EXISTS',
+              message: 'ya existe un cliente con este documento',
+            },
+          ],
+        },
+        '/clients',
+      ),
+    )
+    expect(error.fieldErrors.document).toBe('ya existe un cliente con este documento')
+    expect(error.code).toBe('CLIENT_DOCUMENT_EXISTS')
+  })
+
+  it('CLIENT_ALREADY_BLOCKED en /clients/{id}/block no llena document', () => {
+    const error = toApiError(
+      axiosError(
+        409,
+        {
+          detail: [
+            {
+              field: null,
+              code: 'CLIENT_ALREADY_BLOCKED',
+              message: 'el cliente ya está bloqueado',
+            },
+          ],
+        },
+        '/clients/cli-1/block',
+      ),
+    )
+    expect(error.fieldErrors).toEqual({})
+    expect(error.fieldErrors.document).toBeUndefined()
+    expect(error.message).toBe('el cliente ya está bloqueado')
+    expect(error.code).toBe('CLIENT_ALREADY_BLOCKED')
+  })
+
+  it('los códigos existentes siguen usando messageForCode', () => {
+    expect(
+      toApiError(
+        axiosError(409, {
+          detail: [{ field: null, code: 'DOCUMENT_UNREADABLE', message: 'crypto' }],
+        }),
+      ).message,
+    ).toBe(
+      'No pudimos leer el documento del cliente. Revisa la ficha y vuelve a guardar el documento. Si sigue pasando, avísanos.',
+    )
+    expect(
+      toApiError(
+        axiosError(409, {
+          detail: [{ field: null, code: 'SALE_HAS_PAYMENTS', message: 'no se puede anular' }],
+        }),
+      ).message,
+    ).toBe('No se puede anular: la venta ya tiene pagos.')
+  })
+
+  it('la forma vieja string, loc/msg/type y el dict 502 siguen funcionando', () => {
+    const string409 = toApiError(
+      axiosError(409, { detail: 'ya existe un cliente con este documento' }, '/clients'),
+    )
+    expect(string409.fieldErrors.document).toBe('ya existe un cliente con este documento')
+    expect(string409.code).toBeUndefined()
+
+    const locType = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            loc: ['body', 'document'],
+            msg: 'El formato de la cédula no es válido.',
+            type: 'value_error',
+          },
+        ],
+      }),
+    )
+    expect(locType.fieldErrors.document).toBe('El formato de la cédula no es válido.')
+    expect(locType.message).toBe('El formato de la cédula no es válido.')
+
+    const invite502 = toApiError(
+      axiosError(502, { detail: { code: 'invite_email_failed', message: 'smtp timeout' } }),
+    )
+    expect(invite502.code).toBe('invite_email_failed')
+    expect(invite502.message).toBe(
+      'No se pudo enviar el correo de invitación; puedes reenviarla.',
+    )
+  })
+
+  it('un message en inglés en la forma nueva cae al genérico', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: 'price', code: 'missing', message: 'Field required' }],
+      }),
+    )
+    expect(error.message).toBe(GENERIC_MESSAGE)
+    expect(error.fieldErrors).toEqual({})
+    expect(error.code).toBe('missing')
+  })
+
+  it('si hay items nuevos y viejos, gana el contrato nuevo', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          { loc: ['body', 'price'], msg: 'Field required', type: 'missing' },
+          { field: 'down_payment', code: 'value_error', message: 'La inicial es inválida' },
+        ],
+      }),
+    )
+    expect(error.code).toBe('value_error')
+    expect(error.message).toBe('La inicial es inválida')
+    expect(error.fieldErrors.down_payment).toBe('La inicial es inválida')
+    expect(error.fieldErrors.price).toBeUndefined()
+  })
+})

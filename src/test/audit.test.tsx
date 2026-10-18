@@ -182,7 +182,14 @@ describe('bitácora', () => {
     cleanup()
     server.use(
       http.get('*/audit', () =>
-        HttpResponse.json({ detail: 'from debe ser anterior a to' }, { status: 422 }),
+        HttpResponse.json(
+          {
+            detail: [
+              { field: null, code: 'value_error', message: 'from debe ser anterior a to' },
+            ],
+          },
+          { status: 422 },
+        ),
       ),
     )
     window.history.pushState({}, '', '/auditoria')

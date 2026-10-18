@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { auditActionTitle } from './labels'
+import {
+  auditActionTitle,
+  ENTITY_BADGE,
+  ENTITY_OPTIONS,
+  fieldLabel,
+} from './labels'
 import type { AuditRead } from '@/features/audit/services/types'
 
 function event(overrides: Partial<AuditRead>): AuditRead {
@@ -30,5 +35,35 @@ describe('auditActionTitle', () => {
     expect(auditActionTitle(event({ action: 'login_failed', entity: 'user' }))).toBe(
       'Intento de entrada fallido',
     )
+  })
+
+  it('traduce credit_settings y no usa la palabra interés', () => {
+    expect(
+      auditActionTitle(event({ action: 'create', entity: 'credit_settings' })),
+    ).toBe('Configuración de crédito creada')
+    expect(
+      auditActionTitle(event({ action: 'update', entity: 'credit_settings' })),
+    ).toBe('Configuración de crédito editada')
+    expect(ENTITY_BADGE.credit_settings).toBe('Crédito')
+    expect(ENTITY_OPTIONS.some((option) => option.value === 'credit_settings')).toBe(true)
+    expect(ENTITY_OPTIONS.find((option) => option.value === 'credit_settings')?.label).toBe(
+      'Crédito',
+    )
+    expect(fieldLabel('interest_method')).toBe('Método de cálculo')
+    expect(fieldLabel('surcharge_kind')).toBe('Tipo de recargo')
+    expect(fieldLabel('surcharge_percent')).toBe('Recargo (%)')
+    expect(fieldLabel('surcharge_amount')).toBe('Recargo fijo')
+    expect(fieldLabel('allowed_frequencies')).toBe('Frecuencias permitidas')
+    expect(fieldLabel('max_installments')).toBe('Máximo de cuotas')
+    expect(fieldLabel('min_down_payment_percent')).toBe('Inicial mínima (%)')
+
+    const visible = [
+      ...ENTITY_OPTIONS.map((option) => option.label),
+      ...Object.values(ENTITY_BADGE),
+      fieldLabel('interest_method'),
+      auditActionTitle(event({ action: 'create', entity: 'credit_settings' })),
+      auditActionTitle(event({ action: 'update', entity: 'credit_settings' })),
+    ].join(' ')
+    expect(visible.toLowerCase()).not.toMatch(/inter[eé]s/)
   })
 })

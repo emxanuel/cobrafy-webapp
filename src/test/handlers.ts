@@ -58,6 +58,12 @@ function corsExpose(headers: Record<string, string> = {}) {
   }
 }
 
+type ContractErrorItem = { field: string | null; code: string; message: string }
+
+function contractError(status: 409 | 422, items: ContractErrorItem[]) {
+  return HttpResponse.json({ detail: items }, { status })
+}
+
 type CreditSettingsState = {
   interest_method: string
   surcharge_kind: 'percent_of_financed' | 'fixed_amount'
@@ -582,22 +588,14 @@ export const handlers = [
     if (denied) return denied
     const body = (await request.json()) as { password?: string; pin?: string | null }
     if (!body.password) {
-      return HttpResponse.json(
-        {
-          detail: [{ loc: ['body', 'password'], msg: 'Field required', type: 'missing' }],
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'password', code: 'missing', message: 'Campo obligatorio' },
+      ])
     }
     if (body.pin != null && !/^\d{4,6}$/.test(body.pin)) {
-      return HttpResponse.json(
-        {
-          detail: [
-            { loc: ['body', 'pin'], msg: 'el PIN debe ser de 4 a 6 dígitos', type: 'value_error' },
-          ],
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'pin', code: 'value_error', message: 'El PIN debe ser de 4 a 6 dígitos' },
+      ])
     }
     return new HttpResponse(null, { status: 204 })
   }),
@@ -612,12 +610,9 @@ export const handlers = [
       return HttpResponse.json({ detail: 'invitación inválida' }, { status: 400 })
     }
     if (!body.name || !body.password) {
-      return HttpResponse.json(
-        {
-          detail: 'indica nombre y contraseña',
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: null, code: 'value_error', message: 'Indica nombre y contraseña' },
+      ])
     }
     return HttpResponse.json({
       business_id: businesses.norte.id,
@@ -726,7 +721,9 @@ export const handlers = [
     if (denied) return denied
     const url = new URL(request.url)
     if (![...url.searchParams.keys()].every((key) => key === 'limit' || key === 'before')) {
-      return HttpResponse.json({ detail: 'parámetro de consulta no permitido' }, { status: 422 })
+      return contractError(422, [
+        { field: null, code: 'value_error', message: 'Parámetro de consulta no permitido' },
+      ])
     }
     const id = String(params.id)
     if (id === 'cli-missing') {
@@ -801,10 +798,13 @@ export const handlers = [
     const current = clients.get(id) ?? clientFixture({ id })
     const activeCount = current.contacts.filter((item) => item.is_active).length
     if (activeCount >= 50) {
-      return HttpResponse.json(
-        { detail: 'el cliente ya tiene el máximo de 50 contactos' },
-        { status: 422 },
-      )
+      return contractError(422, [
+        {
+          field: null,
+          code: 'value_error',
+          message: 'El cliente ya tiene el máximo de 50 contactos',
+        },
+      ])
     }
     contactCount += 1
     const contact = {
@@ -925,14 +925,9 @@ export const handlers = [
     if (denied) return denied
     const payload = (await request.json()) as ClientUpdate & { status?: string }
     if ('status' in payload) {
-      return HttpResponse.json(
-        {
-          detail: [
-            { loc: ['body', 'status'], msg: 'Extra inputs are not permitted', type: 'extra_forbidden' },
-          ],
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'status', code: 'extra_forbidden', message: 'Campos adicionales no permitidos' },
+      ])
     }
     const id = String(params.id)
     clientWrites.push({ method: request.method, url: request.url, body: payload })
@@ -962,14 +957,15 @@ export const handlers = [
     }
     const payload = (await request.json()) as { reason?: string }
     if (!payload.reason?.trim()) {
-      return HttpResponse.json(
-        { detail: [{ loc: ['body', 'reason'], msg: 'el motivo es obligatorio', type: 'value_error' }] },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'reason', code: 'value_error', message: 'El motivo es obligatorio' },
+      ])
     }
     const current = clients.get(String(params.id))
     if (current?.is_blocked) {
-      return HttpResponse.json({ detail: 'el cliente ya está bloqueado' }, { status: 409 })
+      return contractError(409, [
+        { field: null, code: 'CLIENT_ALREADY_BLOCKED', message: 'el cliente ya está bloqueado' },
+      ])
     }
     return HttpResponse.json(
       clientFixture({
@@ -989,10 +985,9 @@ export const handlers = [
     }
     const payload = (await request.json()) as { reason?: string }
     if (!payload.reason?.trim()) {
-      return HttpResponse.json(
-        { detail: [{ loc: ['body', 'reason'], msg: 'el motivo es obligatorio', type: 'value_error' }] },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'reason', code: 'value_error', message: 'El motivo es obligatorio' },
+      ])
     }
     return HttpResponse.json(
       clientFixture({
@@ -1012,34 +1007,27 @@ export const handlers = [
     }
     const payload = (await request.json()) as ClientCreate & { status?: unknown }
     if ('status' in payload) {
-      return HttpResponse.json(
-        {
-          detail: [
-            { loc: ['body', 'status'], msg: 'Extra inputs are not permitted', type: 'extra_forbidden' },
-          ],
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'status', code: 'extra_forbidden', message: 'Campos adicionales no permitidos' },
+      ])
     }
     if (payload.document === 'malo') {
-      return HttpResponse.json(
+      return contractError(422, [
         {
-          detail: [
-            {
-              loc: ['body', 'document'],
-              msg: 'El formato de la cédula no es válido.',
-              type: 'value_error',
-            },
-          ],
+          field: 'document',
+          code: 'value_error',
+          message: 'El formato de la cédula no es válido.',
         },
-        { status: 422 },
-      )
+      ])
     }
     if (payload.document === '001-0000000-0' || payload.document === 'duplicado') {
-      return HttpResponse.json(
-        { detail: 'ya existe un cliente con este documento' },
-        { status: 409 },
-      )
+      return contractError(409, [
+        {
+          field: null,
+          code: 'CLIENT_DOCUMENT_EXISTS',
+          message: 'ya existe un cliente con este documento',
+        },
+      ])
     }
     createdCount += 1
     const saved = clientFixture({
@@ -1064,13 +1052,18 @@ export const handlers = [
     const url = new URL(request.url)
     for (const key of url.searchParams.keys()) {
       if (['document', 'q', 'name', 'phone'].includes(key)) {
-        return HttpResponse.json(
-          { detail: 'usa POST /clients/search para buscar por documento, nombre o teléfono' },
-          { status: 422 },
-        )
+        return contractError(422, [
+          {
+            field: null,
+            code: 'value_error',
+            message: 'Usa POST /clients/search para buscar por documento, nombre o teléfono',
+          },
+        ])
       }
       if (!['status', 'collector_membership_id', 'page', 'page_size'].includes(key)) {
-        return HttpResponse.json({ detail: 'parámetro de consulta no permitido' }, { status: 422 })
+        return contractError(422, [
+          { field: null, code: 'value_error', message: 'Parámetro de consulta no permitido' },
+        ])
       }
     }
     const biz = businessFromToken(bearer(request))
@@ -1138,14 +1131,9 @@ export const handlers = [
     const payload = (await request.json()) as MemberUpdate & { name?: unknown }
     memberWrites.push({ method: request.method, url: request.url, body: payload })
     if ('name' in payload) {
-      return HttpResponse.json(
-        {
-          detail: [
-            { loc: ['body', 'name'], msg: 'Extra inputs are not permitted', type: 'extra_forbidden' },
-          ],
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'name', code: 'extra_forbidden', message: 'Campos adicionales no permitidos' },
+      ])
     }
     const id = String(params.id)
     const index = membersState.findIndex((item) => item.id === id)
@@ -1162,10 +1150,13 @@ export const handlers = [
       membersState.filter((item) => item.role === 'dueño' && item.is_active && item.id !== id)
         .length === 0
     if (wouldDropLastOwner) {
-      return HttpResponse.json(
-        { detail: 'el negocio debe tener al menos un dueño activo' },
-        { status: 409 },
-      )
+      return contractError(409, [
+        {
+          field: null,
+          code: 'LAST_ACTIVE_OWNER',
+          message: 'el negocio debe tener al menos un dueño activo',
+        },
+      ])
     }
     const updated: MemberRead = {
       ...current,
@@ -1222,32 +1213,18 @@ export const handlers = [
     ])
     const extra = Object.keys(body).filter((key) => !writeKeys.has(key))
     if (extra.length) {
-      return HttpResponse.json(
+      return contractError(422, [
         {
-          detail: [
-            {
-              loc: ['body', extra[0]],
-              msg: 'campos adicionales no permitidos',
-              type: 'extra_forbidden',
-            },
-          ],
+          field: extra[0] ?? null,
+          code: 'extra_forbidden',
+          message: 'Campos adicionales no permitidos',
         },
-        { status: 422 },
-      )
+      ])
     }
     if (body.surcharge_percent != null && typeof body.surcharge_percent !== 'string') {
-      return HttpResponse.json(
-        {
-          detail: [
-            {
-              loc: ['body', 'surcharge_percent'],
-              msg: 'montos y porcentajes deben ser un string',
-              type: 'value_error',
-            },
-          ],
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'surcharge_percent', code: 'value_error', message: 'Debe ser un número' },
+      ])
     }
     creditSettingsState = {
       interest_method: String(body.interest_method ?? 'recargo_fijo'),
@@ -1295,12 +1272,9 @@ export const handlers = [
     businessWrites.push({ body })
     const keys = Object.keys(body)
     if (!keys.length) {
-      return HttpResponse.json(
-        {
-          detail: [{ loc: ['body'], msg: 'campo obligatorio', type: 'value_error' }],
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: null, code: 'value_error', message: 'Campo obligatorio' },
+      ])
     }
     const current = businessRecords.get(id) ?? defaultBusinessRecord(id)
     const next: BusinessRecord = {
@@ -1525,53 +1499,33 @@ export const handlers = [
     voidWrites.push({ url: request.url, body })
     const extra = Object.keys(body).filter((key) => key !== 'reason')
     if (extra.length) {
-      return HttpResponse.json(
+      return contractError(422, [
         {
-          detail: [
-            {
-              loc: ['body', extra[0]],
-              msg: 'campos adicionales no permitidos',
-              type: 'extra_forbidden',
-            },
-          ],
+          field: extra[0] ?? null,
+          code: 'extra_forbidden',
+          message: 'Campos adicionales no permitidos',
         },
-        { status: 422 },
-      )
+      ])
     }
     if (typeof body.reason !== 'string') {
-      return HttpResponse.json(
-        {
-          detail: [
-            { loc: ['body', 'reason'], msg: 'el motivo debe ser un string', type: 'value_error' },
-          ],
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'reason', code: 'value_error', message: 'Debe ser texto' },
+      ])
     }
     const reason = body.reason.trim()
     if (!reason) {
-      return HttpResponse.json(
-        {
-          detail: [
-            { loc: ['body', 'reason'], msg: 'el motivo es obligatorio', type: 'value_error' },
-          ],
-        },
-        { status: 422 },
-      )
+      return contractError(422, [
+        { field: 'reason', code: 'value_error', message: 'El motivo es obligatorio' },
+      ])
     }
     if (reason.length < 5 || reason.length > 500) {
-      return HttpResponse.json(
+      return contractError(422, [
         {
-          detail: [
-            {
-              loc: ['body', 'reason'],
-              msg: 'el motivo debe tener entre 5 y 500 caracteres',
-              type: 'value_error',
-            },
-          ],
+          field: 'reason',
+          code: 'value_error',
+          message: 'El motivo debe tener entre 5 y 500 caracteres',
         },
-        { status: 422 },
-      )
+      ])
     }
     const id = String(params.id)
     const sale = sales.get(id)

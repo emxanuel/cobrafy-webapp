@@ -412,7 +412,18 @@ describe('client requests', () => {
   it('PATCH /clients/:id 409 sin código no va a document; con DOCUMENT_DUPLICATE sí', async () => {
     server.use(
       http.patch('*/clients/:id', () =>
-        HttpResponse.json({ detail: 'este cliente ya está en otro negocio' }, { status: 409 }),
+        HttpResponse.json(
+          {
+            detail: [
+              {
+                field: null,
+                code: 'value_error',
+                message: 'este cliente ya está en otro negocio',
+              },
+            ],
+          },
+          { status: 409 },
+        ),
       ),
     )
     try {
@@ -427,7 +438,15 @@ describe('client requests', () => {
     server.use(
       http.patch('*/clients/:id', () =>
         HttpResponse.json(
-          { detail: 'ya existe un cliente con este documento', code: 'DOCUMENT_DUPLICATE' },
+          {
+            detail: [
+              {
+                field: null,
+                code: 'CLIENT_DOCUMENT_EXISTS',
+                message: 'ya existe un cliente con este documento',
+              },
+            ],
+          },
           { status: 409 },
         ),
       ),

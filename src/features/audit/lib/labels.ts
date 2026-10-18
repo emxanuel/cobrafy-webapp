@@ -9,6 +9,7 @@ export const ENTITY_OPTIONS = [
   { value: 'contact', label: 'Contactos' },
   { value: 'membership', label: 'Equipo' },
   { value: 'business', label: 'Negocio' },
+  { value: 'credit_settings', label: 'Crédito' },
 ] as const
 
 export const ENTITY_BADGE: Record<string, string> = {
@@ -18,6 +19,7 @@ export const ENTITY_BADGE: Record<string, string> = {
   business: 'Negocio',
   user: 'Usuario',
   invitation: 'Invitación',
+  credit_settings: 'Crédito',
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -33,6 +35,13 @@ const FIELD_LABELS: Record<string, string> = {
   is_active: 'Activo',
   email: 'Correo',
   doc_type: 'Tipo de documento',
+  surcharge_kind: 'Tipo de recargo',
+  surcharge_percent: 'Recargo (%)',
+  surcharge_amount: 'Recargo fijo',
+  allowed_frequencies: 'Frecuencias permitidas',
+  max_installments: 'Máximo de cuotas',
+  min_down_payment_percent: 'Inicial mínima (%)',
+  interest_method: 'Método de cálculo',
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -82,6 +91,12 @@ export function auditActionTitle(event: AuditRead): string {
   if (event.entity === 'membership' && event.action === 'update') return 'Equipo actualizado'
   if (event.entity === 'membership' && event.action === 'create') return 'Miembro agregado'
   if (event.entity === 'business' && event.action === 'update') return 'Negocio editado'
+  if (event.entity === 'credit_settings' && event.action === 'create') {
+    return 'Configuración de crédito creada'
+  }
+  if (event.entity === 'credit_settings' && event.action === 'update') {
+    return 'Configuración de crédito editada'
+  }
   if (event.action === 'create') return 'Registro creado'
   if (event.action === 'update') return 'Registro editado'
   if (event.action === 'deactivate') return 'Registro desactivado'

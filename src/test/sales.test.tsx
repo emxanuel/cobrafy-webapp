@@ -1406,7 +1406,12 @@ describe('CBF-206 ventas', () => {
     loginCashier()
     server.use(
       http.post('*/sales/simulate', () =>
-        HttpResponse.json({ detail: 'conflicto de crédito' }, { status: 409 }),
+        HttpResponse.json(
+          {
+            detail: [{ field: null, code: 'value_error', message: 'conflicto de crédito' }],
+          },
+          { status: 409 },
+        ),
       ),
     )
     window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')

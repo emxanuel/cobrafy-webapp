@@ -1,5 +1,7 @@
+import axios from 'axios'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { toApiError } from '@/features/shared/lib/api-error'
 import type { SaleCreateRequest } from '@/features/sales/services/types'
 import type { SaleFormSnapshot } from '@/features/sales/lib/sale-payload'
 
@@ -78,6 +80,47 @@ describe('pending-sale storage', () => {
     expect(shouldReleasePendingSale(429)).toBe(false)
     expect(shouldReleasePendingSale(500)).toBe(false)
     expect(shouldReleasePendingSale(0)).toBe(false)
+  })
+
+  it('un 422 o 409 con código en la forma nueva también sueltan el pending', () => {
+    const axios422 = new axios.AxiosError(
+      'Request failed',
+      '422',
+      { headers: new axios.AxiosHeaders(), url: '/sales' },
+      undefined,
+      {
+        status: 422,
+        data: {
+          detail: [
+            { field: 'price', code: 'value_error', message: 'El precio debe ser mayor que cero' },
+          ],
+        },
+        statusText: '',
+        headers: {},
+        config: { headers: new axios.AxiosHeaders(), url: '/sales' },
+      },
+    )
+    const err422 = toApiError(axios422)
+    expect(shouldReleasePendingSale(err422.status, err422.code)).toBe(true)
+
+    const axios409 = new axios.AxiosError(
+      'Request failed',
+      '409',
+      { headers: new axios.AxiosHeaders(), url: '/sales' },
+      undefined,
+      {
+        status: 409,
+        data: {
+          detail: [{ field: null, code: 'CLIENT_BLOCKED', message: 'Este cliente está bloqueado' }],
+        },
+        statusText: '',
+        headers: {},
+        config: { headers: new axios.AxiosHeaders(), url: '/sales' },
+      },
+    )
+    const err409 = toApiError(axios409)
+    expect(err409.code).toBe('CLIENT_BLOCKED')
+    expect(shouldReleasePendingSale(err409.status, err409.code)).toBe(true)
   })
 
   it('sin created_at o con fecha inválida el pending está vencido', () => {
