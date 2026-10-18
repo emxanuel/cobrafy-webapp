@@ -8,6 +8,8 @@ import {
   canManageMembers,
   canSell,
   canViewAudit,
+  canViewBusinessSettings,
+  canViewSales,
 } from '@/features/shared/lib/roles'
 import { AppLayout } from '@/features/shared/components/app-layout'
 import { SELECT_BUSINESS_EVENT } from '@/features/shared/services/client'
@@ -80,6 +82,22 @@ const SalesUnauthorized = lazy(async () => {
   const mod = await import('@/pages/sales/sales-unauthorized')
   return { default: mod.SalesUnauthorized }
 })
+const SalesListPage = lazy(async () => {
+  const mod = await import('@/pages/sales/sales-list-page')
+  return { default: mod.SalesListPage }
+})
+const SaleDetailPage = lazy(async () => {
+  const mod = await import('@/pages/sales/sale-detail-page')
+  return { default: mod.SaleDetailPage }
+})
+const BusinessSettingsPage = lazy(async () => {
+  const mod = await import('@/pages/business/business-settings-page')
+  return { default: mod.BusinessSettingsPage }
+})
+const BusinessUnauthorized = lazy(async () => {
+  const mod = await import('@/pages/business/business-unauthorized')
+  return { default: mod.BusinessUnauthorized }
+})
 
 function SessionListeners() {
   const navigate = useNavigate()
@@ -126,11 +144,22 @@ export function Router() {
                 <Route path="/clientes/:clientId/editar" element={<ClientFormPage />} />
               </Route>
               <Route path="/clientes/:clientId/historial" element={<ClientHistoryPage />} />
+              <Route element={<RoleGuard allow={canViewSales} />}>
+                <Route path="/ventas" element={<SalesListPage />} />
+                <Route path="/ventas/:saleId" element={<SaleDetailPage />} />
+              </Route>
               <Route
                 element={<RoleGuard allow={canSell} unauthorized={<SalesUnauthorized />} />}
               >
                 <Route path="/ventas/nueva" element={<ChooseClientPage />} />
                 <Route path="/clientes/:clientId/ventas/nueva" element={<NewSalePage />} />
+              </Route>
+              <Route
+                element={
+                  <RoleGuard allow={canViewBusinessSettings} unauthorized={<BusinessUnauthorized />} />
+                }
+              >
+                <Route path="/negocio" element={<BusinessSettingsPage />} />
               </Route>
               <Route element={<RoleGuard allow={canManageMembers} />}>
                 <Route path="/equipo" element={<MembersPage />} />
