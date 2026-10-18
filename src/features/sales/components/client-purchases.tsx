@@ -95,7 +95,7 @@ export function ClientPurchases({
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {shown.map((sale) => (
             <li key={sale.id}>
-              <SaleCard sale={sale} />
+              <SaleCard sale={sale} fromClient={clientId} />
             </li>
           ))}
         </ul>

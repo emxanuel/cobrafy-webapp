@@ -120,8 +120,8 @@ describe('compras del cliente', () => {
     window.history.pushState({}, '', '/clientes/cli-1/historial')
     renderApp()
     expect(await screen.findByText('#117 · Abanico Royal')).toBeInTheDocument()
-    const voided = screen.getByText('#117 · Abanico Royal').closest('article')!
-    const active = screen.getByText('#128 · Nevera Mabe 14 pies').closest('article')!
+    const voided = screen.getByText('#117 · Abanico Royal').closest('a')!
+    const active = screen.getByText('#128 · Nevera Mabe 14 pies').closest('a')!
     expect(voided).toHaveClass('bg-muted')
     expect(within(voided).getByText('⊘ Anulada')).toBeInTheDocument()
     expect(within(voided).getByText(formatMoney('3600.00'))).toHaveClass('line-through')
@@ -131,7 +131,10 @@ describe('compras del cliente', () => {
     expect(within(active).getByText(`Saldo ${formatMoney('15000.00')}`)).toBeInTheDocument()
     expect(within(active).getByText(`Vendida el ${formatDate('2026-10-17T16:00:00.000Z')}`)).toBeInTheDocument()
     expect(screen.getByText('2 activas · 1 anulada')).toBeInTheDocument()
-    expect(voided.closest('a')).toBeNull()
+    expect(voided.closest('a')).toHaveAttribute('href', '/ventas/sale-117')
+    expect(within(voided).getByLabelText('4 cuotas canceladas')).toBeInTheDocument()
+    expect(within(voided).getByText('Anulada el 29/09/2026 por Ana Pérez')).toBeInTheDocument()
+    expect(within(active).getByText('12 mensuales')).toBeInTheDocument()
     expect(screen.queryByText(/mensuales ×/)).not.toBeInTheDocument()
   })
 

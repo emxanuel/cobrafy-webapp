@@ -11,16 +11,8 @@ import { SaleBanner } from '@/features/sales/components/sale-banner'
 import { frequencyAdjective, registeredCollectorWarning, saleErrorBanner } from '@/features/sales/lib/copy'
 import { saleCuotaAmount } from '@/features/sales/lib/plan-view'
 import { useDownloadContractMutation } from '@/features/sales/hooks/use-sales-queries'
+import { triggerBlobDownload } from '@/features/sales/lib/download'
 import type { SaleDetail } from '@/features/sales/services/types'
-
-function saveBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
 
 export function SaleRegistered({
   sale,
@@ -37,7 +29,7 @@ export function SaleRegistered({
 
   function startDownload() {
     download.mutate(sale.id, {
-      onSuccess: ({ blob, filename }) => saveBlob(blob, filename),
+      onSuccess: ({ blob, filename }) => triggerBlobDownload(blob, filename),
     })
   }
 

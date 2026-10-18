@@ -27,6 +27,7 @@ import {
   getFieldErrors,
   isApiError,
 } from '@/features/shared/lib/api-error'
+import { UNCONFIRMED_MUTATION_MESSAGE } from '@/features/shared/services/client'
 
 export type ClientFormSubmit = {
   client: ClientCreate
@@ -104,7 +105,8 @@ export function ClientForm({
   const check = useCheckClientMutation()
   const apiFields = error ? getFieldErrors(error) : {}
   const forbidden = isApiError(error) && error.status === 403
-  const showBanner = Boolean(error) && (forbidden || Object.keys(apiFields).length === 0)
+  const timedOut = isApiError(error) && error.status === 0 && !client
+  const showBanner = Boolean(error) && (forbidden || timedOut || Object.keys(apiFields).length === 0)
 
   useEffect(() => {
     if (!error) return
@@ -137,7 +139,9 @@ export function ClientForm({
         <Alert>
           {forbidden
             ? 'No tienes permiso para guardar este cliente.'
-            : getApiErrorMessage(error, 'No se pudo guardar el cliente.')}
+            : timedOut
+              ? UNCONFIRMED_MUTATION_MESSAGE
+              : getApiErrorMessage(error, 'No se pudo guardar el cliente.')}
         </Alert>
       ) : null}
 

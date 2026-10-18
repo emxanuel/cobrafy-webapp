@@ -4,9 +4,13 @@ import type { Frequency } from '@/features/sales/services/types'
 
 export const GENERIC_SALE_ERROR = 'No se pudo completar. Inténtalo de nuevo.'
 
-function trimPercent(value: string): string {
+export function trimPercent(value: string): string {
   if (!value.includes('.')) return value
   return value.replace(/\.?0+$/, '')
+}
+
+export function displayPercent(value: string): string {
+  return `${trimPercent(value)} %`
 }
 
 export const IDEMPOTENCY_REUSED_TITLE = 'Puede que esta venta ya esté registrada'
@@ -45,8 +49,27 @@ export function firstDueHint(frequency: Frequency): string {
   return 'Sugerida: un mes después de hoy. Puedes cambiarla.'
 }
 
+export const VOID_FORBIDDEN_MESSAGE = 'Solo el dueño puede anular ventas.'
+export const VOID_NETWORK_TITLE = 'No se pudo anular la venta.'
+export const VOID_NETWORK_BODY = 'Revisa tu conexión e inténtalo de nuevo.'
+export const VOID_NOT_SAVED_TITLE = 'No se guardó la anulación.'
+export const VOID_NOT_SAVED_BODY = 'Se cortó la conexión. Puedes intentar de nuevo.'
+export const VOID_UNCONFIRMED_TITLE = 'No pudimos confirmar si se anuló.'
+export const VOID_UNCONFIRMED_BODY =
+  'Revisa tu conexión y vuelve a intentar; si ya se anuló, no pasa nada.'
+export const CONTRACT_FORBIDDEN_MESSAGE = 'No tienes permiso para descargar el contrato.'
+export const CONTRACT_DOWNLOAD_ERROR_TITLE = 'No se pudo descargar el contrato.'
+export const CONTRACT_DOWNLOAD_ERROR_BODY = 'Inténtalo de nuevo.'
+export const SALE_NOT_FOUND_TITLE = 'Esta venta no existe o ya no está disponible.'
+export const CREDITS_EMPTY_TITLE =
+  'Aún no tienes ventas a crédito. Registra la primera y empieza a ver tu cartera.'
+
+export function voidSuccessMessage(saleNumber: number): string {
+  return `Venta #${saleNumber} anulada.`
+}
+
 export type BannerCopy = {
-  tone: 'danger' | 'warning'
+  tone: 'danger' | 'warning' | 'muted' | 'success'
   icon: string
   title: string
   body: string
@@ -152,16 +175,16 @@ export function saleErrorBanner(
   }
   if (code === 'SALE_ALREADY_VOIDED') {
     return {
-      tone: 'warning',
-      icon: '⚠',
+      tone: 'muted',
+      icon: 'ⓘ',
       title: 'Esta venta ya estaba anulada.',
-      body: '',
+      body: 'Actualizamos la pantalla con los datos de la anulación.',
     }
   }
   if (code === 'SALE_HAS_PAYMENTS') {
     return {
-      tone: 'warning',
-      icon: '⚠',
+      tone: 'danger',
+      icon: '✕',
       title: 'No se puede anular: la venta ya tiene pagos.',
       body: '',
     }
@@ -205,6 +228,9 @@ export function simulatorWarningCopy(
   clientId: string,
   backendMessage?: string,
 ): BannerCopy {
+  if (code === 'CREDIT_SETTINGS_INCOMPLETE') {
+    return saleErrorBanner(code, role, clientId)
+  }
   if (code === 'settings_configured' || code === 'CREDIT_SETTINGS_MISSING') {
     return canConfigureCredit(role)
       ? {

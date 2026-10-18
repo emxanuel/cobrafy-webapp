@@ -41,3 +41,19 @@ export function canSell(role: Role | null): boolean {
 export function canConfigureCredit(role: Role | null): boolean {
   return role === 'dueño'
 }
+
+export function canViewSales(role: Role | null): boolean {
+  return role === 'dueño' || role === 'cajero' || role === 'cobrador'
+}
+
+export function canDownloadContract(role: Role | null): boolean {
+  return role === 'dueño' || role === 'cajero'
+}
+
+export function canVoidSale(role: Role | null): boolean {
+  return role === 'dueño'
+}
+
+export function canViewBusinessSettings(role: Role | null): boolean {
+  return role === 'dueño' || role === 'cajero'
+}

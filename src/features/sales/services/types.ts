@@ -32,6 +32,19 @@ export type CreditSettings = {
   allowed_frequencies: Frequency[]
   max_installments: number
   min_down_payment_percent: string | null
+  /** Sent by backend PR #22. If absent (old backend), do not show the Design banner. */
+  configured?: boolean
+}
+
+/** PUT body. Extra keys (including GET `configured`) → 422. */
+export type CreditSettingsWrite = {
+  interest_method: string
+  surcharge_kind: SurchargeKind
+  surcharge_percent: string | null
+  surcharge_amount: string | null
+  allowed_frequencies: Frequency[]
+  max_installments: number
+  min_down_payment_percent: string | null
 }
 
 export type SimulateSaleRequest = {
@@ -108,10 +121,33 @@ export type SaleRead = {
   created_at: string
 }
 
+export type SaleContractSeller = {
+  membership_id: string
+  name: string
+}
+
+export type SaleContract = {
+  business?: {
+    name?: string
+    rnc?: string | null
+    address?: string | null
+    phone?: string | null
+  }
+  client?: {
+    name?: string
+    doc_type?: string
+    phone?: string
+    address?: string
+  }
+  guarantors?: Array<Record<string, unknown>>
+  item?: { description?: string }
+  seller?: SaleContractSeller
+}
+
 /** POST /sales, GET /sales/{id} — exact SaleDetail. */
 export type SaleDetail = SaleRead & {
   installments: InstallmentRead[]
-  contract: Record<string, unknown>
+  contract: SaleContract
   warnings: SaleWarning[]
 }
 

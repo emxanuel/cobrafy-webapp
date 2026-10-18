@@ -139,3 +139,17 @@ textarea {
   right: 0;
   border-right-color: var(--border);
 }
+
+/* CBF-207: cancelled installment dot. Isolated here + InstallmentStatusLabel.
+   Visual "Cancelada" (gray ring + strike) pending Emmanuel's OK. */
+.cuota-dot-cancelled {
+  border-color: var(--text);
+  opacity: 1;
+  background: linear-gradient(
+    135deg,
+    transparent 42%,
+    var(--text) 42%,
+    var(--text) 58%,
+    transparent 58%
+  );
+}

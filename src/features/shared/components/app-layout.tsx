@@ -13,7 +13,13 @@ import { Button } from '@/features/shared/components/ui/button'
 import { Ticks } from '@/features/shared/components/ticks'
 import { cn } from '@/features/shared/lib/cn'
 import { getApiErrorMessage } from '@/features/shared/lib/api-error'
-import { canManageMembers, canViewAudit, ROLE_LABEL } from '@/features/shared/lib/roles'
+import {
+  canManageMembers,
+  canViewAudit,
+  canViewBusinessSettings,
+  canViewSales,
+  ROLE_LABEL,
+} from '@/features/shared/lib/roles'
 
 function navClass({ isActive }: { isActive: boolean }) {
   return cn(
@@ -70,9 +76,19 @@ export function AppLayout() {
             <NavLink to="/clientes" className={navClass} onClick={close}>
               Clientes
             </NavLink>
+            {canViewSales(role) ? (
+              <NavLink to="/ventas" className={navClass} onClick={close}>
+                Ventas
+              </NavLink>
+            ) : null}
             <NavLink to="/verificar" className={navClass} onClick={close}>
               Verificar bloqueo
             </NavLink>
+            {canViewBusinessSettings(role) ? (
+              <NavLink to="/negocio" className={navClass} onClick={close}>
+                Negocio
+              </NavLink>
+            ) : null}
             {canManageMembers(role) ? (
               <NavLink to="/equipo" className={navClass} onClick={close}>
                 Equipo

@@ -2,9 +2,12 @@ import { api, CREATE_SALE_TIMEOUT_MS } from '@/features/shared/services/client'
 import {
   FREQUENCIES,
   type CreditSettings,
+  type CreditSettingsWrite,
   type Frequency,
   type InstallmentPreview,
   type InstallmentRead,
+  type SaleContract,
+  type SaleContractSeller,
   type SaleCreateRequest,
   type SaleDetail,
   type SalePage,
@@ -72,7 +75,7 @@ function asInstallments(value: unknown): InstallmentRead[] {
       amount: asString(item.amount),
       paid: asString(item.paid, '0.00'),
       late_fee: asString(item.late_fee, '0.00'),
-      status: asString(item.status, 'pendiente'),
+      status: asString(item.status, 'pending'),
     }))
 }
 
@@ -103,7 +106,24 @@ export function normalizeCreditSettings(data: unknown): CreditSettings {
     allowed_frequencies: allowed.length ? allowed : [...FREQUENCIES],
     max_installments: asInt(row.max_installments, 24) || 24,
     min_down_payment_percent: asNullableString(row.min_down_payment_percent),
+    ...(typeof row.configured === 'boolean' ? { configured: row.configured } : {}),
   }
+}
+
+function asSeller(value: unknown): SaleContractSeller | undefined {
+  if (typeof value !== 'object' || value == null) return undefined
+  const row = value as Record<string, unknown>
+  const membershipId = asString(row.membership_id)
+  const name = asString(row.name)
+  if (!membershipId && !name) return undefined
+  return { membership_id: membershipId, name }
+}
+
+function asContract(value: unknown): SaleContract {
+  if (typeof value !== 'object' || value == null) return {}
+  const row = value as SaleContract
+  const seller = asSeller((value as Record<string, unknown>).seller)
+  return seller ? { ...row, seller } : row
 }
 
 export function normalizeSimulation(data: unknown): SimulateSaleResponse {
@@ -150,7 +170,7 @@ export function normalizeSale(data: unknown): SaleRead {
     anchor_date: asString(row.anchor_date),
     anchor_offset: asInt(row.anchor_offset, 0),
     first_due_date: asString(row.first_due_date),
-    status: asString(row.status, 'activa'),
+    status: asString(row.status, 'active'),
     voided_at: asNullableString(row.voided_at),
     void_reason: asNullableString(row.void_reason),
     voided_by: asVoidedBy(row.voided_by),
@@ -163,10 +183,7 @@ export function normalizeSaleDetail(data: unknown): SaleDetail {
   return {
     ...normalizeSale(row),
     installments: asInstallments(row.installments),
-    contract:
-      typeof row.contract === 'object' && row.contract != null
-        ? (row.contract as Record<string, unknown>)
-        : {},
+    contract: asContract(row.contract),
     warnings: asWarnings(row.warnings),
   }
 }
@@ -199,15 +216,73 @@ export async function createSale(
   }
 }
 
+function trimCreditAmount(value: string | null): string | null {
+  if (value == null) return null
+  return value.trim()
+}
+
+/** CreditSettingsWrite only. Never forward GET `configured` — extra keys 422. */
+export function toCreditSettingsWrite(
+  payload: CreditSettings | CreditSettingsWrite,
+): CreditSettingsWrite {
+  return {
+    interest_method: payload.interest_method,
+    surcharge_kind: payload.surcharge_kind,
+    surcharge_percent: trimCreditAmount(payload.surcharge_percent),
+    surcharge_amount: trimCreditAmount(payload.surcharge_amount),
+    allowed_frequencies: payload.allowed_frequencies,
+    max_installments: payload.max_installments,
+    min_down_payment_percent: payload.min_down_payment_percent,
+  }
+}
+
+export function buildCreditSettingsWrite(input: {
+  surcharge_kind: CreditSettingsWrite['surcharge_kind']
+  surcharge_percent: string
+  surcharge_amount: string
+  allowed_frequencies: CreditSettingsWrite['allowed_frequencies']
+  max_installments: number
+  min_down_payment_percent: string
+}): CreditSettingsWrite {
+  return toCreditSettingsWrite({
+    interest_method: 'recargo_fijo',
+    surcharge_kind: input.surcharge_kind,
+    surcharge_percent:
+      input.surcharge_kind === 'percent_of_financed' ? input.surcharge_percent : null,
+    surcharge_amount: input.surcharge_kind === 'fixed_amount' ? input.surcharge_amount : null,
+    allowed_frequencies: input.allowed_frequencies,
+    max_installments: input.max_installments,
+    min_down_payment_percent: input.min_down_payment_percent.trim()
+      ? input.min_down_payment_percent.trim()
+      : null,
+  })
+}
+
+export async function putCreditSettings(
+  businessId: string,
+  payload: CreditSettings | CreditSettingsWrite,
+): Promise<CreditSettings> {
+  const { data } = await api.put<unknown>(
+    `/businesses/${businessId}/credit-settings`,
+    toCreditSettingsWrite(payload),
+  )
+  return normalizeCreditSettings(data)
+}
+
 export async function listSales(params?: {
   page?: number
   page_size?: number
   client_id?: string
+  status?: 'active' | 'voided'
 }): Promise<SalePage> {
-  const { data } = await api.get<SalePage>('/sales', { params })
+  const { data } = await api.get<unknown>('/sales', { params })
+  const row = (data ?? {}) as Record<string, unknown>
+  const items = Array.isArray(row.items) ? row.items.map(normalizeSale) : []
   return {
-    ...data,
-    items: (data.items ?? []).map(normalizeSale),
+    items,
+    total: asInt(row.total, 0),
+    page: asInt(row.page, 1) || 1,
+    page_size: asInt(row.page_size, 50) || 50,
   }
 }
 
@@ -226,11 +301,16 @@ export async function getSale(saleId: string): Promise<SaleDetail> {
   return normalizeSaleDetail(data)
 }
 
-function filenameFromDisposition(header: string): string | null {
+export function filenameFromDisposition(header: string): string | null {
   const utf = /filename\*=UTF-8''([^;]+)/i.exec(header)
   if (utf?.[1]) return decodeURIComponent(utf[1])
   const plain = /filename="?([^"]+)"?/i.exec(header)
   return plain?.[1] ?? null
+}
+
+export async function voidSale(saleId: string, reason: string): Promise<SaleDetail> {
+  const { data } = await api.post<unknown>(`/sales/${saleId}/void`, { reason })
+  return normalizeSaleDetail(data)
 }
 
 export async function downloadSaleContract(
