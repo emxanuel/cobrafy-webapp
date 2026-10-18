@@ -37,7 +37,10 @@ describe('CBF-210-A UI', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByRole('heading', { name: 'Equipo' })).toBeInTheDocument()
-    const ownerRow = screen.getByText('Olivia Dueña').closest('li')
+    const people = (await screen.findByRole('heading', { name: 'Personas del negocio' }))
+      .closest('section')
+    expect(people).toBeTruthy()
+    const ownerRow = (await within(people as HTMLElement).findByText('Olivia Dueña')).closest('li')
     expect(ownerRow).toBeTruthy()
     await user.click(within(ownerRow as HTMLElement).getByRole('button', { name: 'Desactivar' }))
     expect(
@@ -67,6 +70,7 @@ describe('CBF-210-A UI', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByRole('heading', { name: 'Equipo' })).toBeInTheDocument()
+    expect(await screen.findByText('nuevo@negocio.com')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cancelar' }))
     expect(await screen.findByText('la invitación no se puede revocar')).toBeInTheDocument()
   })
@@ -130,7 +134,7 @@ describe('CBF-210-A UI', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByRole('heading', { name: 'Bitácora' })).toBeInTheDocument()
-    const card = screen.getByText('Configuración de crédito editada').closest('li')
+    const card = (await screen.findByText('Configuración de crédito editada')).closest('li')
     expect(card).toBeTruthy()
     expect(within(card as HTMLElement).getByText('Crédito')).toBeInTheDocument()
 
