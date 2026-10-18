@@ -45,7 +45,7 @@ export function isPendingSaleExpired(
   now = Date.now(),
 ): boolean {
   const created = Date.parse(attempt.created_at)
-  if (!Number.isFinite(created)) return false
+  if (!Number.isFinite(created)) return true
   return now - created >= PENDING_SALE_TTL_MS
 }
 
@@ -76,7 +76,7 @@ export function readPendingSale(clientId: string): PendingSaleAttempt | null {
   if (!isAttempt(stored)) return null
   return {
     ...stored,
-    created_at: stored.created_at || new Date().toISOString(),
+    created_at: typeof stored.created_at === 'string' ? stored.created_at : '',
   }
 }
 

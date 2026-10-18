@@ -217,6 +217,30 @@ describe('toApiError', () => {
     expect(unblocked.message).toBe('el cliente no está bloqueado')
   })
 
+  it('No permission no se trata como español', () => {
+    const error = toApiError(axiosError(403, { detail: 'No permission' }))
+    expect(error.message).toBe(GENERIC_MESSAGE)
+    expect(error.message).not.toBe('No permission')
+  })
+
+  it('un 409 de PATCH /clients/:id sin código no va a document', () => {
+    const general = toApiError(
+      axiosError(409, { detail: 'este cliente ya está en otro negocio' }, '/clients/cli-1'),
+    )
+    expect(general.fieldErrors).toEqual({})
+    expect(general.message).toBe('este cliente ya está en otro negocio')
+
+    const duplicate = toApiError(
+      axiosError(
+        409,
+        { detail: 'ya existe un cliente con este documento', code: 'DOCUMENT_DUPLICATE' },
+        '/clients/cli-1',
+      ),
+    )
+    expect(duplicate.fieldErrors.document).toBe('ya existe un cliente con este documento')
+    expect(duplicate.code).toBe('DOCUMENT_DUPLICATE')
+  })
+
   it('un 409 de garante no va al campo document', () => {
     const guarantor = toApiError(
       axiosError(

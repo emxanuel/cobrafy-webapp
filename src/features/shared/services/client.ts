@@ -14,6 +14,7 @@ export const SELECT_BUSINESS_EVENT = 'cobrafy:select-business'
 
 type StampedConfig = InternalAxiosRequestConfig & {
   cobrafyAccessToken?: string | null
+  cobrafyTimeoutId?: number
 }
 
 function bearerFromHeader(header: unknown): string | null {
@@ -44,11 +45,35 @@ function tokenUsedOnRequest(config?: StampedConfig): string | null {
 
 export const api = axios.create({
   baseURL,
-  timeout: GET_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
 })
+
+function isGet(config: InternalAxiosRequestConfig): boolean {
+  return (config.method ?? 'get').toLowerCase() === 'get'
+}
+
+function clearRequestTimer(config?: InternalAxiosRequestConfig) {
+  const stamped = config as StampedConfig | undefined
+  if (stamped?.cobrafyTimeoutId != null) {
+    window.clearTimeout(stamped.cobrafyTimeoutId)
+    stamped.cobrafyTimeoutId = undefined
+  }
+}
+
+function attachGetTimeout(config: StampedConfig) {
+  if (!isGet(config)) return
+  if (config.timeout != null && config.timeout !== 0) return
+  config.timeout = GET_TIMEOUT_MS
+  const controller = new AbortController()
+  if (config.signal) {
+    if (config.signal.aborted) controller.abort()
+    else config.signal.addEventListener('abort', () => controller.abort())
+  }
+  config.cobrafyTimeoutId = window.setTimeout(() => controller.abort(), GET_TIMEOUT_MS)
+  config.signal = controller.signal
+}
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const stamped = config as StampedConfig
@@ -57,12 +82,17 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     stamped.headers.Authorization = `Bearer ${token}`
   }
+  attachGetTimeout(stamped)
   return stamped
 })
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    clearRequestTimer(response.config)
+    return response
+  },
   async (error: AxiosError) => {
+    clearRequestTimer(error.config)
     if (error.response?.data instanceof Blob) {
       const text = await error.response.data.text()
       try {

@@ -375,9 +375,19 @@ function NewSaleForm({
         ? saleErrorBanner(createCode, role, clientId, createBackendMessage)
         : { tone: 'danger' as const, icon: '✕', title: PENDING_SALE_FAILED, body: '' }
       : create.isError &&
-          createStatus === 409 &&
-          createCode !== 'IDEMPOTENCY_KEY_REUSED'
-        ? saleErrorBanner(createCode, role, clientId, createBackendMessage)
+          !pending &&
+          !idempotencyReused &&
+          createStatus >= 400 &&
+          createStatus < 500 &&
+          createStatus !== 403
+        ? saleErrorHasOwnCopy(createCode)
+          ? saleErrorBanner(createCode, role, clientId, createBackendMessage)
+          : {
+              tone: 'danger' as const,
+              icon: '✕',
+              title: createBackendMessage || 'No se pudo completar. Inténtalo de nuevo.',
+              body: '',
+            }
         : simulate.isError && simulateStatus === 409
           ? saleErrorBanner(simulateCode, role, clientId, getApiErrorMessage(simulate.error))
           : null
@@ -486,10 +496,11 @@ function NewSaleForm({
       return
     }
     rememberIdempotency(attempt.payload)
-    if (!shouldReleasePendingSale(status, code)) {
-      setRetryHint(
-        pending == null ? null : status === 0 || status >= 500 ? 'offline' : 'unconfirmed',
-      )
+    const hadPending = pending != null
+    const unknown = status === 0 || status >= 500
+    const keepLock = unknown || (hadPending && !shouldReleasePendingSale(status, code))
+    if (keepLock) {
+      setRetryHint(hadPending ? (unknown ? 'offline' : 'unconfirmed') : null)
       setFailedAfterPending(false)
       persistPending(attempt)
       setConfirmOpen(false)
@@ -497,7 +508,7 @@ function NewSaleForm({
       return
     }
     releasePending()
-    setFailedAfterPending(true)
+    setFailedAfterPending(hadPending)
     setConfirmOpen(false)
     queueMicrotask(() => bannerRef.current?.focus())
   }

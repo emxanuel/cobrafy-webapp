@@ -110,7 +110,7 @@ const TECHNICAL_DETAILS = new Set(
 )
 
 const SPANISH_DETAIL_WORD =
-  /\b(?:el|la|los|las|un|una|unos|unas|de|del|al|no|se|ya|con|este|esta|esto|estos|estas|para|por|que|es|está|están|ser|debe|tienen?|existe|formato|revisa|inténtalo|sesión|permiso|bloqueo|bloqueado|anterior|motivo|correo|contraseña|cuota|venta|negocio|garante|cliente|documento|invitación|credenciales|válid\w*|inválid\w*)\b/i
+  /\b(?:ya|este|esta|esto|estos|estas|para|está|están|debe|tienen?|existe|formato|revisa|inténtalo|sesión|permiso|bloqueo|bloqueado|anterior|motivo|correo|contraseña|cuota|venta|negocio|garante|cliente|documento|invitación|credenciales|válid\w*|inválid\w*|autorizado|autenticado|encontrado|recurso|conflicto|crédito|máximo|contactos|obligatorio|demasiados|intentos|pudimos|pudo|pudieron|completar|conexión|permitido)\b/i
 
 function isTechnicalDetail(text: string): boolean {
   return TECHNICAL_DETAILS.has(text.trim().toLowerCase())
@@ -125,10 +125,9 @@ function isUnmappedEnglish(text: string): boolean {
   return /[A-Za-z]/.test(trimmed)
 }
 
-function clientDocumentWriteUrl(url = ''): boolean {
+function isClientCreateUrl(url = ''): boolean {
   const path = url.split('?')[0]?.replace(/\/$/, '') ?? ''
-  if (/\/clients$/.test(path)) return true
-  return /\/clients\/(?!search$|check$)[^/]+$/.test(path)
+  return /\/clients$/.test(path)
 }
 
 function isDocumentConflictCode(code?: string): boolean {
@@ -245,7 +244,7 @@ export function parseFieldErrors(body: ErrorBody, status = 0, url = ''): Record<
     if (code === 'DOCUMENT_UNREADABLE' || code === 'DOCUMENT_UNREADABLE_GUARANTOR') {
       return errors
     }
-    if (isDocumentConflictCode(code) || clientDocumentWriteUrl(url)) {
+    if (isDocumentConflictCode(code) || isClientCreateUrl(url)) {
       errors.document =
         typeof body.detail === 'string' && body.detail.trim()
           ? body.detail

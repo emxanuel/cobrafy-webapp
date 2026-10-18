@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { http, HttpResponse } from 'msw'
+import { describe, expect, it, vi } from 'vitest'
+import { delay, http, HttpResponse } from 'msw'
 
 import { setSwitchingFromToken } from '@/features/auth/lib/switching-token'
 import { useSessionStore } from '@/features/auth/stores/session-store'
-import { api } from '@/features/shared/services/client'
+import { isApiError } from '@/features/shared/lib/api-error'
+import { GET_TIMEOUT_MS, api } from '@/features/shared/services/client'
 import { authResponse, businesses, membership, users } from '@/test/fixtures'
 import { server } from '@/test/server'
 
@@ -100,5 +101,27 @@ describe('api 401 interceptor', () => {
     await Promise.resolve()
     expect(useSessionStore.getState().accessToken).toBeNull()
     expect(useSessionStore.getState().user).toBeNull()
+  })
+})
+
+describe('api timeouts', () => {
+  it('un GET se cancela a los 15 s', async () => {
+    expect(api.defaults.timeout).toBeFalsy()
+    server.use(
+      http.get('*/clients', async () => {
+        await delay('infinite')
+        return HttpResponse.json({ items: [] })
+      }),
+    )
+    vi.useFakeTimers()
+    try {
+      const pending = api.get('/clients')
+      await vi.advanceTimersByTimeAsync(GET_TIMEOUT_MS)
+      await expect(pending).rejects.toSatisfy(
+        (error) => isApiError(error) && error.status === 0,
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

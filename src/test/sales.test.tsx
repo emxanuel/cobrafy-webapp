@@ -564,6 +564,82 @@ describe('CBF-206 ventas', () => {
     expect(await screen.findByText('Listo, venta #77 registrada.')).toBeInTheDocument()
   })
 
+  it('el primer POST 403 muestra el error y deja el formulario editable', async () => {
+    loginCashier()
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        return HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expect(await screen.findByText('No tienes permiso para registrar ventas.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Artículo')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+    expect(screen.queryByText(PENDING_SALE_TITLE)).not.toBeInTheDocument()
+  })
+
+  it('el primer POST 429 muestra el error y no crea pending', async () => {
+    loginCashier()
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        return HttpResponse.json({ detail: 'Too Many Requests' }, { status: 429 })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expect(await screen.findByText(GENERIC_SALE_ERROR)).toBeInTheDocument()
+    expect(screen.getByLabelText('Artículo')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+    expect(screen.queryByText(PENDING_SALE_TITLE)).not.toBeInTheDocument()
+  })
+
+  it('el primer POST 500 bloquea el formulario', async () => {
+    loginCashier()
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        return HttpResponse.json({ detail: 'Internal Server Error' }, { status: 500 })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expectNetworkWarning()
+    expect(screen.getByLabelText('Artículo')).toBeDisabled()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeTruthy()
+  })
+
   it('403, 429 y 401 al reintentar mantienen el bloqueo y la misma clave', async () => {
     loginCashier()
     const keys: string[] = []

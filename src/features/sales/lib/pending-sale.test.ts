@@ -80,6 +80,25 @@ describe('pending-sale storage', () => {
     expect(shouldReleasePendingSale(0)).toBe(false)
   })
 
+  it('sin created_at o con fecha inválida el pending está vencido', () => {
+    expect(isPendingSaleExpired({ created_at: '' })).toBe(true)
+    expect(isPendingSaleExpired({ created_at: 'not-a-date' })).toBe(true)
+    sessionStorage.setItem(
+      pendingSaleStorageKey('cli-1'),
+      JSON.stringify({ key: 'key-1', payload, snapshot }),
+    )
+    const missing = readPendingSale('cli-1')
+    expect(missing?.created_at).toBe('')
+    expect(isPendingSaleExpired(missing!)).toBe(true)
+    sessionStorage.setItem(
+      pendingSaleStorageKey('cli-1'),
+      JSON.stringify({ key: 'key-1', payload, snapshot, created_at: 'ayer' }),
+    )
+    const invalid = readPendingSale('cli-1')
+    expect(invalid?.created_at).toBe('ayer')
+    expect(isPendingSaleExpired(invalid!)).toBe(true)
+  })
+
   it('a las 23 h el pending está vencido', () => {
     vi.useFakeTimers()
     const created_at = new Date().toISOString()
