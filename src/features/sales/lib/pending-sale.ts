@@ -11,12 +11,23 @@ export const PENDING_SALE_UNCONFIRMED =
   'No pudimos confirmar la venta. Reintenta o revisa las compras del cliente.'
 export const PENDING_SALE_FAILED =
   'La venta no se registró. Revisa los datos y confirma de nuevo.'
+export const PENDING_SALE_EXPIRED_TITLE = 'Ya no se puede reintentar'
+export const PENDING_SALE_EXPIRED_BODY =
+  'Pasó mucho tiempo y no sabemos si la venta se registró. Revisa las compras del cliente antes de registrarla de nuevo.'
+export const DISCARD_SALE_LABEL = 'Descartar'
+export const DISCARD_SALE_TITLE = '¿Descartar esta venta?'
+export const DISCARD_SALE_BODY =
+  'Si ya se registró, la verás en las compras del cliente. Si no, tendrás que registrarla de nuevo.'
+export const DISCARD_SALE_BACK = 'Volver'
+export const DISCARD_SALE_TOAST = 'Venta descartada.'
 export const PENDING_SALE_PREFIX = 'cobrafy.pendingSale:'
+export const PENDING_SALE_TTL_MS = 23 * 60 * 60 * 1000
 
 export type PendingSaleAttempt = {
   key: string
   payload: SaleCreateRequest
   snapshot: SaleFormSnapshot
+  created_at: string
 }
 
 export function pendingSaleStorageKey(clientId: string): string {
@@ -27,6 +38,15 @@ export function pendingSaleStorageKey(clientId: string): string {
 export function shouldReleasePendingSale(status: number, code?: string): boolean {
   if (status === 422) return true
   return status === 409 && Boolean(code)
+}
+
+export function isPendingSaleExpired(
+  attempt: Pick<PendingSaleAttempt, 'created_at'>,
+  now = Date.now(),
+): boolean {
+  const created = Date.parse(attempt.created_at)
+  if (!Number.isFinite(created)) return false
+  return now - created >= PENDING_SALE_TTL_MS
 }
 
 export function clearAllPendingSales() {
@@ -53,11 +73,21 @@ function isAttempt(value: unknown): value is PendingSaleAttempt {
 
 export function readPendingSale(clientId: string): PendingSaleAttempt | null {
   const stored = readJson<PendingSaleAttempt>(pendingSaleStorageKey(clientId))
-  return isAttempt(stored) ? stored : null
+  if (!isAttempt(stored)) return null
+  return {
+    ...stored,
+    created_at: stored.created_at || new Date().toISOString(),
+  }
 }
 
-export function writePendingSale(clientId: string, attempt: PendingSaleAttempt) {
-  writeJson(pendingSaleStorageKey(clientId), attempt)
+export function writePendingSale(
+  clientId: string,
+  attempt: Omit<PendingSaleAttempt, 'created_at'> & { created_at?: string },
+) {
+  writeJson(pendingSaleStorageKey(clientId), {
+    ...attempt,
+    created_at: attempt.created_at || new Date().toISOString(),
+  })
 }
 
 export function clearPendingSale(clientId: string) {

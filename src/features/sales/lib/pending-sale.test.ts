@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { SaleCreateRequest } from '@/features/sales/services/types'
 import type { SaleFormSnapshot } from '@/features/sales/lib/sale-payload'
 
 import {
+  PENDING_SALE_TTL_MS,
   clearAllPendingSales,
   clearPendingSale,
+  isPendingSaleExpired,
   pendingSaleStorageKey,
   readPendingSale,
   shouldReleasePendingSale,
@@ -41,7 +43,8 @@ describe('pending-sale storage', () => {
     expect(pendingSaleStorageKey('cli-1')).toBe('cobrafy.pendingSale:cli-1')
     expect(readPendingSale('cli-1')).toBeNull()
     writePendingSale('cli-1', { key: 'key-1', payload, snapshot })
-    expect(readPendingSale('cli-1')).toEqual({ key: 'key-1', payload, snapshot })
+    expect(readPendingSale('cli-1')).toMatchObject({ key: 'key-1', payload, snapshot })
+    expect(readPendingSale('cli-1')?.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(readPendingSale('cli-2')).toBeNull()
     clearPendingSale('cli-1')
     expect(readPendingSale('cli-1')).toBeNull()
@@ -75,5 +78,16 @@ describe('pending-sale storage', () => {
     expect(shouldReleasePendingSale(429)).toBe(false)
     expect(shouldReleasePendingSale(500)).toBe(false)
     expect(shouldReleasePendingSale(0)).toBe(false)
+  })
+
+  it('a las 23 h el pending está vencido', () => {
+    vi.useFakeTimers()
+    const created_at = new Date().toISOString()
+    expect(isPendingSaleExpired({ created_at })).toBe(false)
+    vi.advanceTimersByTime(PENDING_SALE_TTL_MS - 1)
+    expect(isPendingSaleExpired({ created_at })).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(isPendingSaleExpired({ created_at })).toBe(true)
+    vi.useRealTimers()
   })
 })

@@ -51,11 +51,20 @@ import {
   type IdempotencyState,
 } from '@/features/sales/lib/idempotency'
 import {
+  DISCARD_SALE_BACK,
+  DISCARD_SALE_BODY,
+  DISCARD_SALE_LABEL,
+  DISCARD_SALE_TITLE,
+  DISCARD_SALE_TOAST,
   PENDING_SALE_BODY,
+  PENDING_SALE_EXPIRED_BODY,
+  PENDING_SALE_EXPIRED_TITLE,
   PENDING_SALE_FAILED,
   PENDING_SALE_STILL_OFFLINE,
   PENDING_SALE_TITLE,
+  PENDING_SALE_TTL_MS,
   PENDING_SALE_UNCONFIRMED,
+  isPendingSaleExpired,
   shouldReleasePendingSale,
   clearPendingSale,
   readPendingSale,
@@ -185,7 +194,12 @@ function NewSaleForm({
   const [pending, setPending] = useState<PendingSaleAttempt | null>(storedPending)
   const [retryHint, setRetryHint] = useState<'offline' | 'unconfirmed' | null>(null)
   const [failedAfterPending, setFailedAfterPending] = useState(false)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [discardedToast, setDiscardedToast] = useState(false)
+  const [formEpoch, setFormEpoch] = useState(0)
+  const [, setExpiryTick] = useState(0)
   const locked = pending != null
+  const expired = pending != null && isPendingSaleExpired(pending)
   const [idempotency, setIdempotency] = useState<IdempotencyState | null>(() => {
     if (!storedPending) return null
     const fingerprint = salePayloadFingerprint(storedPending.payload)
@@ -222,6 +236,16 @@ function NewSaleForm({
     const timer = window.setTimeout(() => setDebounced(pendingSnapshot), 400)
     return () => window.clearTimeout(timer)
   }, [pendingSnapshot])
+
+  useEffect(() => {
+    if (!pending) return
+    const created = Date.parse(pending.created_at)
+    if (!Number.isFinite(created)) return
+    const remaining = created + PENDING_SALE_TTL_MS - Date.now()
+    if (remaining <= 0) return
+    const timer = window.setTimeout(() => setExpiryTick((tick) => tick + 1), remaining)
+    return () => window.clearTimeout(timer)
+  }, [pending])
 
   const simulatePayload = debounced
     ? {
@@ -396,9 +420,38 @@ function NewSaleForm({
   }
 
   function persistPending(attempt: PendingSaleAttempt) {
-    writePendingSale(clientId, attempt)
-    setPending(attempt)
-    rememberIdempotency(attempt.payload)
+    const next = {
+      ...attempt,
+      created_at: attempt.created_at || pending?.created_at || new Date().toISOString(),
+    }
+    writePendingSale(clientId, next)
+    setPending(next)
+    rememberIdempotency(next.payload)
+  }
+
+  function resetSaleForm() {
+    setArticle('')
+    setPrice('')
+    setDown('0.00')
+    setInstallments(maxInstallments < 12 ? maxInstallments : 12)
+    setFrequency(allowed.includes('mensual') ? 'mensual' : (allowed[0] ?? 'mensual'))
+    setFirstDue('')
+    setDebounced(null)
+    setPriceInvalid(false)
+    setDownInvalid(false)
+    setFailedAfterPending(false)
+    setIdempotencyReused(false)
+    setConfirmOpen(false)
+    setDiscardOpen(false)
+    setFormEpoch((epoch) => epoch + 1)
+  }
+
+  function discardPending() {
+    if (pending) forgetIdempotency(salePayloadFingerprint(pending.payload))
+    forgetIdempotency()
+    releasePending()
+    resetSaleForm()
+    setDiscardedToast(true)
   }
 
   function releasePending() {
@@ -453,7 +506,12 @@ function NewSaleForm({
     if (locked || confirmDisabled || !plan || !ready || create.isPending || inFlightRef.current) return
     const payload = buildSaleCreateBody(snapshot, plan)
     const next = rememberIdempotency(payload)
-    const attempt = { payload, key: next.key, snapshot }
+    const attempt = {
+      payload,
+      key: next.key,
+      snapshot,
+      created_at: new Date().toISOString(),
+    }
     setIdempotencyReused(false)
     setFailedAfterPending(false)
     inFlightRef.current = true
@@ -467,7 +525,7 @@ function NewSaleForm({
   }
 
   function retryPending() {
-    if (!pending || create.isPending || inFlightRef.current) return
+    if (!pending || expired || create.isPending || inFlightRef.current) return
     setRetryHint(null)
     inFlightRef.current = true
     create.mutate(
@@ -495,18 +553,26 @@ function NewSaleForm({
 
   return (
     <div className="flex flex-col gap-5 pb-56">
+      {discardedToast && !locked ? (
+        <Alert tone="success" title={DISCARD_SALE_TOAST} />
+      ) : null}
+
       {locked ? (
         <div
           ref={bannerRef}
           tabIndex={-1}
           className="bg-bg sticky top-0 z-20 -mx-1 px-1 py-1"
         >
-          <Alert tone="warning" icon="⚠" title={PENDING_SALE_TITLE}>
-            <p className="m-0">{PENDING_SALE_BODY}</p>
-            {retryHint === 'offline' ? (
+          <Alert
+            tone="warning"
+            icon="⚠"
+            title={expired ? PENDING_SALE_EXPIRED_TITLE : PENDING_SALE_TITLE}
+          >
+            <p className="m-0">{expired ? PENDING_SALE_EXPIRED_BODY : PENDING_SALE_BODY}</p>
+            {!expired && retryHint === 'offline' ? (
               <p className="m-0 mt-1.5">{PENDING_SALE_STILL_OFFLINE}</p>
             ) : null}
-            {retryHint === 'unconfirmed' ? (
+            {!expired && retryHint === 'unconfirmed' ? (
               <p className="m-0 mt-1.5">{PENDING_SALE_UNCONFIRMED}</p>
             ) : null}
           </Alert>
@@ -631,6 +697,7 @@ function NewSaleForm({
             }
           >
             <MoneyInput
+              key={`price-${formEpoch}`}
               id="price"
               value={price}
               onValue={setPrice}
@@ -652,6 +719,7 @@ function NewSaleForm({
             hint={minDown ? `Mínimo ${minDown.replace(/\.?0+$/, '')} % del precio.` : undefined}
           >
             <MoneyInput
+              key={`down-${formEpoch}`}
               id="down_payment"
               value={down}
               onValue={setDown}
@@ -729,26 +797,45 @@ function NewSaleForm({
       >
         {locked ? (
           <div className="flex flex-col gap-2">
+            {expired ? (
+              <Link
+                to={`/clientes/${clientId}/historial`}
+                className={`${buttonVariants()} min-h-12 w-full`}
+              >
+                Ver compras del cliente
+              </Link>
+            ) : (
+              <>
+                <Button
+                  className="min-h-12 w-full"
+                  disabled={create.isPending}
+                  onClick={retryPending}
+                >
+                  {create.isPending ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" aria-hidden />
+                      Confirmando…
+                    </>
+                  ) : (
+                    'Reintentar'
+                  )}
+                </Button>
+                <Link
+                  to={`/clientes/${clientId}/historial`}
+                  className={`${buttonVariants({ variant: 'link' })} min-h-11 w-full`}
+                >
+                  Ver compras del cliente
+                </Link>
+              </>
+            )}
             <Button
-              className="min-h-12 w-full"
+              variant="ghost"
+              className="min-h-11 w-full"
               disabled={create.isPending}
-              onClick={retryPending}
+              onClick={() => setDiscardOpen(true)}
             >
-              {create.isPending ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                  Confirmando…
-                </>
-              ) : (
-                'Reintentar'
-              )}
+              {DISCARD_SALE_LABEL}
             </Button>
-            <Link
-              to={`/clientes/${clientId}/historial`}
-              className={`${buttonVariants({ variant: 'link' })} min-h-11 w-full`}
-            >
-              Ver compras del cliente
-            </Link>
           </div>
         ) : (
           <Button
@@ -760,6 +847,26 @@ function NewSaleForm({
           </Button>
         )}
       </StickyActionBar>
+
+      {discardOpen ? (
+        <BottomSheet
+          title={DISCARD_SALE_TITLE}
+          titleId="discard-sale-title"
+          onClose={() => setDiscardOpen(false)}
+        >
+          <p className="m-0">{DISCARD_SALE_BODY}</p>
+          <Button variant="danger" className="min-h-12 w-full" onClick={discardPending}>
+            {DISCARD_SALE_LABEL}
+          </Button>
+          <Button
+            variant="ghost"
+            className="min-h-11 w-full"
+            onClick={() => setDiscardOpen(false)}
+          >
+            {DISCARD_SALE_BACK}
+          </Button>
+        </BottomSheet>
+      ) : null}
 
       {confirmOpen && plan ? (
         <BottomSheet

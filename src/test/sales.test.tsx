@@ -1,7 +1,7 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
-import { http, HttpResponse } from 'msw'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { delay, http, HttpResponse } from 'msw'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   GENERIC_SALE_ERROR,
@@ -9,12 +9,22 @@ import {
   IDEMPOTENCY_REUSED_TITLE,
 } from '@/features/sales/lib/copy'
 import {
+  DISCARD_SALE_BACK,
+  DISCARD_SALE_BODY,
+  DISCARD_SALE_LABEL,
+  DISCARD_SALE_TITLE,
+  DISCARD_SALE_TOAST,
   PENDING_SALE_BODY,
+  PENDING_SALE_EXPIRED_BODY,
+  PENDING_SALE_EXPIRED_TITLE,
   PENDING_SALE_FAILED,
   PENDING_SALE_STILL_OFFLINE,
   PENDING_SALE_TITLE,
+  PENDING_SALE_TTL_MS,
   PENDING_SALE_UNCONFIRMED,
+  writePendingSale,
 } from '@/features/sales/lib/pending-sale'
+import { CREATE_SALE_TIMEOUT_MS } from '@/features/shared/services/client'
 import { MONEY_INVALID_MESSAGE } from '@/features/sales/components/money-input'
 import { quincenalOptions } from '@/features/sales/lib/calendar'
 import { formatDueDate } from '@/features/shared/lib/format-due-date'
@@ -119,6 +129,7 @@ function expectNetworkWarning(options?: { stillOffline?: boolean; unconfirmed?: 
     expect(screen.queryByText(PENDING_SALE_UNCONFIRMED)).not.toBeInTheDocument()
   }
   expectPurchasesLink()
+  expect(screen.getByRole('button', { name: DISCARD_SALE_LABEL })).toBeInTheDocument()
   expect(screen.getByLabelText('Artículo')).toBeDisabled()
   expect(screen.queryByRole('button', { name: 'Confirmar venta' })).not.toBeInTheDocument()
   expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeTruthy()
@@ -170,6 +181,7 @@ function saleJson(overrides: Record<string, unknown> = {}) {
 
 describe('CBF-206 ventas', () => {
   afterEach(() => {
+    vi.useRealTimers()
     window.history.pushState({}, '', '/')
   })
 
@@ -657,6 +669,153 @@ describe('CBF-206 ventas', () => {
     expect(screen.getByLabelText('Artículo')).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Quitar una cuota' })).toBeInTheDocument()
     expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+  })
+
+  it('a las 23 h oculta Reintentar y deja Ver compras y Descartar', async () => {
+    loginCashier()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    writePendingSale('cli-1', {
+      key: 'expired-key',
+      payload: {
+        client_id: 'cli-1',
+        item_description: 'Nevera Mabe 14 pies',
+        price: '18500.00',
+        down_payment: '0.00',
+        installments: 12,
+        frequency: 'mensual',
+        first_due_date: '2026-11-17',
+      },
+      snapshot: {
+        client_id: 'cli-1',
+        item_description: 'Nevera Mabe 14 pies',
+        price: '18500.00',
+        down_payment: '0.00',
+        installments: 12,
+        frequency: 'mensual',
+        first_due_date: '2026-11-17',
+      },
+      created_at: new Date(Date.now() - PENDING_SALE_TTL_MS).toISOString(),
+    })
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    renderApp()
+    await goToNewSale()
+    expect(screen.getByText(PENDING_SALE_EXPIRED_TITLE)).toBeInTheDocument()
+    expect(screen.getByText(PENDING_SALE_EXPIRED_BODY)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver compras del cliente' })).toHaveClass('min-h-12')
+    expect(screen.getByRole('button', { name: DISCARD_SALE_LABEL })).toHaveClass('min-h-11')
+    expect(screen.getByLabelText('Artículo')).toBeDisabled()
+  })
+
+  it('Volver en Descartar mantiene el bloqueo', async () => {
+    loginCashier()
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: request.headers.get('Idempotency-Key'),
+        })
+        return HttpResponse.error()
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expectNetworkWarning()
+    const storedKey = pendingSaleKey()
+    await user.click(screen.getByRole('button', { name: DISCARD_SALE_LABEL }))
+    expect(screen.getByRole('heading', { name: DISCARD_SALE_TITLE })).toBeInTheDocument()
+    expect(screen.getByText(DISCARD_SALE_BODY)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: DISCARD_SALE_BACK }))
+    expect(screen.queryByRole('heading', { name: DISCARD_SALE_TITLE })).not.toBeInTheDocument()
+    expectNetworkWarning()
+    expect(pendingSaleKey()).toBe(storedKey)
+  })
+
+  it('Descartar vacía el formulario, muestra el aviso y la siguiente venta usa otra clave', async () => {
+    loginCashier()
+    const keys: string[] = []
+    let failFirst = true
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        const key = request.headers.get('Idempotency-Key')
+        if (key) keys.push(key)
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: key,
+        })
+        if (failFirst) {
+          failFirst = false
+          return HttpResponse.error()
+        }
+        return HttpResponse.json(saleJson({ id: 'sale-after-discard', sale_number: 55 }), {
+          status: 201,
+        })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expectNetworkWarning()
+    const firstKey = pendingSaleKey()
+    await user.click(screen.getByRole('button', { name: DISCARD_SALE_LABEL }))
+    const sheet = screen.getByRole('dialog')
+    await user.click(within(sheet).getByRole('button', { name: DISCARD_SALE_LABEL }))
+    expect(screen.getByText(DISCARD_SALE_TOAST)).toBeInTheDocument()
+    expect(screen.getByLabelText('Artículo')).toHaveValue('')
+    expect(screen.getByLabelText('Artículo')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Confirmar venta' })).toBeInTheDocument()
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+    await fillHappyPath(user)
+    await confirmSale(user)
+    expect(await screen.findByText('Listo, venta #55 registrada.')).toBeInTheDocument()
+    expect(keys.at(-1)).not.toBe(firstKey)
+    expect(sessionStorage.getItem('cobrafy.pendingSale:cli-1')).toBeNull()
+  })
+
+  it('un timeout del POST deja el bloqueo con la misma clave', async () => {
+    loginCashier()
+    const keys: string[] = []
+    server.use(
+      http.post('*/sales', async ({ request }) => {
+        const key = request.headers.get('Idempotency-Key')
+        if (key) keys.push(key)
+        saleWrites.push({
+          method: 'POST',
+          url: request.url,
+          body: await request.json(),
+          idempotencyKey: key,
+        })
+        await delay('infinite')
+        return HttpResponse.json(saleJson(), { status: 201 })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
+    const user = userEvent.setup()
+    renderApp()
+    await goToNewSale()
+    await fillHappyPath(user)
+    await openConfirmSheet(user)
+    const registrar = screen.getByRole('button', { name: 'Registrar venta' })
+    vi.useFakeTimers()
+    fireEvent.click(registrar)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CREATE_SALE_TIMEOUT_MS)
+    })
+    expect(keys).toHaveLength(1)
+    expectNetworkWarning()
+    expect(pendingSaleKey()).toBe(keys[0])
+    expect(screen.queryByRole('button', { name: 'Confirmar venta' })).not.toBeInTheDocument()
   })
 
   it('un 409 con copy propio desbloquea y muestra ese aviso', async () => {

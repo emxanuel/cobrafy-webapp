@@ -7,6 +7,9 @@ import { logHttpError } from '@/features/shared/lib/logger'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
 
+export const GET_TIMEOUT_MS = 15_000
+export const CREATE_SALE_TIMEOUT_MS = 30_000
+
 export const SELECT_BUSINESS_EVENT = 'cobrafy:select-business'
 
 type StampedConfig = InternalAxiosRequestConfig & {
@@ -41,6 +44,7 @@ function tokenUsedOnRequest(config?: StampedConfig): string | null {
 
 export const api = axios.create({
   baseURL,
+  timeout: GET_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },

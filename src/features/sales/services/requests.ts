@@ -1,4 +1,4 @@
-import { api } from '@/features/shared/services/client'
+import { api, CREATE_SALE_TIMEOUT_MS } from '@/features/shared/services/client'
 import {
   FREQUENCIES,
   type CreditSettings,
@@ -187,6 +187,7 @@ export async function createSale(
 ): Promise<SaleDetail> {
   const { data } = await api.post<unknown>('/sales', payload, {
     headers: { 'Idempotency-Key': idempotencyKey },
+    timeout: CREATE_SALE_TIMEOUT_MS,
   })
   return normalizeSaleDetail(data)
 }
