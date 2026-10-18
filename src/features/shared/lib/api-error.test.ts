@@ -241,6 +241,9 @@ describe('toApiError', () => {
     )
     expect(spanish.message).toBe('el precio es obligatorio')
     expect(spanish.fieldErrors.price).toBe('el precio es obligatorio')
+
+    const blocked = toApiError(axiosError(409, { detail: 'Atraso de 3 cuotas' }))
+    expect(blocked.message).toBe('Atraso de 3 cuotas')
   })
 
   it('No permission no se trata como español', () => {

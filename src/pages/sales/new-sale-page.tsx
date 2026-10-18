@@ -267,12 +267,11 @@ function NewSaleForm({
 
   const simulate = useSimulateSale(clientId, canSimulate ? simulatePayload : null)
   const create = useCreateSaleMutation(clientId)
-  const resetCreateRef = useRef(create.reset)
-  resetCreateRef.current = create.reset
 
-  useEffect(() => {
-    resetCreateRef.current()
-  }, [fingerprint])
+  function clearCreateError() {
+    if (create.isError) create.reset()
+  }
+
   const plan = simulate.data
   const simulating = simulate.isFetching || (canSimulate && debounced !== snapshot)
   const stale = !plan || saleFormFingerprint({
@@ -406,6 +405,7 @@ function NewSaleForm({
           : null
 
   function changeFrequency(next: Frequency) {
+    if (next !== frequency) clearCreateError()
     setFrequency(next)
     setFirstDue('')
     if (next === 'quincenal') {
@@ -701,7 +701,10 @@ function NewSaleForm({
             error={mergedFields.item_description}
             disabled={locked}
             readOnly={locked}
-            onChange={(event) => setArticle(event.target.value)}
+            onChange={(event) => {
+              clearCreateError()
+              setArticle(event.target.value)
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') event.preventDefault()
             }}
@@ -724,7 +727,10 @@ function NewSaleForm({
               key={`price-${formEpoch}`}
               id="price"
               value={price}
-              onValue={setPrice}
+              onValue={(value) => {
+                if (value !== price) clearCreateError()
+                setPrice(value)
+              }}
               onInvalid={setPriceInvalid}
               disabled={locked}
               error={priceInvalid ? MONEY_INVALID_MESSAGE : mergedFields.price}
@@ -746,7 +752,10 @@ function NewSaleForm({
               key={`down-${formEpoch}`}
               id="down_payment"
               value={down}
-              onValue={setDown}
+              onValue={(value) => {
+                if (value !== down) clearCreateError()
+                setDown(value)
+              }}
               onInvalid={setDownInvalid}
               disabled={locked}
               error={downInvalid ? MONEY_INVALID_MESSAGE : mergedFields.down_payment}
@@ -764,7 +773,10 @@ function NewSaleForm({
             id="installments"
             value={installments}
             max={maxInstallments}
-            onChange={setInstallments}
+            onChange={(value) => {
+              if (value !== installments) clearCreateError()
+              setInstallments(value)
+            }}
             error={mergedFields.installments}
             disabled={locked}
             hideButtons={locked}
@@ -784,7 +796,10 @@ function NewSaleForm({
         <FirstDuePicker
           frequency={frequency}
           value={pickerDue}
-          onChange={setFirstDue}
+          onChange={(value) => {
+            if (value !== firstDue) clearCreateError()
+            setFirstDue(value)
+          }}
           error={
             mergedFields.first_due_date
               ? formatFieldMessage(mergedFields.first_due_date)
