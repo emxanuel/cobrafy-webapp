@@ -114,7 +114,6 @@ function messageForCode(code: string | undefined): string | undefined {
   if (code === 'invite_email_failed') return INVITE_EMAIL_FAILED
   if (code === 'DOCUMENT_UNREADABLE') return DOCUMENT_UNREADABLE_MESSAGE
   if (code === 'DOCUMENT_UNREADABLE_GUARANTOR') return DOCUMENT_UNREADABLE_GUARANTOR_MESSAGE
-  if (code === 'IDEMPOTENCY_KEY_REUSED') return GENERIC_MESSAGE
   return undefined
 }
 

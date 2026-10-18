@@ -12,7 +12,7 @@ export function PlanCard({
   state,
   plan,
   surchargePercent = null,
-  surchargeKind = 'percent',
+  surchargeKind = 'percent_of_financed',
   dim = false,
 }: {
   state: 'idle' | 'calculating' | 'result' | 'field-error'

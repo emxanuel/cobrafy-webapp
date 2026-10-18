@@ -9,13 +9,15 @@ function trimPercent(value: string): string {
   return value.replace(/\.?0+$/, '')
 }
 
+export const IDEMPOTENCY_REUSED_TITLE = 'Puede que esta venta ya esté registrada'
+export const IDEMPOTENCY_REUSED_BODY =
+  'Revisa las compras del cliente antes de intentar de nuevo.'
+
 export function surchargeLabel(input: {
   surcharge_kind?: string | null
-  surcharge_mode?: string | null
   surcharge_percent?: string | null
 }): string {
-  const kind = input.surcharge_kind ?? input.surcharge_mode ?? ''
-  if (kind === 'fixed' || kind === 'monto_fijo') return 'Recargo (monto fijo)'
+  if (input.surcharge_kind === 'fixed_amount') return 'Recargo (monto fijo)'
   if (input.surcharge_percent) return `Recargo (${trimPercent(input.surcharge_percent)} %)`
   return 'Recargo'
 }

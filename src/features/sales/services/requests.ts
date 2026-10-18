@@ -13,7 +13,7 @@ import {
   type SaleWarning,
   type SimulateSaleRequest,
   type SimulateSaleResponse,
-  type SurchargeMode,
+  type SurchargeKind,
 } from './types'
 
 function asString(value: unknown, fallback = ''): string {
@@ -37,9 +37,8 @@ function asFrequency(value: unknown): Frequency {
   return FREQUENCIES.includes(value as Frequency) ? (value as Frequency) : 'mensual'
 }
 
-function asMode(value: unknown): SurchargeMode {
-  if (value === 'fixed' || value === 'monto_fijo') return 'fixed'
-  return 'percent'
+function asSurchargeKind(value: unknown): SurchargeKind {
+  return value === 'fixed_amount' ? 'fixed_amount' : 'percent_of_financed'
 }
 
 function asWarnings(value: unknown): SaleWarning[] {
@@ -98,7 +97,7 @@ export function normalizeCreditSettings(data: unknown): CreditSettings {
     : [...FREQUENCIES]
   return {
     interest_method: asString(row.interest_method, 'recargo_fijo'),
-    surcharge_mode: asMode(row.surcharge_mode),
+    surcharge_kind: asSurchargeKind(row.surcharge_kind),
     surcharge_percent: asNullableString(row.surcharge_percent),
     surcharge_amount: asNullableString(row.surcharge_amount),
     allowed_frequencies: allowed.length ? allowed : [...FREQUENCIES],
@@ -141,7 +140,7 @@ export function normalizeSale(data: unknown): SaleRead {
     financed: asString(row.financed, '0.00'),
     surcharge: asString(row.surcharge, '0.00'),
     total: asString(row.total, '0.00'),
-    surcharge_kind: asString(row.surcharge_kind, 'percent'),
+    surcharge_kind: asSurchargeKind(row.surcharge_kind),
     surcharge_percent: asNullableString(row.surcharge_percent),
     surcharge_amount: asNullableString(row.surcharge_amount),
     interest_method: asString(row.interest_method, 'recargo_fijo'),
@@ -185,8 +184,6 @@ export async function createSale(
   payload: SaleCreateRequest,
   idempotencyKey: string,
 ): Promise<SaleDetail> {
-  // Send Idempotency-Key only. Do not read Idempotent-Replayed: CORS has no
-  // expose_headers yet (CBF-212). Success is the JSON body / status.
   const { data } = await api.post<unknown>('/sales', payload, {
     headers: { 'Idempotency-Key': idempotencyKey },
   })

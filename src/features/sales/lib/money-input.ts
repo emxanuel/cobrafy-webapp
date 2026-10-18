@@ -1,12 +1,15 @@
-/** Turns typed money (`18500`, `18,500`, `18500.5`) into a decimal string. No Number. */
+const GROUPED = /^\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?$/
+const PLAIN = /^\d+(?:\.\d{1,2})?$/
+
+/** Turns typed money into a decimal string. Anything outside the allowed formats is null. */
 export function parseMoneyInput(raw: string): string | null {
   const trimmed = raw.trim().replace(/\s/g, '')
   if (!trimmed) return null
+  if (!GROUPED.test(trimmed) && !PLAIN.test(trimmed)) return null
   const normalized = trimmed.replace(/,/g, '')
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null
   const [intPart, frac = ''] = normalized.split('.')
   const whole = (intPart || '0').replace(/^0+(?=\d)/, '') || '0'
-  const cents = `${frac}00`.slice(0, 2)
+  const cents = frac.length === 0 ? '00' : frac.length === 1 ? `${frac}0` : frac
   return `${whole}.${cents}`
 }
 

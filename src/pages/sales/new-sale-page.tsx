@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 
 import type { Role } from '@/features/auth/services/types'
 import { useSessionStore } from '@/features/auth/stores/session-store'
@@ -18,7 +18,7 @@ import { getApiErrorMessage, getFieldErrors, isApiError } from '@/features/share
 import { formatDueDate } from '@/features/shared/lib/format-due-date'
 import { formatMoney } from '@/features/shared/lib/format-money'
 import { FirstDuePicker } from '@/features/sales/components/first-due-picker'
-import { MoneyInput } from '@/features/sales/components/money-input'
+import { MoneyInput, MONEY_INVALID_MESSAGE } from '@/features/sales/components/money-input'
 import { PlanCard } from '@/features/sales/components/plan-card'
 import { SaleBanner } from '@/features/sales/components/sale-banner'
 import { SegmentedControl } from '@/features/sales/components/segmented-control'
@@ -33,6 +33,8 @@ import {
 } from '@/features/sales/hooks/use-sales-queries'
 import { quincenalOptions } from '@/features/sales/lib/calendar'
 import {
+  IDEMPOTENCY_REUSED_BODY,
+  IDEMPOTENCY_REUSED_TITLE,
   confirmBlockedReason,
   formatFieldMessage,
   frequencyAdjective,
@@ -45,10 +47,16 @@ import { isPositiveAmount } from '@/features/sales/lib/money-input'
 import {
   buildSaleCreateBody,
   saleFormFingerprint,
+  salePayloadFingerprint,
   type SaleFormSnapshot,
 } from '@/features/sales/lib/sale-payload'
 import { planCuotaCount, planFirstDue, planLastDue } from '@/features/sales/lib/plan-view'
-import { FREQUENCIES, type Frequency, type SaleDetail } from '@/features/sales/services/types'
+import {
+  FREQUENCIES,
+  type Frequency,
+  type SaleCreateRequest,
+  type SaleDetail,
+} from '@/features/sales/services/types'
 import { SaleRegistered } from '@/pages/sales/sale-registered'
 
 const FREQUENCY_LABEL: Record<Frequency, string> = {
@@ -104,7 +112,7 @@ export function NewSalePage() {
       allowed={allowed}
       maxInstallments={maxInstallments}
       minDown={minDown}
-      surchargeKind={settings?.surcharge_mode ?? 'percent'}
+      surchargeKind={settings?.surcharge_kind ?? 'percent_of_financed'}
       surchargePercent={settings?.surcharge_percent ?? null}
     />
   )
@@ -150,8 +158,18 @@ function NewSaleForm({
   const [debounced, setDebounced] = useState<SaleFormSnapshot | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [created, setCreated] = useState<SaleDetail | null>(null)
+  const [priceInvalid, setPriceInvalid] = useState(false)
+  const [downInvalid, setDownInvalid] = useState(false)
+  const [idempotencyReused, setIdempotencyReused] = useState(false)
+  const [lastSubmitted, setLastSubmitted] = useState<{
+    payload: SaleCreateRequest
+    key: string
+    snapshot: SaleFormSnapshot
+  } | null>(null)
   const idempotencyRef = useRef<IdempotencyState | null>(null)
+  const inFlightRef = useRef(false)
   const bannerRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   const snapshot: SaleFormSnapshot = useMemo(
     () => ({
@@ -167,7 +185,12 @@ function NewSaleForm({
   )
 
   const fingerprint = saleFormFingerprint(snapshot)
-  const canSimulate = isPositiveAmount(price) && installments >= 1 && Boolean(frequency)
+  const canSimulate =
+    isPositiveAmount(price) &&
+    !priceInvalid &&
+    !downInvalid &&
+    installments >= 1 &&
+    Boolean(frequency)
   const pendingSnapshot = canSimulate ? snapshot : null
 
   useEffect(() => {
@@ -235,6 +258,8 @@ function NewSaleForm({
   const confirmDisabled =
     !articleValid ||
     !isPositiveAmount(price) ||
+    priceInvalid ||
+    downInvalid ||
     installments < 1 ||
     !ready ||
     Boolean(blockReason) ||
@@ -243,7 +268,9 @@ function NewSaleForm({
     create.isPending
 
   let confirmHint = ''
-  if (!isPositiveAmount(price) || installments < 1 || !articleValid) {
+  if (priceInvalid || downInvalid) {
+    confirmHint = MONEY_INVALID_MESSAGE
+  } else if (!isPositiveAmount(price) || installments < 1 || !articleValid) {
     confirmHint = 'Completa precio, plazo y artículo para continuar.'
   } else if (simulating || stale) {
     confirmHint = 'Espera a que termine el cálculo.'
@@ -251,10 +278,14 @@ function NewSaleForm({
     confirmHint = blockReason
   }
 
+  const formChangedSinceSubmit =
+    lastSubmitted != null && saleFormFingerprint(lastSubmitted.snapshot) !== fingerprint
   const registerNetwork =
     create.isError &&
     (createStatus === 0 || createStatus >= 500) &&
-    createCode !== 'IDEMPOTENCY_KEY_REUSED'
+    createCode !== 'IDEMPOTENCY_KEY_REUSED' &&
+    lastSubmitted != null &&
+    !formChangedSinceSubmit
 
   const banners: ReturnType<typeof simulatorWarningCopy>[] = []
   if (blockedFromSim) {
@@ -291,7 +322,10 @@ function NewSaleForm({
   }
 
   const registerBanner =
-    create.isError && createStatus === 409 && !registerNetwork
+    create.isError &&
+    createStatus === 409 &&
+    !registerNetwork &&
+    createCode !== 'IDEMPOTENCY_KEY_REUSED'
       ? saleErrorBanner(
           createCode,
           role,
@@ -313,29 +347,64 @@ function NewSaleForm({
     }
   }
 
+  function closeConfirm() {
+    if (create.isPending) return
+    setConfirmOpen(false)
+    setIdempotencyReused(false)
+  }
+
   function openConfirm() {
     if (confirmDisabled || !plan) return
+    setIdempotencyReused(false)
     setConfirmOpen(true)
   }
 
+  function finishCreate(error?: unknown) {
+    inFlightRef.current = false
+    if (!error) return
+    if (isApiError(error) && error.code === 'IDEMPOTENCY_KEY_REUSED') {
+      idempotencyRef.current = null
+      setIdempotencyReused(true)
+      return
+    }
+    setConfirmOpen(false)
+    queueMicrotask(() => bannerRef.current?.focus())
+  }
+
   function submitSale() {
-    if (!plan) return
-    const next = idempotencyForForm(idempotencyRef.current, fingerprint)
+    if (confirmDisabled || !plan || !ready || create.isPending || inFlightRef.current) return
+    const payload = buildSaleCreateBody(snapshot, plan)
+    const payloadFingerprint = salePayloadFingerprint(payload)
+    const next = idempotencyForForm(idempotencyRef.current, payloadFingerprint)
     idempotencyRef.current = next
+    setLastSubmitted({ payload, key: next.key, snapshot })
+    setIdempotencyReused(false)
+    inFlightRef.current = true
     create.mutate(
-      {
-        payload: buildSaleCreateBody(snapshot, plan),
-        idempotencyKey: next.key,
-      },
+      { payload, idempotencyKey: next.key },
       {
         onSuccess: (sale) => {
+          inFlightRef.current = false
           setConfirmOpen(false)
           setCreated(sale)
         },
-        onError: () => {
+        onError: finishCreate,
+      },
+    )
+  }
+
+  function retryLastSubmitted() {
+    if (!lastSubmitted || create.isPending || inFlightRef.current || formChangedSinceSubmit) return
+    inFlightRef.current = true
+    create.mutate(
+      { payload: lastSubmitted.payload, idempotencyKey: lastSubmitted.key },
+      {
+        onSuccess: (sale) => {
+          inFlightRef.current = false
           setConfirmOpen(false)
-          queueMicrotask(() => bannerRef.current?.focus())
+          setCreated(sale)
         },
+        onError: finishCreate,
       },
     )
   }
@@ -413,7 +482,7 @@ function NewSaleForm({
           title="No se pudo registrar la venta."
           action={
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={submitSale}>
+              <Button variant="outline" onClick={retryLastSubmitted}>
                 Reintentar
               </Button>
               <Link
@@ -459,15 +528,31 @@ function NewSaleForm({
           <Field
             id="price"
             label="Precio"
-            error={mergedFields.price ? formatFieldMessage(mergedFields.price) : undefined}
+            error={
+              priceInvalid
+                ? MONEY_INVALID_MESSAGE
+                : mergedFields.price
+                  ? formatFieldMessage(mergedFields.price)
+                  : undefined
+            }
           >
-            <MoneyInput id="price" value={price} onValue={setPrice} error={mergedFields.price} />
+            <MoneyInput
+              id="price"
+              value={price}
+              onValue={setPrice}
+              onInvalid={setPriceInvalid}
+              error={priceInvalid ? MONEY_INVALID_MESSAGE : mergedFields.price}
+            />
           </Field>
           <Field
             id="down_payment"
             label="Inicial"
             error={
-              mergedFields.down_payment ? formatFieldMessage(mergedFields.down_payment) : undefined
+              downInvalid
+                ? MONEY_INVALID_MESSAGE
+                : mergedFields.down_payment
+                  ? formatFieldMessage(mergedFields.down_payment)
+                  : undefined
             }
             hint={minDown ? `Mínimo ${minDown.replace(/\.?0+$/, '')} % del precio.` : undefined}
           >
@@ -475,7 +560,8 @@ function NewSaleForm({
               id="down_payment"
               value={down}
               onValue={setDown}
-              error={mergedFields.down_payment}
+              onInvalid={setDownInvalid}
+              error={downInvalid ? MONEY_INVALID_MESSAGE : mergedFields.down_payment}
             />
           </Field>
         </div>
@@ -550,9 +636,7 @@ function NewSaleForm({
         <BottomSheet
           title="Revisa antes de registrar"
           titleId="confirm-sale-title"
-          onClose={() => {
-            if (!create.isPending) setConfirmOpen(false)
-          }}
+          onClose={closeConfirm}
           closeDisabled={create.isPending}
         >
           <div>
@@ -579,21 +663,47 @@ function NewSaleForm({
             />
           </div>
           <CuotaDots count={planCuotaCount(plan)} />
-          <Button
-            className="min-h-12 w-full"
-            disabled={create.isPending}
-            onClick={submitSale}
-          >
-            {create.isPending ? 'Registrando…' : 'Registrar venta'}
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full"
-            disabled={create.isPending}
-            onClick={() => setConfirmOpen(false)}
-          >
-            Volver a editar
-          </Button>
+          {idempotencyReused ? (
+            <>
+              <Alert
+                tone="warning"
+                icon="⚠"
+                title={IDEMPOTENCY_REUSED_TITLE}
+              >
+                {IDEMPOTENCY_REUSED_BODY}
+              </Alert>
+              <Button
+                className="min-h-11 w-full"
+                onClick={() => {
+                  closeConfirm()
+                  navigate(`/clientes/${clientId}`)
+                }}
+              >
+                Ver compras del cliente
+              </Button>
+              <Button variant="ghost" className="min-h-11 w-full" onClick={closeConfirm}>
+                Cerrar
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                className="min-h-12 w-full"
+                disabled={create.isPending}
+                onClick={submitSale}
+              >
+                {create.isPending ? 'Registrando…' : 'Registrar venta'}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                disabled={create.isPending}
+                onClick={closeConfirm}
+              >
+                Volver a editar
+              </Button>
+            </>
+          )}
         </BottomSheet>
       ) : null}
     </div>

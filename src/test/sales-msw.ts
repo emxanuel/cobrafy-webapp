@@ -197,7 +197,7 @@ export function saleDetailFromPlan(
     financed: plan.financed,
     surcharge: plan.surcharge,
     total: plan.total,
-    surcharge_kind: 'percent',
+    surcharge_kind: 'percent_of_financed',
     surcharge_percent: '20.00',
     surcharge_amount: null,
     interest_method: 'recargo_fijo',

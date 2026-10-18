@@ -26,6 +26,20 @@ export function saleFormFingerprint(form: SaleFormSnapshot): string {
   ].join('|')
 }
 
+export function salePayloadFingerprint(body: SaleCreateRequest): string {
+  return JSON.stringify({
+    client_id: body.client_id,
+    item_description: body.item_description,
+    price: body.price,
+    down_payment: body.down_payment,
+    installments: body.installments,
+    frequency: body.frequency,
+    first_due_date: body.first_due_date ?? null,
+    anchor_date: body.anchor_date ?? null,
+    anchor_offset: body.anchor_offset ?? null,
+  })
+}
+
 export function buildSaleCreateBody(
   form: SaleFormSnapshot,
   simulation: Pick<SimulateSaleResponse, 'anchor_date' | 'anchor_offset'>,

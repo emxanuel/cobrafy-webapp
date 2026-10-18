@@ -995,7 +995,7 @@ export const handlers = [
     if (denied) return denied
     return HttpResponse.json({
       interest_method: 'recargo_fijo',
-      surcharge_mode: 'percent',
+      surcharge_kind: 'percent_of_financed',
       surcharge_percent: '20.00',
       surcharge_amount: null,
       allowed_frequencies: ['semanal', 'quincenal', 'mensual'],

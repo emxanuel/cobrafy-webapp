@@ -1,8 +1,8 @@
 export const FREQUENCIES = ['semanal', 'quincenal', 'mensual'] as const
 export type Frequency = (typeof FREQUENCIES)[number]
 
-export const SURCHARGE_MODES = ['percent', 'fixed'] as const
-export type SurchargeMode = (typeof SURCHARGE_MODES)[number]
+export const SURCHARGE_KINDS = ['percent_of_financed', 'fixed_amount'] as const
+export type SurchargeKind = (typeof SURCHARGE_KINDS)[number]
 
 export type SaleWarning = {
   code: string
@@ -26,7 +26,7 @@ export type InstallmentRead = {
 
 export type CreditSettings = {
   interest_method: string
-  surcharge_mode: SurchargeMode
+  surcharge_kind: SurchargeKind
   surcharge_percent: string | null
   surcharge_amount: string | null
   allowed_frequencies: Frequency[]
@@ -91,7 +91,7 @@ export type SaleRead = {
   financed: string
   surcharge: string
   total: string
-  surcharge_kind: string
+  surcharge_kind: SurchargeKind
   surcharge_percent: string | null
   surcharge_amount: string | null
   interest_method: string

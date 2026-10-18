@@ -113,14 +113,14 @@ describe('toApiError', () => {
     expect(error.message).toBe('ya existe un cliente con este documento')
   })
 
-  it('IDEMPOTENCY_KEY_REUSED es un error genérico', () => {
+  it('IDEMPOTENCY_KEY_REUSED conserva el código para el aviso de la hoja', () => {
     const error = toApiError(
       axiosError(409, {
         detail: [{ field: null, code: 'IDEMPOTENCY_KEY_REUSED', message: 'key reused' }],
       }),
     )
     expect(error.code).toBe('IDEMPOTENCY_KEY_REUSED')
-    expect(error.message).toBe('No se pudo completar. Inténtalo de nuevo.')
+    expect(error.message).toBe('key reused')
   })
 
   it('un código desconocido sin mensaje cae al genérico en español', () => {

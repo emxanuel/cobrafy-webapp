@@ -39,7 +39,7 @@ describe('normalizeSimulation / normalizeSaleDetail vs fa39236', () => {
       financed: '999.99',
       surcharge: '0.00',
       total: '999.99',
-      surcharge_kind: 'percent',
+      surcharge_kind: 'percent_of_financed',
       surcharge_percent: '0.00',
       surcharge_amount: null,
       interest_method: 'recargo_fijo',
