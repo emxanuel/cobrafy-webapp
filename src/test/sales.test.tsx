@@ -776,9 +776,10 @@ describe('CBF-206 ventas', () => {
     window.history.pushState({}, '', '/clientes/cli-1/ventas/nueva')
     renderApp()
     await goToNewSale()
+    expect(PENDING_SALE_TTL_MS).toBe(23 * 60 * 60 * 1000)
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(PENDING_SALE_TTL_MS - 60_000)
+      await vi.advanceTimersByTimeAsync(82_800_000 - 60_000)
     })
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
     await act(async () => {
