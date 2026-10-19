@@ -185,7 +185,7 @@ describe('bitácora', () => {
         HttpResponse.json(
           {
             detail: [
-              { field: null, code: 'value_error', message: 'from debe ser anterior a to' },
+              { field: null, code: 'value_error', message: 'from y to deben incluir zona horaria' },
             ],
           },
           { status: 422 },
@@ -195,7 +195,7 @@ describe('bitácora', () => {
     window.history.pushState({}, '', '/auditoria')
     renderApp()
     expect(
-      await screen.findByText('from debe ser anterior a to', {}, { timeout: 4000 }),
+      await screen.findByText('from y to deben incluir zona horaria', {}, { timeout: 4000 }),
     ).toBeInTheDocument()
     expect(screen.queryByText(/Revisa tu conexión/)).not.toBeInTheDocument()
   })

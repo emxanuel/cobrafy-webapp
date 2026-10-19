@@ -611,9 +611,14 @@ export const handlers = [
     if (body.token !== 'inv-ok') {
       return HttpResponse.json({ detail: 'invitación inválida' }, { status: 400 })
     }
-    if (!body.name || !body.password) {
+    if (!body.name || !body.name.trim()) {
       return contractError(422, [
-        { field: null, code: 'value_error', message: 'Indica nombre y contraseña' },
+        { field: null, code: 'value_error', message: 'El nombre es obligatorio' },
+      ])
+    }
+    if (!body.password) {
+      return contractError(422, [
+        { field: null, code: 'value_error', message: 'La contraseña es obligatoria' },
       ])
     }
     return HttpResponse.json({
@@ -1016,7 +1021,7 @@ export const handlers = [
     if (payload.document === 'malo') {
       return contractError(422, [
         {
-          field: 'document',
+          field: null,
           code: 'value_error',
           message: 'Cédula inválida',
         },
@@ -1326,7 +1331,7 @@ export const handlers = [
           detail: [
             {
               field: 'down_payment',
-              code: 'DOWN_PAYMENT_INVALID',
+              code: 'value_error',
               message: 'La inicial debe ser menor que el precio',
             },
           ],

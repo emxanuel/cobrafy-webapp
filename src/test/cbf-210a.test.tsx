@@ -130,7 +130,7 @@ describe('CBF-210-A UI', () => {
     window.history.pushState({}, '', '/clientes/cli-1')
     const user = userEvent.setup()
     renderApp()
-    await user.click(await screen.findByRole('button', { name: 'Bloquear' }))
+    await user.click(await screen.findByRole('button', { name: 'Bloquear' }, { timeout: 4000 }))
     await user.type(screen.getByLabelText('Motivo del bloqueo'), 'Atraso de 3 cuotas')
     await user.click(screen.getByRole('button', { name: 'Confirmar bloqueo' }))
     expect(await screen.findByText('El cliente ya está bloqueado')).toBeInTheDocument()

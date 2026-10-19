@@ -722,8 +722,8 @@ describe('CBF-206 ventas', () => {
             detail: [
               {
                 field: 'item_description',
-                code: 'ITEM_DESCRIPTION_INVALID',
-                message: 'El artículo no es válido',
+                code: 'value_error',
+                message: 'La descripción del artículo debe tener entre 1 y 500 caracteres',
               },
             ],
           },
@@ -740,7 +740,9 @@ describe('CBF-206 ventas', () => {
     expectNetworkWarning()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText(PENDING_SALE_FAILED)).toBeInTheDocument()
-    expect(screen.getByText('El artículo no es válido.')).toBeInTheDocument()
+    expect(
+      screen.getByText('La descripción del artículo debe tener entre 1 y 500 caracteres.'),
+    ).toBeInTheDocument()
     expect(screen.queryByText(PENDING_SALE_BODY)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Artículo')).toBeEnabled()
@@ -1003,7 +1005,7 @@ describe('CBF-206 ventas', () => {
           idempotencyKey: request.headers.get('Idempotency-Key'),
         })
         return HttpResponse.json(
-          { detail: [{ field: 'price', code: 'AMOUNT_INVALID', message: 'Monto inválido' }] },
+          { detail: [{ field: 'price', code: 'amount', message: 'Monto inválido' }] },
           { status: 422 },
         )
       }),
@@ -1189,7 +1191,7 @@ describe('CBF-206 ventas', () => {
                 {
                   field: null,
                   code: 'IDEMPOTENCY_KEY_REUSED',
-                  message: 'Esta clave de idempotencia ya se usó con otro cuerpo',
+                  message: 'Esta clave de idempotencia ya se usó con otra solicitud',
                 },
               ],
             },
@@ -1240,7 +1242,7 @@ describe('CBF-206 ventas', () => {
               {
                 field: null,
                 code: 'IDEMPOTENCY_KEY_REUSED',
-                message: 'Esta clave de idempotencia ya se usó con otro cuerpo',
+                message: 'Esta clave de idempotencia ya se usó con otra solicitud',
               },
             ],
           },
@@ -1386,7 +1388,7 @@ describe('CBF-206 ventas', () => {
             detail: [
               {
                 field: 'down_payment',
-                code: 'DOWN_PAYMENT_INVALID',
+                code: 'value_error',
                 message: 'La inicial debe ser menor que el precio',
               },
             ],

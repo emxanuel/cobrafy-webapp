@@ -7,6 +7,7 @@ import {
   ApiError,
   GENERIC_MESSAGE,
   isPinLockedError,
+  LEADING_IDENTIFIER,
   PIN_LOCKED_DETAIL,
   toApiError,
 } from './api-error'
@@ -51,13 +52,13 @@ describe('toApiError', () => {
         detail: [
           {
             field: 'down_payment',
-            code: 'DOWN_PAYMENT_INVALID',
+            code: 'value_error',
             message: 'La inicial debe ser menor que el precio',
           },
         ],
       }),
     )
-    expect(error.code).toBe('DOWN_PAYMENT_INVALID')
+    expect(error.code).toBe('value_error')
     expect(error.fieldErrors.down_payment).toBe('La inicial debe ser menor que el precio')
     expect(error.message).toBe('La inicial debe ser menor que el precio')
   })
@@ -145,9 +146,13 @@ describe('toApiError', () => {
     expect(invite.message).toBe('invitación inválida')
 
     const contacts = toApiError(
-      axiosError(409, { detail: maxContactsMessage() }),
+      axiosError(422, {
+        detail: [{ field: null, code: 'value_error', message: maxContactsMessage() }],
+      }),
     )
     expect(contacts.message).toBe(maxContactsMessage())
+    expect(contacts.code).toBe('value_error')
+    expect(contacts.status).toBe(422)
 
     const plain409 = toApiError(
       axiosError(
@@ -315,11 +320,11 @@ const BACKEND_A_SPANISH_MESSAGES = [
   'Campo obligatorio',
   'Campos adicionales no permitidos',
   'Debe ser texto',
-  'Debe tener al menos 1 caracteres',
+  'Debe tener al menos 1 carácter',
   'Debe tener como máximo 500 caracteres',
   'Debe ser un número entero',
   'Debe ser verdadero o falso',
-  'Identificador inválido',
+  'Debe ser un UUID',
   'Valor no permitido',
   'Fecha inválida (usa AAAA-MM-DD)',
   'Fecha y hora inválidas',
@@ -332,7 +337,7 @@ const BACKEND_A_SPANISH_MESSAGES = [
   'Debe tener como máximo 50 elementos',
   'El cuerpo debe ser un objeto',
   'El cuerpo no es un JSON válido',
-  'Correo inválido',
+  'Email inválido',
   'Dato inválido',
   'Debe ser un número',
   'Monto inválido',
@@ -345,12 +350,12 @@ describe('contrato 210-A {field, code, message}', () => {
       axiosError(422, {
         detail: [
           { field: 'price', code: 'value_error', message: 'El precio debe ser mayor que cero' },
-          { field: 'installments', code: 'int_type', message: 'Dato inválido' },
+          { field: 'installments', code: 'int_type', message: 'Debe ser un número entero' },
         ],
       }),
     )
     expect(error.fieldErrors.price).toBe('El precio debe ser mayor que cero')
-    expect(error.fieldErrors.installments).toBe('Dato inválido')
+    expect(error.fieldErrors.installments).toBe('Debe ser un número entero')
     expect(error.message).toBe('El precio debe ser mayor que cero')
     expect(error.code).toBe('value_error')
     expect(error.codes).toEqual(['value_error', 'int_type'])
@@ -373,14 +378,14 @@ describe('contrato 210-A {field, code, message}', () => {
         detail: [
           {
             field: 'Idempotency-Key',
-            code: 'uuid_type',
-            message: 'Identificador inválido',
+            code: 'uuid_parsing',
+            message: 'Idempotency-Key debe ser un UUID',
           },
         ],
       }),
     )
-    expect(error.fieldErrors['Idempotency-Key']).toBe('Identificador inválido')
-    expect(error.code).toBe('uuid_type')
+    expect(error.fieldErrors['Idempotency-Key']).toBe('Idempotency-Key debe ser un UUID')
+    expect(error.code).toBe('uuid_parsing')
   })
 
   it('lee los 6 códigos 409 nuevos con el mensaje del backend', () => {
@@ -509,13 +514,13 @@ describe('contrato 210-A {field, code, message}', () => {
       axiosError(422, {
         detail: [
           { loc: ['body', 'price'], msg: 'Field required', type: 'missing' },
-          { field: 'down_payment', code: 'value_error', message: 'La inicial es inválida' },
+          { field: 'down_payment', code: 'value_error', message: 'La inicial debe ser menor que el precio' },
         ],
       }),
     )
     expect(error.code).toBe('value_error')
-    expect(error.message).toBe('La inicial es inválida')
-    expect(error.fieldErrors.down_payment).toBe('La inicial es inválida')
+    expect(error.message).toBe('La inicial debe ser menor que el precio')
+    expect(error.fieldErrors.down_payment).toBe('La inicial debe ser menor que el precio')
     expect(error.fieldErrors.price).toBeUndefined()
   })
 
@@ -591,7 +596,7 @@ describe('contrato 210-A {field, code, message}', () => {
     expect(error.fieldErrors.document).toBeUndefined()
   })
 
-  it('CLIENT_ALREADY_BLOCKED en /clients no llena document (P6)', () => {
+  it('CLIENT_ALREADY_BLOCKED en /clients no llena document (P6: el return del contrato nuevo)', () => {
     const error = toApiError(
       axiosError(
         409,
@@ -640,6 +645,52 @@ describe('contrato 210-A {field, code, message}', () => {
     expect(error.message).toBe('anchor_date no puede ser posterior a hoy')
     expect(error.message).not.toBe(GENERIC_MESSAGE)
     expect(error.fieldErrors.anchor_date).toBe('anchor_date no puede ser posterior a hoy')
+  })
+
+  it.each(['name no puede ser null', 'phone no puede ser null'] as const)(
+    '"%s" se muestra tal cual y no cae en el genérico',
+    (message) => {
+      const error = toApiError(
+        axiosError(422, {
+          detail: [{ field: 'name', code: 'value_error', message }],
+        }),
+      )
+      expect(error.message).toBe(message)
+      expect(error.message).not.toBe(GENERIC_MESSAGE)
+    },
+  )
+
+  it('LEADING_IDENTIFIER solo ancla al inicio (B5)', () => {
+    expect(LEADING_IDENTIFIER.test('client_id is required')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('value_error')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('note: client_id is required')).toBe(false)
+    expect(LEADING_IDENTIFIER.test('anchor_date must not be in the future')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('see anchor_date must not be in the future')).toBe(false)
+  })
+
+  it.each([
+    ['value_error', 'sí'],
+    ['client_id is required', 'sí'],
+    ['anchor_date must not be in the future', 'sí'],
+    ['uq_clients_document violates unique constraint', 'sí'],
+    ['from debe ser anterior a to', 'no'],
+    ['from y to deben incluir zona horaria', 'no'],
+    ['From y to deben incluir zona horaria', 'no'],
+    ['anchor_date no puede ser posterior a hoy', 'no'],
+    ['client_id debe ser un UUID', 'no'],
+  ] as const)('el detalle con identificador "%s" %s cae en GENERIC_MESSAGE', (message, falls) => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: null, code: 'value_error', message }],
+      }),
+    )
+    if (falls === 'sí') {
+      expect(error.message).toBe(GENERIC_MESSAGE)
+      expect(error.fieldErrors).toEqual({})
+    } else {
+      expect(error.message).toBe(message)
+      expect(error.message).not.toBe(GENERIC_MESSAGE)
+    }
   })
 
   it.each([
