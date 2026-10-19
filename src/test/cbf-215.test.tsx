@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -24,7 +24,7 @@ import {
   membership,
   users,
 } from './fixtures'
-import { clientWrites, persistCreatedContact } from './handlers'
+import { clientWrites, contactWrites, persistCreatedContact } from './handlers'
 import { renderApp, seedAuth } from './render'
 import { server } from './server'
 
@@ -834,7 +834,7 @@ describe('CBF-215 errores de documento en el campo', () => {
 
     expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE })).toBeInTheDocument()
     const saved = screen.getByRole('group', { name: 'Garante 1' })
-    expect(within(saved).getByText(CONTACT_SAVED_LABEL)).toBeInTheDocument()
+    expect(await within(saved).findByText(CONTACT_SAVED_LABEL)).toBeInTheDocument()
     expect(within(saved).getByLabelText('Nombre')).toBeDisabled()
     expect(within(saved).getByLabelText('Número de documento (opcional)')).toBeDisabled()
     expect(within(saved).queryByText(CBF_215_CEDULA_INVALID.message)).not.toBeInTheDocument()
@@ -860,5 +860,166 @@ describe('CBF-215 errores de documento en el campo', () => {
     expect(contactPosts.filter((item) => item.name === 'Garante 1')).toHaveLength(1)
     expect(contactPosts.map((item) => item.name)).toEqual(['Garante 1', 'Garante 2', 'Garante 2'])
     expect(await screen.findByText(CLIENT_AND_GUARANTOR_SAVED_TOAST)).toBeInTheDocument()
+  })
+
+  it('quitar un contacto ya creado y reintentar hace DELETE + POST, no PATCH de otro contacto', async () => {
+    loginCashier()
+    const contactPosts: ContactCreate[] = []
+    let savedId = ''
+    server.use(
+      okCheck(),
+      http.post('*/clients/:id/contacts', async ({ request, params }) => {
+        const payload = (await request.json()) as ContactCreate
+        contactPosts.push(payload)
+        if (payload.document === '001-0000001-1') {
+          return contractError(422, [CBF_215_CEDULA_INVALID])
+        }
+        const saved = persistCreatedContact(String(params.id), payload)
+        if (!savedId) savedId = saved.id
+        return HttpResponse.json(saved, { status: 201 })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/editar')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    await addGarante(user, 0, '001-2222222-2')
+    await addGarante(user, 1, '001-0000001-1')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => {
+      expect(document.getElementById('contacts.1.document-error')).toHaveTextContent(
+        CBF_215_CEDULA_INVALID.message,
+      )
+    })
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await user.click(
+      within(screen.getByRole('group', { name: 'Garante 1' })).getByRole('button', {
+        name: 'Quitar',
+      }),
+    )
+    confirm.mockRestore()
+
+    const remaining = screen.getByRole('group', { name: 'Garante 1' })
+    const input = within(remaining).getByLabelText('Número de documento (opcional)')
+    await user.clear(input)
+    await user.type(input, '001-3333333-3')
+    contactWrites.length = 0
+    const postsBeforeRetry = contactPosts.length
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(contactWrites.filter((item) => item.method === 'DELETE')).toHaveLength(1)
+    expect(contactWrites.filter((item) => item.method === 'DELETE')[0]?.url).toContain(savedId)
+    const patches = contactWrites.filter((item) => item.method === 'PATCH')
+    expect(patches).toHaveLength(0)
+    expect(contactPosts.slice(postsBeforeRetry)).toEqual([
+      expect.objectContaining({ name: 'Garante 2', document: '001-3333333-3' }),
+    ])
+    expect(
+      patches.some((item) => (item.body as { document?: string }).document === '001-3333333-3'),
+    ).toBe(false)
+  })
+
+  it('si se cambia el nombre del cliente antes de reintentar, el PATCH lleva el nombre nuevo', async () => {
+    loginCashier()
+    server.use(
+      okCheck(),
+      http.post('*/clients/:id/contacts', async ({ request, params }) => {
+        const payload = (await request.json()) as ContactCreate
+        if (payload.document === '001-0000001-1') {
+          return contractError(422, [CBF_215_CEDULA_INVALID])
+        }
+        return HttpResponse.json(persistCreatedContact(String(params.id), payload), {
+          status: 201,
+        })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/editar')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    await addGarante(user, 0, '001-0000001-1')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => {
+      expect(document.getElementById('contacts.0.document-error')).toHaveTextContent(
+        CBF_215_CEDULA_INVALID.message,
+      )
+    })
+
+    const nameInput = document.getElementById('name') as HTMLInputElement
+    await user.clear(nameInput)
+    await user.type(nameInput, 'Ana Editada')
+    const group = screen.getByRole('group', { name: 'Garante 1' })
+    await user.clear(within(group).getByLabelText('Número de documento (opcional)'))
+    await user.type(within(group).getByLabelText('Número de documento (opcional)'), '001-7654321-0')
+    clientWrites.length = 0
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Editada' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    const patches = clientWrites.filter((item) => item.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    expect(patches[0]?.body).toEqual({ name: 'Ana Editada' })
+  })
+
+  it('un doble click al guardar no dispara dos POST /clients', async () => {
+    loginCashier()
+    server.use(okCheck())
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(clientWrites.filter((item) => item.method === 'POST')).toHaveLength(1)
+  })
+
+  it('un doble click al reintentar no dispara dos POST de contacto', async () => {
+    loginCashier()
+    const contactPosts: ContactCreate[] = []
+    server.use(
+      okCheck(),
+      http.post('*/clients/:id/contacts', async ({ request, params }) => {
+        const payload = (await request.json()) as ContactCreate
+        contactPosts.push(payload)
+        if (payload.document === '001-0000001-1') {
+          return contractError(422, [CBF_215_CEDULA_INVALID])
+        }
+        return HttpResponse.json(persistCreatedContact(String(params.id), payload), {
+          status: 201,
+        })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    await addGarante(user, 0, '001-0000001-1')
+    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    await waitFor(() => {
+      expect(document.getElementById('contacts.0.document-error')).toHaveTextContent(
+        CBF_215_CEDULA_INVALID.message,
+      )
+    })
+    const group = screen.getByRole('group', { name: 'Garante 1' })
+    const input = within(group).getByLabelText('Número de documento (opcional)')
+    await user.clear(input)
+    await user.type(input, '001-7654321-0')
+    const postsBeforeRetry = contactPosts.length
+    fireEvent.click(screen.getByRole('button', { name: SAVE_GUARANTOR_LABEL }))
+    fireEvent.click(screen.getByRole('button', { name: SAVE_GUARANTOR_LABEL }))
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(contactPosts.slice(postsBeforeRetry)).toHaveLength(1)
   })
 })

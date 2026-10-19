@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useFieldArray, useForm, type FieldPath } from 'react-hook-form'
+import { useFieldArray, useForm, useWatch, type FieldPath } from 'react-hook-form'
 
 import {
   CLIENT_SAVED_BANNER_BODY,
@@ -59,10 +59,7 @@ function mergeContacts(current: ContactRead[], incoming: ContactRead[]) {
   return [...byId.values()]
 }
 
-function toSubmit(
-  values: ClientFormValues,
-  savedByIndex: Record<number, ContactRead> = {},
-): ClientFormSubmit {
+function toSubmit(values: ClientFormValues): ClientFormSubmit {
   return {
     client: {
       name: values.name,
@@ -73,8 +70,8 @@ function toSubmit(
       notes: values.notes || null,
       collector_membership_id: values.collector_membership_id || null,
     },
-    contacts: values.contacts.map((item, index) => ({
-      id: item.contact_id || savedByIndex[index]?.id,
+    contacts: values.contacts.map((item) => ({
+      id: item.contact_id || undefined,
       type: item.type,
       name: item.name,
       phone: item.phone,
@@ -134,6 +131,7 @@ export function ClientForm({
     defaultValues: client ? fromClient(client) : emptyClientForm(),
   })
   const contacts = useFieldArray({ control: form.control, name: 'contacts' })
+  const contactValues = useWatch({ control: form.control, name: 'contacts' })
   const check = useCheckClientMutation()
   const [errorForDismiss, setErrorForDismiss] = useState(error)
   const [dismissedFields, setDismissedFields] = useState<Set<string>>(() => new Set())
@@ -141,14 +139,12 @@ export function ClientForm({
   const [resumeContacts, setResumeContacts] = useState<ContactRead[]>(
     () => client?.contacts.filter((item) => item.is_active) ?? [],
   )
-  const [savedByIndex, setSavedByIndex] = useState<Record<number, ContactRead>>({})
   if (error !== errorForDismiss) {
     setErrorForDismiss(error)
     setDismissedFields(new Set())
     if (isPartialClientSaveError(error)) {
       setResumeClient(error.savedClient)
       setResumeContacts((current) => mergeContacts(current, Object.values(error.createdByIndex)))
-      setSavedByIndex((current) => ({ ...current, ...error.createdByIndex }))
     }
   }
   const saveFields = error ? getFieldErrors(error) : {}
@@ -222,7 +218,7 @@ export function ClientForm({
       className="flex flex-col gap-6"
       onSubmit={form.handleSubmit((values) =>
         onSubmit({
-          ...toSubmit(values, savedByIndex),
+          ...toSubmit(values),
           resume: resumeClient
             ? { client: resumeClient, previousContacts: resumeContacts }
             : undefined,
@@ -394,7 +390,8 @@ export function ClientForm({
         </div>
         {contacts.fields.map((field, index) => {
           const kind = field.type
-          const rowLocked = Boolean(savedByIndex[index])
+          const rowLocked =
+            completingGuarantor && Boolean(contactValues?.[index]?.contact_id)
           return (
             <fieldset
               key={field.id}
