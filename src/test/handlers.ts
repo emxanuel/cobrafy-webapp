@@ -17,6 +17,8 @@ import {
   clientFixture,
   collectorMember,
   membership,
+  MAX_CONTACTS_PER_CLIENT,
+  maxContactsMessage,
   ownerMember,
   pendingInvite,
   users,
@@ -797,12 +799,12 @@ export const handlers = [
     const id = String(params.id)
     const current = clients.get(id) ?? clientFixture({ id })
     const activeCount = current.contacts.filter((item) => item.is_active).length
-    if (activeCount >= 50) {
+    if (activeCount >= MAX_CONTACTS_PER_CLIENT) {
       return contractError(422, [
         {
           field: null,
           code: 'value_error',
-          message: 'El cliente ya tiene el máximo de 50 contactos',
+          message: maxContactsMessage(),
         },
       ])
     }
@@ -1016,7 +1018,7 @@ export const handlers = [
         {
           field: 'document',
           code: 'value_error',
-          message: 'El formato de la cédula no es válido.',
+          message: 'Cédula inválida',
         },
       ])
     }
@@ -1325,7 +1327,7 @@ export const handlers = [
             {
               field: 'down_payment',
               code: 'DOWN_PAYMENT_INVALID',
-              message: 'La inicial debe ser menor que el precio.',
+              message: 'La inicial debe ser menor que el precio',
             },
           ],
         },

@@ -48,6 +48,40 @@ describe('CBF-210-A UI', () => {
     ).toBeInTheDocument()
   })
 
+  it('otro 409 al desactivar no muestra el aviso del último dueño', async () => {
+    loginOwner()
+    server.use(
+      http.patch('*/users/:id', () =>
+        HttpResponse.json(
+          {
+            detail: [
+              {
+                field: null,
+                code: 'INVITATION_NOT_REVOCABLE',
+                message: 'La invitación no se puede revocar',
+              },
+            ],
+          },
+          { status: 409 },
+        ),
+      ),
+    )
+    window.history.pushState({}, '', '/equipo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Equipo' })).toBeInTheDocument()
+    const people = (await screen.findByRole('heading', { name: 'Personas del negocio' }))
+      .closest('section')
+    expect(people).toBeTruthy()
+    const ownerRow = (await within(people as HTMLElement).findByText('Olivia Dueña')).closest('li')
+    expect(ownerRow).toBeTruthy()
+    await user.click(within(ownerRow as HTMLElement).getByRole('button', { name: 'Desactivar' }))
+    expect(await screen.findByText('La invitación no se puede revocar')).toBeInTheDocument()
+    expect(
+      screen.queryByText('El negocio debe tener al menos un dueño activo.'),
+    ).not.toBeInTheDocument()
+  })
+
   it('otro 409 al revocar muestra el mensaje del backend', async () => {
     loginOwner()
     server.use(

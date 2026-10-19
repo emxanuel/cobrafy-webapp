@@ -161,6 +161,13 @@ export function clientFixture(overrides: Partial<ClientDetail> = {}): ClientDeta
   }
 }
 
+/** Mirrors backend `settings.max_contacts_per_client`. */
+export const MAX_CONTACTS_PER_CLIENT = 50
+
+export function maxContactsMessage(limit = MAX_CONTACTS_PER_CLIENT): string {
+  return `El cliente ya tiene el máximo de ${limit} contactos`
+}
+
 export const pendingInvite: InvitationRead = {
   id: 'inv-1',
   email: 'nuevo@negocio.com',

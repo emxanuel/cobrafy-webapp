@@ -185,7 +185,7 @@ describe('CBF-110 aceptación', () => {
     await user.type(screen.getByLabelText('Dirección'), 'Calle 1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
     expect(
-      await screen.findByText('El formato de la cédula no es válido.'),
+      await screen.findByText('Cédula inválida'),
     ).toBeInTheDocument()
 
     await user.clear(screen.getByLabelText('Número de documento'))

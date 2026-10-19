@@ -123,7 +123,10 @@ const TECHNICAL_DETAILS = new Set(
 )
 
 const SPANISH_DETAIL_WORD =
-  /\b(?:ya|este|esta|esto|estos|estas|para|está|están|debe|tienen?|existe|formato|revisa|inténtalo|sesión|permiso|bloqueo|bloqueado|anterior|motivo|correo|contraseña|cuotas?|atraso|venta|negocio|garante|cliente|documento|invitación|credenciales|válid\w*|inválid\w*|autorizado|autenticado|encontrado|recurso|conflicto|crédito|máximo|contactos|obligatorio|demasiados|intentos|pudimos|pudo|pudieron|completar|conexión|permitid[oa]s?|indica|demasiad\w*|negativ[oa]s?|admite|recargo|monto|nombre)\b/i
+  /\b(?:ya|este|esta|esto|estos|estas|para|está|están|debe|tienen?|existe|formato|revisa|inténtalo|sesión|permiso|bloqueo|bloqueado|anterior|motivo|correo|contraseña|cuotas?|atraso|venta|negocio|garante|cliente|documento|invitación|credenciales|(?:in)?v[aá]lid[oa]s?|autorizado|autenticado|encontrado|recurso|conflicto|crédito|máximo|contactos|obligatorios?|demasiados|intentos|pudimos|pudo|pudieron|completar|conexión|permitid[oa]s?|indica|demasiad\w*|negativ[oa]s?|admite|recargo|monto|nombre)\b/i
+
+/** Mensajes del backend que empiezan por un identificador técnico (`anchor_date`, `client_id`). */
+const LEADING_IDENTIFIER = /^[a-z][a-z0-9]*_[a-z0-9_]+\b/
 
 function isTechnicalDetail(text: string): boolean {
   return TECHNICAL_DETAILS.has(text.trim().toLowerCase())
@@ -134,6 +137,7 @@ function isUnmappedEnglish(text: string): boolean {
   if (!trimmed) return false
   if (isTechnicalDetail(trimmed)) return true
   if (/[áéíóúñü¿¡]/i.test(trimmed)) return false
+  if (LEADING_IDENTIFIER.test(trimmed)) return false
   if (SPANISH_DETAIL_WORD.test(trimmed)) return false
   return /[A-Za-z]/.test(trimmed)
 }
@@ -315,7 +319,8 @@ export function parseFieldErrors(body: ErrorBody, status = 0, url = ''): Record<
     if (code === 'DOCUMENT_UNREADABLE' || code === 'DOCUMENT_UNREADABLE_GUARANTOR') {
       return errors
     }
-    if (isDocumentConflictCode(code) || isClientCreateUrl(url)) {
+    // Forma vieja solamente: un 409 nuevo con código no puede caer al fallback por URL.
+    if (!newest.length && (isDocumentConflictCode(code) || isClientCreateUrl(url))) {
       const raw =
         typeof body.detail === 'string' && body.detail.trim()
           ? body.detail.trim()

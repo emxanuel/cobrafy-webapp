@@ -1189,7 +1189,7 @@ describe('CBF-206 ventas', () => {
                 {
                   field: null,
                   code: 'IDEMPOTENCY_KEY_REUSED',
-                  message: 'Esa clave de idempotencia ya se usó con otro cuerpo',
+                  message: 'Esta clave de idempotencia ya se usó con otro cuerpo',
                 },
               ],
             },
@@ -1240,7 +1240,7 @@ describe('CBF-206 ventas', () => {
               {
                 field: null,
                 code: 'IDEMPOTENCY_KEY_REUSED',
-                message: 'Esa clave de idempotencia ya se usó con otro cuerpo',
+                message: 'Esta clave de idempotencia ya se usó con otro cuerpo',
               },
             ],
           },

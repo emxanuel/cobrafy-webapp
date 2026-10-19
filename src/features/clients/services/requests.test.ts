@@ -43,7 +43,7 @@ describe('client requests', () => {
       throw new Error('debía fallar')
     } catch (error) {
       expect(isApiError(error)).toBe(true)
-      expect(getFieldErrors(error).document).toBe('El formato de la cédula no es válido.')
+      expect(getFieldErrors(error).document).toBe('Cédula inválida')
     }
   })
 
