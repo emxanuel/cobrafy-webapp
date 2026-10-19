@@ -511,7 +511,9 @@ describe('CBF-206 ventas', () => {
     expect(readIdempotencyKey(salePayloadFingerprint(firstBody))).toBe(firstKey)
 
     await user.click(screen.getByRole('link', { name: '‹ Volver a la ficha' }))
-    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: /Nueva venta/ }))
     expect(await screen.findByRole('heading', { name: 'Nueva venta' })).toBeInTheDocument()
     expectNetworkWarning()

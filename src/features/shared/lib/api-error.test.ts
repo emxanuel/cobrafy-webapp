@@ -405,15 +405,53 @@ describe('contrato 210-A {field, code, message}', () => {
     expect(error.message).not.toBe(GENERIC_MESSAGE)
   })
 
-  it('un UUID inválido en el body usa uuid_parsing e Identificador inválido', () => {
+  it('un UUID inválido en simulate/create usa value_error y client_id: identificador inválido', () => {
     const error = toApiError(
       axiosError(422, {
-        detail: [{ field: 'client_id', code: 'uuid_parsing', message: 'Identificador inválido' }],
+        detail: [
+          {
+            field: 'client_id',
+            code: 'value_error',
+            message: 'client_id: identificador inválido',
+          },
+        ],
       }),
     )
-    expect(error.fieldErrors.client_id).toBe('Identificador inválido')
+    expect(error.fieldErrors.client_id).toBe('client_id: identificador inválido')
+    expect(error.code).toBe('value_error')
+    expect(error.message).toBe('client_id: identificador inválido')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+  })
+
+  it('un precio por encima del máximo usa field price y code amount', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: 'price', code: 'amount', message: 'El monto supera el máximo' }],
+      }),
+    )
+    expect(error.fieldErrors.price).toBe('El monto supera el máximo')
+    expect(error.code).toBe('amount')
+    expect(error.message).toBe('El monto supera el máximo')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+  })
+
+  it('un UUID inválido de collector_membership_id usa uuid_parsing y se muestra tal cual', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            field: 'collector_membership_id',
+            code: 'uuid_parsing',
+            message: 'collector_membership_id: identificador inválido',
+          },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.collector_membership_id).toBe(
+      'collector_membership_id: identificador inválido',
+    )
     expect(error.code).toBe('uuid_parsing')
-    expect(error.message).toBe('Identificador inválido')
+    expect(error.message).toBe('collector_membership_id: identificador inválido')
     expect(error.message).not.toBe(GENERIC_MESSAGE)
   })
 
@@ -731,6 +769,8 @@ describe('contrato 210-A {field, code, message}', () => {
     ['client_id: identificador inválido', 'no'],
     ['Idempotency-Key: must be a UUID', 'sí'],
     ['client_id: invalid uuid', 'sí'],
+    ['Monto: invalid amount', 'sí'],
+    ['Nombre: required', 'sí'],
   ] as const)('el detalle con identificador "%s" %s cae en GENERIC_MESSAGE', (message, falls) => {
     const error = toApiError(
       axiosError(422, {

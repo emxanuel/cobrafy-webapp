@@ -611,14 +611,19 @@ export const handlers = [
     if (body.token !== 'inv-ok') {
       return HttpResponse.json({ detail: 'invitación inválida' }, { status: 400 })
     }
-    if (!body.name || !body.name.trim()) {
+    if (body.name == null) {
       return contractError(422, [
-        { field: 'name', code: 'value_error', message: 'El nombre es obligatorio' },
+        { field: null, code: 'value_error', message: 'El nombre es obligatorio' },
       ])
     }
-    if (!body.password) {
+    if (body.password == null || body.password === '') {
       return contractError(422, [
-        { field: 'password', code: 'value_error', message: 'La contraseña es obligatoria' },
+        { field: null, code: 'value_error', message: 'La contraseña es obligatoria' },
+      ])
+    }
+    if (!body.name.trim()) {
+      return contractError(422, [
+        { field: 'name', code: 'value_error', message: 'El nombre es obligatorio' },
       ])
     }
     return HttpResponse.json({

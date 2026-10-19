@@ -254,24 +254,12 @@ describe('CBF-110 aceptación', () => {
     expect(screen.queryByText('001-1234567-8')).not.toBeInTheDocument()
   })
 
-  it('un 422 de nombre al aceptar invitación queda en el campo Nombre', async () => {
+  it('un nombre solo con espacios al aceptar invitación queda en el campo Nombre', async () => {
     const user = userEvent.setup()
-    server.use(
-      http.post('*/invitations/accept', () =>
-        HttpResponse.json(
-          {
-            detail: [
-              { field: 'name', code: 'value_error', message: 'El nombre es obligatorio' },
-            ],
-          },
-          { status: 422 },
-        ),
-      ),
-    )
     window.history.pushState({}, '', '/invitar/inv-ok')
     renderApp()
     expect(await screen.findByRole('heading', { name: 'Únete al negocio' })).toBeInTheDocument()
-    await user.type(screen.getByLabelText('Nombre'), 'Nora Nueva')
+    await user.type(screen.getByLabelText('Nombre'), '   ')
     await user.type(screen.getByLabelText('Tu contraseña'), 'clavesegura')
     await user.type(screen.getByLabelText('Repite la contraseña'), 'clavesegura')
     await user.click(screen.getByRole('button', { name: 'Aceptar invitación' }))
