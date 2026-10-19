@@ -1,10 +1,13 @@
 import axios from 'axios'
 import { describe, expect, it } from 'vitest'
 
+import { maxContactsMessage } from '@/test/fixtures'
+
 import {
   ApiError,
   GENERIC_MESSAGE,
   isPinLockedError,
+  LEADING_IDENTIFIER,
   PIN_LOCKED_DETAIL,
   toApiError,
 } from './api-error'
@@ -32,15 +35,15 @@ describe('toApiError', () => {
         detail: [
           {
             loc: ['body', 'document'],
-            msg: 'El formato de la cédula no es válido.',
+            msg: 'Cédula inválida',
             type: 'value_error',
           },
         ],
       }),
     )
     expect(error).toBeInstanceOf(ApiError)
-    expect(error.fieldErrors.document).toBe('El formato de la cédula no es válido.')
-    expect(error.message).toBe('El formato de la cédula no es válido.')
+    expect(error.fieldErrors.document).toBe('Cédula inválida')
+    expect(error.message).toBe('Cédula inválida')
   })
 
   it('mapea 422 con field al campo, no al texto', () => {
@@ -49,15 +52,15 @@ describe('toApiError', () => {
         detail: [
           {
             field: 'down_payment',
-            code: 'DOWN_PAYMENT_INVALID',
-            message: 'La inicial debe ser menor que el precio.',
+            code: 'value_error',
+            message: 'La inicial debe ser menor que el precio',
           },
         ],
       }),
     )
-    expect(error.code).toBe('DOWN_PAYMENT_INVALID')
-    expect(error.fieldErrors.down_payment).toBe('La inicial debe ser menor que el precio.')
-    expect(error.message).toBe('La inicial debe ser menor que el precio.')
+    expect(error.code).toBe('value_error')
+    expect(error.fieldErrors.down_payment).toBe('La inicial debe ser menor que el precio')
+    expect(error.message).toBe('La inicial debe ser menor que el precio')
   })
 
   it('un 409 en lista con field null va al banner, no a un campo', () => {
@@ -143,9 +146,13 @@ describe('toApiError', () => {
     expect(invite.message).toBe('invitación inválida')
 
     const contacts = toApiError(
-      axiosError(409, { detail: 'El cliente ya tiene el máximo de 50 contactos' }),
+      axiosError(422, {
+        detail: [{ field: null, code: 'value_error', message: maxContactsMessage() }],
+      }),
     )
-    expect(contacts.message).toBe('El cliente ya tiene el máximo de 50 contactos')
+    expect(contacts.message).toBe(maxContactsMessage())
+    expect(contacts.code).toBe('value_error')
+    expect(contacts.status).toBe(422)
 
     const plain409 = toApiError(
       axiosError(
@@ -313,7 +320,7 @@ const BACKEND_A_SPANISH_MESSAGES = [
   'Campo obligatorio',
   'Campos adicionales no permitidos',
   'Debe ser texto',
-  'Debe tener al menos 1 caracteres',
+  'Debe tener al menos 1 carácter',
   'Debe tener como máximo 500 caracteres',
   'Debe ser un número entero',
   'Debe ser verdadero o falso',
@@ -326,11 +333,11 @@ const BACKEND_A_SPANISH_MESSAGES = [
   'Debe ser mayor que 0',
   'Debe ser menor que 100',
   'Debe ser una lista',
-  'Debe tener al menos 1 elementos',
+  'Debe tener al menos 1 elemento',
   'Debe tener como máximo 50 elementos',
   'El cuerpo debe ser un objeto',
   'El cuerpo no es un JSON válido',
-  'Correo inválido',
+  'Email inválido',
   'Dato inválido',
   'Debe ser un número',
   'Monto inválido',
@@ -343,12 +350,12 @@ describe('contrato 210-A {field, code, message}', () => {
       axiosError(422, {
         detail: [
           { field: 'price', code: 'value_error', message: 'El precio debe ser mayor que cero' },
-          { field: 'installments', code: 'int_type', message: 'Dato inválido' },
+          { field: 'installments', code: 'int_type', message: 'Debe ser un número entero' },
         ],
       }),
     )
     expect(error.fieldErrors.price).toBe('El precio debe ser mayor que cero')
-    expect(error.fieldErrors.installments).toBe('Dato inválido')
+    expect(error.fieldErrors.installments).toBe('Debe ser un número entero')
     expect(error.message).toBe('El precio debe ser mayor que cero')
     expect(error.code).toBe('value_error')
     expect(error.codes).toEqual(['value_error', 'int_type'])
@@ -357,28 +364,95 @@ describe('contrato 210-A {field, code, message}', () => {
   it('un item con field null va al mensaje, no a un campo', () => {
     const error = toApiError(
       axiosError(422, {
-        detail: [{ field: null, code: 'AMOUNT_OVER_MAX', message: 'El monto supera el máximo' }],
+        detail: [{ field: null, code: 'value_error', message: 'El monto supera el máximo' }],
       }),
     )
     expect(error.fieldErrors).toEqual({})
     expect(error.message).toBe('El monto supera el máximo')
-    expect(error.code).toBe('AMOUNT_OVER_MAX')
+    expect(error.code).toBe('value_error')
   })
 
-  it('acepta Idempotency-Key como field', () => {
+  it('un 422 de bitácora llena fieldErrors.from y fieldErrors.to', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          { field: 'from', code: 'value_error', message: 'from y to deben incluir zona horaria' },
+          { field: 'to', code: 'value_error', message: 'from y to deben incluir zona horaria' },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.from).toBe('from y to deben incluir zona horaria')
+    expect(error.fieldErrors.to).toBe('from y to deben incluir zona horaria')
+    expect(error.message).toBe('from y to deben incluir zona horaria')
+    expect(error.code).toBe('value_error')
+  })
+
+  it('acepta Idempotency-Key como field con value_error', () => {
     const error = toApiError(
       axiosError(422, {
         detail: [
           {
             field: 'Idempotency-Key',
-            code: 'uuid_type',
-            message: 'La clave de idempotencia no es válida',
+            code: 'value_error',
+            message: 'Idempotency-Key: identificador inválido',
           },
         ],
       }),
     )
-    expect(error.fieldErrors['Idempotency-Key']).toBe('La clave de idempotencia no es válida')
-    expect(error.code).toBe('uuid_type')
+    expect(error.fieldErrors['Idempotency-Key']).toBe('Idempotency-Key: identificador inválido')
+    expect(error.code).toBe('value_error')
+    expect(error.message).toBe('Idempotency-Key: identificador inválido')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+  })
+
+  it('un UUID inválido en simulate/create usa value_error y client_id: identificador inválido', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            field: 'client_id',
+            code: 'value_error',
+            message: 'client_id: identificador inválido',
+          },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.client_id).toBe('client_id: identificador inválido')
+    expect(error.code).toBe('value_error')
+    expect(error.message).toBe('client_id: identificador inválido')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+  })
+
+  it('un precio por encima del máximo usa field price y code amount', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: 'price', code: 'amount', message: 'El monto supera el máximo' }],
+      }),
+    )
+    expect(error.fieldErrors.price).toBe('El monto supera el máximo')
+    expect(error.code).toBe('amount')
+    expect(error.message).toBe('El monto supera el máximo')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+  })
+
+  it('un UUID inválido de collector_membership_id usa uuid_parsing y se muestra tal cual', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            field: 'collector_membership_id',
+            code: 'uuid_parsing',
+            message: 'collector_membership_id: identificador inválido',
+          },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.collector_membership_id).toBe(
+      'collector_membership_id: identificador inválido',
+    )
+    expect(error.code).toBe('uuid_parsing')
+    expect(error.message).toBe('collector_membership_id: identificador inválido')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
   })
 
   it('lee los 6 códigos 409 nuevos con el mensaje del backend', () => {
@@ -473,14 +547,14 @@ describe('contrato 210-A {field, code, message}', () => {
         detail: [
           {
             loc: ['body', 'document'],
-            msg: 'El formato de la cédula no es válido.',
+            msg: 'Cédula inválida',
             type: 'value_error',
           },
         ],
       }),
     )
-    expect(locType.fieldErrors.document).toBe('El formato de la cédula no es válido.')
-    expect(locType.message).toBe('El formato de la cédula no es válido.')
+    expect(locType.fieldErrors.document).toBe('Cédula inválida')
+    expect(locType.message).toBe('Cédula inválida')
 
     const invite502 = toApiError(
       axiosError(502, { detail: { code: 'invite_email_failed', message: 'smtp timeout' } }),
@@ -507,13 +581,13 @@ describe('contrato 210-A {field, code, message}', () => {
       axiosError(422, {
         detail: [
           { loc: ['body', 'price'], msg: 'Field required', type: 'missing' },
-          { field: 'down_payment', code: 'value_error', message: 'La inicial es inválida' },
+          { field: 'down_payment', code: 'value_error', message: 'La inicial debe ser menor que el precio' },
         ],
       }),
     )
     expect(error.code).toBe('value_error')
-    expect(error.message).toBe('La inicial es inválida')
-    expect(error.fieldErrors.down_payment).toBe('La inicial es inválida')
+    expect(error.message).toBe('La inicial debe ser menor que el precio')
+    expect(error.fieldErrors.down_payment).toBe('La inicial debe ser menor que el precio')
     expect(error.fieldErrors.price).toBeUndefined()
   })
 
@@ -588,4 +662,158 @@ describe('contrato 210-A {field, code, message}', () => {
     expect(error.fieldErrors).toEqual({})
     expect(error.fieldErrors.document).toBeUndefined()
   })
+
+  it('CLIENT_ALREADY_BLOCKED en /clients no llena document (P6: el return del contrato nuevo)', () => {
+    const error = toApiError(
+      axiosError(
+        409,
+        {
+          detail: [
+            {
+              field: null,
+              code: 'CLIENT_ALREADY_BLOCKED',
+              message: 'El cliente ya está bloqueado',
+            },
+          ],
+        },
+        '/clients',
+      ),
+    )
+    expect(error.code).toBe('CLIENT_ALREADY_BLOCKED')
+    expect(error.fieldErrors).toEqual({})
+    expect(error.fieldErrors.document).toBeUndefined()
+    expect(error.message).toBe('El cliente ya está bloqueado')
+  })
+
+  it('el fallback de document en 409 usa mayúscula inicial (N14)', () => {
+    const error = toApiError(axiosError(409, { detail: '' }, '/clients'))
+    expect(error.fieldErrors.document).toBe('Ya existe un cliente con este documento')
+    expect(error.message).toBe('Ya existe un cliente con este documento')
+  })
+
+  it('una palabra en inglés con prefijo español cae en GENERIC_MESSAGE (F7)', () => {
+    const error = toApiError(axiosError(422, { detail: 'Parameter is required' }))
+    expect(error.message).toBe(GENERIC_MESSAGE)
+    expect(error.message).not.toBe('Parameter is required')
+  })
+
+  it('anchor_date no puede ser posterior a hoy se muestra tal cual', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          {
+            field: 'anchor_date',
+            code: 'value_error',
+            message: 'anchor_date no puede ser posterior a hoy',
+          },
+        ],
+      }),
+    )
+    expect(error.message).toBe('anchor_date no puede ser posterior a hoy')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+    expect(error.fieldErrors.anchor_date).toBe('anchor_date no puede ser posterior a hoy')
+  })
+
+  it.each(['name no puede ser null', 'phone no puede ser null'] as const)(
+    '"%s" se muestra tal cual y no cae en el genérico',
+    (message) => {
+      const error = toApiError(
+        axiosError(422, {
+          detail: [{ field: 'name', code: 'value_error', message }],
+        }),
+      )
+      expect(error.message).toBe(message)
+      expect(error.message).not.toBe(GENERIC_MESSAGE)
+    },
+  )
+
+  it.each([
+    'Idempotency-Key: identificador inválido',
+    'client_id: identificador inválido',
+  ] as const)('"%s" se muestra tal cual (prefijo con : recortado, resto español)', (message) => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: null, code: 'value_error', message }],
+      }),
+    )
+    expect(error.message).toBe(message)
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+  })
+
+  it('LEADING_IDENTIFIER solo ancla al inicio (B5)', () => {
+    expect(LEADING_IDENTIFIER.test('client_id is required')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('value_error')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('Idempotency-Key: identificador inválido')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('client_id: identificador inválido')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('see value_error')).toBe(false)
+    expect(LEADING_IDENTIFIER.test('see client_id is required')).toBe(false)
+    expect(LEADING_IDENTIFIER.test('see Idempotency-Key: identificador inválido')).toBe(false)
+    expect(LEADING_IDENTIFIER.test('see client_id: identificador inválido')).toBe(false)
+    expect(LEADING_IDENTIFIER.test('anchor_date must not be in the future')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('see anchor_date must not be in the future')).toBe(false)
+  })
+
+  it.each([
+    ['value_error', 'sí'],
+    ['client_id is required', 'sí'],
+    ['anchor_date must not be in the future', 'sí'],
+    ['uq_clients_document violates unique constraint', 'sí'],
+    ['from debe ser anterior a to', 'no'],
+    ['from y to deben incluir zona horaria', 'no'],
+    ['From y to deben incluir zona horaria', 'no'],
+    ['anchor_date no puede ser posterior a hoy', 'no'],
+    ['anchor_date y anchor_offset van juntos', 'no'],
+    ['client_id debe ser un UUID', 'no'],
+    ['Identificador inválido', 'no'],
+    ['Idempotency-Key: identificador inválido', 'no'],
+    ['client_id: identificador inválido', 'no'],
+    ['Idempotency-Key: must be a UUID', 'sí'],
+    ['client_id: invalid uuid', 'sí'],
+    ['Monto: invalid amount', 'sí'],
+    ['Nombre: required', 'sí'],
+  ] as const)('el detalle con identificador "%s" %s cae en GENERIC_MESSAGE', (message, falls) => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: null, code: 'value_error', message }],
+      }),
+    )
+    if (falls === 'sí') {
+      expect(error.message).toBe(GENERIC_MESSAGE)
+      expect(error.fieldErrors).toEqual({})
+    } else {
+      expect(error.message).toBe(message)
+      expect(error.message).not.toBe(GENERIC_MESSAGE)
+    }
+  })
+
+  it.each([
+    'Dato invalido',
+    'Campos obligatorios',
+    'Campo obligatorio',
+    'Fecha invalida',
+    'Monto invalido',
+    'Identificador invalido',
+  ] as const)('la variante sin tilde o en plural %s se reconoce como español', (message) => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: 'status', code: 'value_error', message }],
+      }),
+    )
+    expect(error.message).toBe(message)
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+    expect(error.fieldErrors.status).toBe(message)
+  })
+
+  it.each(['Invalid input', 'Field required', 'negative', 'permitted'] as const)(
+    'el inglés %s sigue cayendo en GENERIC_MESSAGE',
+    (message) => {
+      const error = toApiError(
+        axiosError(422, {
+          detail: [{ field: 'status', code: 'value_error', message }],
+        }),
+      )
+      expect(error.message).toBe(GENERIC_MESSAGE)
+      expect(error.fieldErrors).toEqual({})
+    },
+  )
 })

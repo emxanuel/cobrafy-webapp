@@ -173,7 +173,7 @@ describe('CBF-110 aceptación', () => {
     expect(await screen.findByText('No tienes permiso para desbloquear.')).toBeInTheDocument()
   })
 
-  it('errores 422 y 409 se muestran en el campo del documento', async () => {
+  it('el 422 de cédula (field null) va al banner; el 409 de documento va al campo', async () => {
     const user = userEvent.setup()
     renderApp()
     await loginAs(users.cashier.email)
@@ -184,9 +184,10 @@ describe('CBF-110 aceptación', () => {
     await user.type(screen.getByLabelText('Teléfono'), '8095551111')
     await user.type(screen.getByLabelText('Dirección'), 'Calle 1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    expect(
-      await screen.findByText('El formato de la cédula no es válido.'),
-    ).toBeInTheDocument()
+    const cedulaBanner = await screen.findByText('Cédula inválida')
+    expect(cedulaBanner.closest('[role="alert"]')).toBeTruthy()
+    expect(document.getElementById('document-error')).toBeNull()
+    expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
 
     await user.clear(screen.getByLabelText('Número de documento'))
     await user.type(screen.getByLabelText('Número de documento'), 'duplicado')
@@ -194,6 +195,9 @@ describe('CBF-110 aceptación', () => {
     expect(
       await screen.findByText('Ya existe un cliente con este documento'),
     ).toBeInTheDocument()
+    expect(document.getElementById('document-error')).toHaveTextContent(
+      'Ya existe un cliente con este documento',
+    )
   })
 
   it('una sesión 401 redirige al login', async () => {
@@ -248,6 +252,21 @@ describe('CBF-110 aceptación', () => {
     renderApp()
     expect(await screen.findByText(/001-\*\*\*\*\*1234/)).toBeInTheDocument()
     expect(screen.queryByText('001-1234567-8')).not.toBeInTheDocument()
+  })
+
+  it('un nombre solo con espacios al aceptar invitación queda en el campo Nombre', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/invitar/inv-ok')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Únete al negocio' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Nombre'), '   ')
+    await user.type(screen.getByLabelText('Tu contraseña'), 'clavesegura')
+    await user.type(screen.getByLabelText('Repite la contraseña'), 'clavesegura')
+    await user.click(screen.getByRole('button', { name: 'Aceptar invitación' }))
+    await waitFor(() => {
+      expect(document.getElementById('name-error')).toHaveTextContent('El nombre es obligatorio')
+    })
+    expect(screen.getByRole('heading', { name: 'Únete al negocio' })).toBeInTheDocument()
   })
 
   it('acepta una invitación y deja que el invitado ponga su contraseña', async () => {

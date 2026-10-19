@@ -17,6 +17,8 @@ import {
   clientFixture,
   collectorMember,
   membership,
+  MAX_CONTACTS_PER_CLIENT,
+  maxContactsMessage,
   ownerMember,
   pendingInvite,
   users,
@@ -609,9 +611,19 @@ export const handlers = [
     if (body.token !== 'inv-ok') {
       return HttpResponse.json({ detail: 'invitación inválida' }, { status: 400 })
     }
-    if (!body.name || !body.password) {
+    if (body.name == null) {
       return contractError(422, [
-        { field: null, code: 'value_error', message: 'Indica nombre y contraseña' },
+        { field: null, code: 'value_error', message: 'El nombre es obligatorio' },
+      ])
+    }
+    if (body.password == null || body.password === '') {
+      return contractError(422, [
+        { field: null, code: 'value_error', message: 'La contraseña es obligatoria' },
+      ])
+    }
+    if (!body.name.trim()) {
+      return contractError(422, [
+        { field: 'name', code: 'value_error', message: 'El nombre es obligatorio' },
       ])
     }
     return HttpResponse.json({
@@ -797,12 +809,12 @@ export const handlers = [
     const id = String(params.id)
     const current = clients.get(id) ?? clientFixture({ id })
     const activeCount = current.contacts.filter((item) => item.is_active).length
-    if (activeCount >= 50) {
+    if (activeCount >= MAX_CONTACTS_PER_CLIENT) {
       return contractError(422, [
         {
           field: null,
           code: 'value_error',
-          message: 'El cliente ya tiene el máximo de 50 contactos',
+          message: maxContactsMessage(),
         },
       ])
     }
@@ -1014,9 +1026,9 @@ export const handlers = [
     if (payload.document === 'malo') {
       return contractError(422, [
         {
-          field: 'document',
+          field: null,
           code: 'value_error',
-          message: 'El formato de la cédula no es válido.',
+          message: 'Cédula inválida',
         },
       ])
     }
@@ -1324,8 +1336,8 @@ export const handlers = [
           detail: [
             {
               field: 'down_payment',
-              code: 'DOWN_PAYMENT_INVALID',
-              message: 'La inicial debe ser menor que el precio.',
+              code: 'value_error',
+              message: 'La inicial debe ser menor que el precio',
             },
           ],
         },

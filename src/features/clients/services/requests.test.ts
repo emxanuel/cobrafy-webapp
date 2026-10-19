@@ -31,7 +31,7 @@ describe('client requests', () => {
     useBusinessStore.getState().setActiveBusinessId(businesses.norte.id)
   })
 
-  it('expone el 422 en document', async () => {
+  it('expone el 422 de cédula en el mensaje (field null → banner)', async () => {
     try {
       await createClient({
         name: 'Ana Pérez',
@@ -43,7 +43,8 @@ describe('client requests', () => {
       throw new Error('debía fallar')
     } catch (error) {
       expect(isApiError(error)).toBe(true)
-      expect(getFieldErrors(error).document).toBe('El formato de la cédula no es válido.')
+      expect(getFieldErrors(error)).toEqual({})
+      expect((error as Error).message).toBe('Cédula inválida')
     }
   })
 
