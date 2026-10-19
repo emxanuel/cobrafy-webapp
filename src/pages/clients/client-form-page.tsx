@@ -1,4 +1,5 @@
-import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import {
@@ -11,6 +12,13 @@ import {
   useUpdateClientMutation,
 } from '@/features/clients/hooks/use-clients-queries'
 import { ClientForm } from '@/features/clients/components/client-form'
+import {
+  BACK_LABEL,
+  CLIENT_AND_GUARANTOR_SAVED_TOAST,
+  COMPLETE_GUARANTOR_TITLE,
+  SAVE_GUARANTOR_LABEL,
+} from '@/features/clients/lib/complete-guarantor'
+import { isPartialClientSaveError } from '@/features/clients/lib/document-field-errors'
 import { useMembersQuery } from '@/features/members/hooks/use-members-queries'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -35,6 +43,11 @@ export function ClientFormPage() {
   )
   const pending = create.isPending || update.isPending
   const error = create.error ?? update.error
+  const [resumeClientId, setResumeClientId] = useState<string | null>(null)
+  if (!isEdit && isPartialClientSaveError(error) && !resumeClientId) {
+    setResumeClientId(error.savedClient.id)
+  }
+  const completingGuarantor = Boolean(resumeClientId)
 
   if (isEdit && existing.isPending) {
     return (
@@ -50,23 +63,60 @@ export function ClientFormPage() {
 
   return (
     <>
+      {completingGuarantor ? (
+        <Link
+          to="/clientes"
+          className="text-accent inline-flex min-h-11 items-center no-underline"
+        >
+          {BACK_LABEL}
+        </Link>
+      ) : null}
       <PageHeader
-        title={isEdit ? 'Editar cliente' : 'Nuevo cliente'}
-        description="Completa la ficha. Puedes agregar varias referencias y garantes."
+        title={
+          completingGuarantor
+            ? COMPLETE_GUARANTOR_TITLE
+            : isEdit
+              ? 'Editar cliente'
+              : 'Nuevo cliente'
+        }
+        description={
+          completingGuarantor
+            ? undefined
+            : 'Completa la ficha. Puedes agregar varias referencias y garantes.'
+        }
       />
       <ClientForm
         client={existing.data}
         collectors={collectors}
         pending={pending}
         error={error}
-        submitLabel={isEdit ? 'Guardar cambios' : 'Guardar cliente'}
+        completingGuarantor={completingGuarantor}
+        submitLabel={
+          completingGuarantor
+            ? SAVE_GUARANTOR_LABEL
+            : isEdit
+              ? 'Guardar cambios'
+              : 'Guardar cliente'
+        }
+        onGoToRecord={
+          resumeClientId
+            ? () => navigate(`/clientes/${resumeClientId}`)
+            : undefined
+        }
         onSubmit={(payload) => {
-          const go = (result: { client: { id: string } }) =>
+          const go = (result: { client: { id: string } }) => {
+            if (completingGuarantor) {
+              navigate(`/clientes/${result.client.id}`, {
+                state: { toast: CLIENT_AND_GUARANTOR_SAVED_TOAST },
+              })
+              return
+            }
             navigate(
               fromVenta
                 ? `/clientes/${result.client.id}/ventas/nueva`
                 : `/clientes/${result.client.id}`,
             )
+          }
           if (isEdit && clientId) {
             if (!existing.data) return
             update.mutate(

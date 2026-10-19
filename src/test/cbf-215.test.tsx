@@ -1,9 +1,19 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useBusinessStore } from '@/features/business/stores/business-store'
+import {
+  BACK_LABEL,
+  CLIENT_AND_GUARANTOR_SAVED_TOAST,
+  CLIENT_SAVED_BANNER_BODY,
+  CLIENT_SAVED_BANNER_TITLE,
+  COMPLETE_GUARANTOR_TITLE,
+  CONTACT_SAVED_LABEL,
+  GO_TO_RECORD_LABEL,
+  SAVE_GUARANTOR_LABEL,
+} from '@/features/clients/lib/complete-guarantor'
 import type { ContactCreate, ContactRead } from '@/features/clients/services/types'
 import {
   CBF_215_CEDULA_INVALID,
@@ -668,22 +678,31 @@ describe('CBF-215 errores de documento en el campo', () => {
         CBF_215_CEDULA_INVALID.message,
       )
     })
-    expect(screen.getByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: COMPLETE_GUARANTOR_TITLE })).toBeInTheDocument()
+    const resumeBanner = screen.getByRole('status')
+    expect(resumeBanner).toHaveTextContent(CLIENT_SAVED_BANNER_TITLE)
+    expect(resumeBanner).toHaveTextContent(CLIENT_SAVED_BANNER_BODY)
+    expect(resumeBanner).not.toHaveTextContent(CBF_215_CEDULA_INVALID.message)
     expectNoBanner(CBF_215_DOCUMENT_EXISTS.message)
     expectNoBanner(CBF_215_CEDULA_INVALID.message)
+    expect(screen.getByLabelText('Número de documento')).toBeDisabled()
+    expect(screen.getByLabelText('Dirección')).toBeDisabled()
+    const group = screen.getByRole('group', { name: 'Garante 1' })
+    const input = within(group).getByLabelText('Número de documento (opcional)')
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input).toHaveFocus()
     expect(clientWrites.filter((item) => item.method === 'POST')).toHaveLength(1)
     expect(contactPosts).toHaveLength(1)
 
-    const group = screen.getByRole('group', { name: 'Garante 1' })
-    const input = within(group).getByLabelText('Número de documento (opcional)')
     await user.clear(input)
     await user.type(input, '001-7654321-0')
-    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    await user.click(screen.getByRole('button', { name: SAVE_GUARANTOR_LABEL }))
 
     expect(
       await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
     ).toBeInTheDocument()
-    expect(screen.getByText(/Pedro Gómez|Garante 1/)).toBeInTheDocument()
+    expect(await screen.findByText(CLIENT_AND_GUARANTOR_SAVED_TOAST)).toBeInTheDocument()
+    expect(screen.getByText(/Garante 1/)).toBeInTheDocument()
     expect(clientWrites.filter((item) => item.method === 'POST')).toHaveLength(1)
     expect(contactPosts).toHaveLength(2)
     expect(contactPosts[1]?.document).toBe('001-7654321-0')
@@ -735,5 +754,111 @@ describe('CBF-215 errores de documento en el campo', () => {
     expect(contactPosts[2]?.document).toBe('001-3333333-3')
     expect(screen.getAllByText(/Garante 1 ·/).length).toBe(1)
     expect(screen.getByText(/Garante 2 ·/)).toBeInTheDocument()
+  })
+
+  it('Ir a la ficha navega sin reenviar el garante pendiente', async () => {
+    loginCashier()
+    const contactPosts: ContactCreate[] = []
+    server.use(
+      okCheck(),
+      http.post('*/clients/:id/contacts', async ({ request }) => {
+        const payload = (await request.json()) as ContactCreate
+        contactPosts.push(payload)
+        return contractError(422, [CBF_215_CEDULA_INVALID])
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    await addGarante(user, 0, '001-0000001-1')
+    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: GO_TO_RECORD_LABEL }))
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(contactPosts).toHaveLength(1)
+    expect(screen.queryByText(CLIENT_AND_GUARANTOR_SAVED_TOAST)).not.toBeInTheDocument()
+    expect(screen.queryByText('Este cliente no tiene garante.')).not.toBeInTheDocument()
+  })
+
+  it('Atrás sale de Completar garante sin diálogo', async () => {
+    loginCashier()
+    server.use(
+      okCheck(),
+      http.post('*/clients/:id/contacts', () => contractError(422, [CBF_215_CEDULA_INVALID])),
+    )
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    await addGarante(user, 0, '001-0000001-1')
+    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE })).toBeInTheDocument()
+
+    const confirm = vi.spyOn(window, 'confirm')
+    await user.click(screen.getByRole('link', { name: BACK_LABEL }))
+    expect(confirm).not.toHaveBeenCalled()
+    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    confirm.mockRestore()
+  })
+
+  it('varios garantes: el guardado queda en solo lectura y el inválido sigue editable', async () => {
+    loginCashier()
+    const contactPosts: ContactCreate[] = []
+    server.use(
+      okCheck(),
+      http.post('*/clients/:id/contacts', async ({ request, params }) => {
+        const payload = (await request.json()) as ContactCreate
+        contactPosts.push(payload)
+        if (payload.document === '001-0000001-1') {
+          return contractError(422, [CBF_215_CEDULA_INVALID])
+        }
+        return HttpResponse.json(persistCreatedContact(String(params.id), payload), {
+          status: 201,
+        })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    await addGarante(user, 0, '001-2222222-2')
+    await addGarante(user, 1, '001-0000001-1')
+    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+
+    expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE })).toBeInTheDocument()
+    const saved = screen.getByRole('group', { name: 'Garante 1' })
+    expect(within(saved).getByText(CONTACT_SAVED_LABEL)).toBeInTheDocument()
+    expect(within(saved).getByLabelText('Nombre')).toBeDisabled()
+    expect(within(saved).getByLabelText('Número de documento (opcional)')).toBeDisabled()
+    expect(within(saved).queryByText(CBF_215_CEDULA_INVALID.message)).not.toBeInTheDocument()
+
+    const pending = screen.getByRole('group', { name: 'Garante 2' })
+    const pendingInput = within(pending).getByLabelText('Número de documento (opcional)')
+    expect(within(pending).queryByText(CONTACT_SAVED_LABEL)).not.toBeInTheDocument()
+    expect(pendingInput).toBeEnabled()
+    expect(pendingInput).toHaveAttribute('aria-invalid', 'true')
+    expect(pendingInput).toHaveFocus()
+    expect(document.getElementById('contacts.1.document-error')).toHaveTextContent(
+      CBF_215_CEDULA_INVALID.message,
+    )
+    expect(screen.getByRole('status')).not.toHaveTextContent(CBF_215_CEDULA_INVALID.message)
+    expect(contactPosts.map((item) => item.name)).toEqual(['Garante 1', 'Garante 2'])
+
+    await user.clear(pendingInput)
+    await user.type(pendingInput, '001-3333333-3')
+    await user.click(screen.getByRole('button', { name: SAVE_GUARANTOR_LABEL }))
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(contactPosts.filter((item) => item.name === 'Garante 1')).toHaveLength(1)
+    expect(contactPosts.map((item) => item.name)).toEqual(['Garante 1', 'Garante 2', 'Garante 2'])
+    expect(await screen.findByText(CLIENT_AND_GUARANTOR_SAVED_TOAST)).toBeInTheDocument()
   })
 })
