@@ -437,8 +437,8 @@ describe('CBF-215 errores de documento en el campo', () => {
   it('un 422 field foo o guarantors.1.document muestra banner en el form de cliente', async () => {
     loginCashier()
     const cases = [
-      { field: 'foo', message: 'Campo desconocido foo' },
-      { field: 'guarantors.1.document', message: 'Garante anidado' },
+      { field: 'foo', message: 'Revisa este valor.' },
+      { field: 'guarantors.1.document', message: 'Revisa el documento del garante.' },
     ]
     for (const item of cases) {
       server.use(
@@ -464,8 +464,8 @@ describe('CBF-215 errores de documento en el campo', () => {
   it('un 422 field foo o guarantors.1.document muestra banner en el composer', async () => {
     loginCashier()
     const cases = [
-      { field: 'foo', message: 'Campo desconocido foo' },
-      { field: 'guarantors.1.document', message: 'Garante anidado' },
+      { field: 'foo', message: 'Revisa este valor.' },
+      { field: 'guarantors.1.document', message: 'Revisa el documento del garante.' },
     ]
     for (const item of cases) {
       server.use(

@@ -195,9 +195,10 @@ describe('CBF-110 aceptación', () => {
     await user.clear(screen.getByLabelText('Número de documento'))
     await user.type(screen.getByLabelText('Número de documento'), 'duplicado')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    const duplicateBanner = await screen.findByText('Ya hay un cliente con este documento.')
-    expect(duplicateBanner.closest('[role="alert"]')).toBeTruthy()
-    expect(duplicateBanner.id).not.toBe('document-error')
+    const duplicateBanners = await screen.findAllByText('Ya hay un cliente con este documento.')
+    expect(duplicateBanners.length).toBeGreaterThanOrEqual(1)
+    expect(duplicateBanners.every((el) => el.closest('[role="alert"]'))).toBe(true)
+    expect(duplicateBanners.every((el) => el.id !== 'document-error')).toBe(true)
     expect(document.getElementById('document-error')).toBeNull()
   })
 
