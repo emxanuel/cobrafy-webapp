@@ -277,7 +277,6 @@ export function parseMessage(
 export function parseFieldErrors(body: ErrorBody, status = 0): Record<string, string> {
   const errors: Record<string, string> = {}
   const items = listItems(body)
-  const newest = (items ?? []).filter(isNewContractItem)
 
   if (items) {
     for (const row of items) {
@@ -298,10 +297,6 @@ export function parseFieldErrors(body: ErrorBody, status = 0): Record<string, st
     if (nested.field && nested.message && !isGenericDetail(nested.message, status)) {
       errors[nested.field] = nested.message
     }
-  }
-
-  if (status === 409 && !Object.keys(errors).length && newest.length) {
-    return errors
   }
 
   return errors

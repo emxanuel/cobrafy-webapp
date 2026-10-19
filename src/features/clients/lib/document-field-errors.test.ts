@@ -30,17 +30,33 @@ describe('document field errors (CBF-215)', () => {
   })
 
   it('foo y guarantors.1.document no están renderizados en el form de cliente', () => {
-    expect(isClientFormField('document')).toBe(true)
-    expect(isClientFormField('contacts.1.document')).toBe(true)
-    expect(isClientFormField('foo')).toBe(false)
-    expect(isClientFormField('guarantors.1.document')).toBe(false)
+    expect(isClientFormField('document', 0)).toBe(true)
+    expect(isClientFormField('contacts.1.document', 2)).toBe(true)
+    expect(isClientFormField('contacts.1.document', 1)).toBe(false)
+    expect(isClientFormField('contacts.0.document', 0)).toBe(false)
+    expect(isClientFormField('foo', 0)).toBe(false)
+    expect(isClientFormField('guarantors.1.document', 2)).toBe(false)
     expect(
-      hasUnrenderedFieldError({ foo: 'x' }, isClientFormField),
+      hasUnrenderedFieldError({ foo: 'x' }, (field) => isClientFormField(field, 0)),
     ).toBe(true)
     expect(
-      hasUnrenderedFieldError({ 'guarantors.1.document': 'x' }, isClientFormField),
+      hasUnrenderedFieldError({ 'guarantors.1.document': 'x' }, (field) =>
+        isClientFormField(field, 2),
+      ),
     ).toBe(true)
-    expect(hasUnrenderedFieldError({ document: 'x' }, isClientFormField)).toBe(false)
+    expect(
+      hasUnrenderedFieldError({ 'contacts.1.document': 'x' }, (field) =>
+        isClientFormField(field, 1),
+      ),
+    ).toBe(true)
+    expect(
+      hasUnrenderedFieldError({ 'contacts.1.document': 'x' }, (field) =>
+        isClientFormField(field, 2),
+      ),
+    ).toBe(false)
+    expect(hasUnrenderedFieldError({ document: 'x' }, (field) => isClientFormField(field, 0))).toBe(
+      false,
+    )
   })
 
   it('doc_type, address y type no están en el set del composer/card', () => {

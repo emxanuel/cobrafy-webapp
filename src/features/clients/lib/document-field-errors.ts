@@ -9,12 +9,17 @@ export const CLIENT_FORM_FIELDS = new Set([
   'address',
 ])
 
-const CONTACT_ROW_DOCUMENT = /^contacts\.\d+\.document$/
+const CONTACT_ROW_DOCUMENT = /^contacts\.(\d+)\.document$/
 
 export const CONTACT_EDITOR_FIELDS = new Set(['name', 'phone', 'relationship', 'document'])
 
-export function isClientFormField(field: string): boolean {
-  return CLIENT_FORM_FIELDS.has(field) || CONTACT_ROW_DOCUMENT.test(field)
+export function isClientFormField(field: string, contactCount: number): boolean {
+  const row = CONTACT_ROW_DOCUMENT.exec(field)
+  if (row) {
+    const index = parseInt(row[1] ?? '', 10)
+    return index >= 0 && index < contactCount
+  }
+  return CLIENT_FORM_FIELDS.has(field)
 }
 
 export function hasUnrenderedFieldError(

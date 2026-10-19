@@ -675,7 +675,7 @@ describe('contrato 210-A {field, code, message}', () => {
     expect(error.fieldErrors.document).toBeUndefined()
   })
 
-  it('CLIENT_ALREADY_BLOCKED en /clients no llena document (P6: el return del contrato nuevo)', () => {
+  it('CLIENT_ALREADY_BLOCKED en /clients no llena document', () => {
     const error = toApiError(
       axiosError(
         409,

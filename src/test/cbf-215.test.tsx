@@ -352,6 +352,35 @@ describe('CBF-215 errores de documento en el campo', () => {
     expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
   })
 
+  it('formato viejo: PATCH /clients/:id 409 CLIENT_DOCUMENT_EXISTS con field null va al banner, no al campo', async () => {
+    loginCashier()
+    server.use(
+      okCheck(),
+      http.patch('*/clients/:id', () =>
+        contractError(409, [
+          {
+            field: null,
+            code: 'CLIENT_DOCUMENT_EXISTS',
+            message: 'Ya hay un cliente con este documento.',
+          },
+        ]),
+      ),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/editar')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    const input = screen.getByLabelText('Número de documento')
+    await user.clear(input)
+    await user.type(input, '001-9999999-9')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    const banner = await screen.findByText('Ya hay un cliente con este documento.')
+    expect(banner.closest('[role="alert"]')).toBeTruthy()
+    expect(banner.id).not.toBe('document-error')
+    expect(document.getElementById('document-error')).toBeNull()
+    expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
+  })
+
   it('al editar el campo el error se borra', async () => {
     loginCashier()
     server.use(
@@ -487,5 +516,60 @@ describe('CBF-215 errores de documento en el campo', () => {
       expect(document.getElementById('new-contact-document-error')).toBeNull()
       view.unmount()
     }
+  })
+
+  it('un field desconocido (doc_type) en el contact card va al banner', async () => {
+    loginCashier()
+    const first = contactFixture({ id: 'ct-1', name: 'Garante 1' })
+    server.use(
+      http.get('*/clients/:id', () =>
+        HttpResponse.json(clientFixture({ id: 'cli-1', contacts: [first] })),
+      ),
+      http.patch('*/clients/:id/contacts/:contactId', () =>
+        contractError(422, [
+          { field: 'doc_type', code: 'value_error', message: 'Revisa este tipo de documento.' },
+        ]),
+      ),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Editar' }))
+    const phone = screen.getByLabelText('Teléfono')
+    await user.clear(phone)
+    await user.type(phone, '8095550000')
+    await user.click(screen.getByRole('button', { name: 'Guardar contacto' }))
+    const banner = await screen.findByText('Revisa este tipo de documento.')
+    expect(banner.closest('[role="alert"]')).toBeTruthy()
+    expect(document.getElementById('ct-1-document-error')).toBeNull()
+  })
+
+  it('contacts.N.document fuera de rango va al banner', async () => {
+    loginCashier()
+    server.use(
+      okCheck(),
+      http.post('*/clients', () =>
+        contractError(422, [
+          {
+            field: 'contacts.1.document',
+            code: 'value_error',
+            message: 'Revisa el documento del garante.',
+          },
+        ]),
+      ),
+    )
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    await addGarante(user, 0, '001-2222222-2')
+    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    const banner = await screen.findByText('Revisa el documento del garante.')
+    expect(banner.closest('[role="alert"]')).toBeTruthy()
+    expect(document.getElementById('document-error')).toBeNull()
+    expect(document.getElementById('contacts.0.document-error')).toBeNull()
+    expect(document.getElementById('contacts.1.document-error')).toBeNull()
   })
 })

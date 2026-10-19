@@ -118,8 +118,9 @@ export function ClientForm({
   const apiFields = { ...checkFields, ...saveFields }
   const forbidden = isApiError(error) && error.status === 403
   const timedOut = isApiError(error) && error.status === 0 && !client
-  const saveHasUnrendered = hasUnrenderedFieldError(saveFields, isClientFormField)
-  const checkHasUnrendered = hasUnrenderedFieldError(checkFields, isClientFormField)
+  const isRenderedField = (field: string) => isClientFormField(field, contacts.fields.length)
+  const saveHasUnrendered = hasUnrenderedFieldError(saveFields, isRenderedField)
+  const checkHasUnrendered = hasUnrenderedFieldError(checkFields, isRenderedField)
   const showBanner =
     (Boolean(error) &&
       (forbidden || timedOut || Object.keys(saveFields).length === 0 || saveHasUnrendered)) ||

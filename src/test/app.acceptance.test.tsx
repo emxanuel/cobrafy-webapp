@@ -176,10 +176,21 @@ describe('CBF-110 aceptación', () => {
   })
 
   it('formato viejo: field null de cédula y de documento duplicado van al banner', async () => {
+    server.use(
+      http.post('*/clients/check', () =>
+        HttpResponse.json({
+          found: false,
+          is_blocked: false,
+          blocked_reason: null,
+          client_id: null,
+        }),
+      ),
+    )
     const user = userEvent.setup()
     renderApp()
     await loginAs(users.cashier.email)
     await user.click(await screen.findByRole('link', { name: 'Nuevo cliente' }))
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
 
     await user.type(screen.getByLabelText('Nombre'), 'Ana Pérez')
     await user.type(screen.getByLabelText('Número de documento'), 'malo')
@@ -195,11 +206,11 @@ describe('CBF-110 aceptación', () => {
     await user.clear(screen.getByLabelText('Número de documento'))
     await user.type(screen.getByLabelText('Número de documento'), 'duplicado')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    const duplicateBanners = await screen.findAllByText('Ya hay un cliente con este documento.')
-    expect(duplicateBanners.length).toBeGreaterThanOrEqual(1)
-    expect(duplicateBanners.every((el) => el.closest('[role="alert"]'))).toBe(true)
-    expect(duplicateBanners.every((el) => el.id !== 'document-error')).toBe(true)
+    const duplicateBanner = await screen.findByText('Ya hay un cliente con este documento.')
+    expect(duplicateBanner.closest('[role="alert"]')).toBeTruthy()
+    expect(duplicateBanner.id).not.toBe('document-error')
     expect(document.getElementById('document-error')).toBeNull()
+    expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
   })
 
   it('una sesión 401 redirige al login', async () => {
