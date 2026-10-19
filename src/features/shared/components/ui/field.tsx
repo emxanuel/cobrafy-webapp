@@ -15,6 +15,29 @@ type FieldProps = {
   hint?: string
 }
 
+export function FieldError({
+  id,
+  children,
+}: {
+  id?: string
+  children: ReactNode
+}) {
+  return (
+    <p
+      id={id}
+      role="alert"
+      className="text-danger flex items-start gap-1.5 text-sm"
+    >
+      <CircleAlert
+        className="text-danger mt-0.5 size-4 shrink-0"
+        size={16}
+        aria-hidden="true"
+      />
+      {children}
+    </p>
+  )
+}
+
 export function Field({
   id,
   label,
@@ -29,14 +52,7 @@ export function Field({
       </label>
       {children}
       {error ? (
-        <p
-          id={`${id}-error`}
-          role="alert"
-          className="text-danger flex items-start gap-1.5 text-sm"
-        >
-          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-          {error}
-        </p>
+        <FieldError id={`${id}-error`}>{error}</FieldError>
       ) : hint ? (
         <p className="text-text text-sm">{hint}</p>
       ) : null}

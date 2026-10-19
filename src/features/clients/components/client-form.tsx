@@ -3,6 +3,10 @@ import { useEffect, useState } from 'react'
 import { useFieldArray, useForm, type FieldPath } from 'react-hook-form'
 
 import {
+  hasUnrenderedFieldError,
+  isClientFormField,
+} from '@/features/clients/lib/document-field-errors'
+import {
   clientFormSchema,
   emptyClientForm,
   type ClientFormValues,
@@ -114,9 +118,14 @@ export function ClientForm({
   const apiFields = { ...checkFields, ...saveFields }
   const forbidden = isApiError(error) && error.status === 403
   const timedOut = isApiError(error) && error.status === 0 && !client
+  const saveHasUnrendered = hasUnrenderedFieldError(saveFields, isClientFormField)
+  const checkHasUnrendered = hasUnrenderedFieldError(checkFields, isClientFormField)
   const showBanner =
-    (Boolean(error) && (forbidden || timedOut || Object.keys(saveFields).length === 0)) ||
-    (!error && check.isError && Object.keys(checkFields).length === 0)
+    (Boolean(error) &&
+      (forbidden || timedOut || Object.keys(saveFields).length === 0 || saveHasUnrendered)) ||
+    (!error &&
+      check.isError &&
+      (Object.keys(checkFields).length === 0 || checkHasUnrendered))
 
   useEffect(() => {
     const source = error ?? (check.isError ? check.error : undefined)
@@ -165,7 +174,7 @@ export function ClientForm({
     >
       {showBanner ? (
         <Alert>
-            {forbidden
+          {forbidden
             ? 'No tienes permiso para guardar este cliente.'
             : timedOut
               ? UNCONFIRMED_MUTATION_MESSAGE

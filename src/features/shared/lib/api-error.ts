@@ -76,7 +76,7 @@ export function toApiError(error: unknown): ApiError {
 
   const status = error.response?.status ?? 0
   const body = (error.response?.data ?? {}) as ErrorBody
-  const fieldErrors = parseFieldErrors(body, status, error.config?.url)
+  const fieldErrors = parseFieldErrors(body, status)
   const codes = collectCodes(body)
   const code = codes[0] ?? errorCode(body)
   const message = parseMessage(body, status, code, fieldErrors)
@@ -153,20 +153,6 @@ function isUnmappedEnglish(text: string): boolean {
 
 function isGenericDetail(text: string, status: number): boolean {
   return status >= 500 || isTechnicalDetail(text) || isUnmappedEnglish(text)
-}
-
-function isClientCreateUrl(url = ''): boolean {
-  const path = url.split('?')[0]?.replace(/\/$/, '') ?? ''
-  return /\/clients$/.test(path)
-}
-
-function isDocumentConflictCode(code?: string): boolean {
-  return (
-    code === 'DOCUMENT_DUPLICATE' ||
-    code === 'DOCUMENT_EXISTS' ||
-    code === 'DOCUMENT_ALREADY_EXISTS' ||
-    code === 'CLIENT_DOCUMENT_EXISTS'
-  )
 }
 
 function isNewContractItem(item: unknown): item is ErrorItem {
@@ -288,7 +274,7 @@ export function parseMessage(
   return GENERIC_MESSAGE
 }
 
-export function parseFieldErrors(body: ErrorBody, status = 0, url = ''): Record<string, string> {
+export function parseFieldErrors(body: ErrorBody, status = 0): Record<string, string> {
   const errors: Record<string, string> = {}
   const items = listItems(body)
   const newest = (items ?? []).filter(isNewContractItem)
@@ -314,29 +300,8 @@ export function parseFieldErrors(body: ErrorBody, status = 0, url = ''): Record<
     }
   }
 
-  if (status === 409 && !Object.keys(errors).length) {
-    if (newest.length) {
-      const documentItem = newest.find((item) => isDocumentConflictCode(item.code))
-      if (documentItem) {
-        const msg = documentItem.message.trim()
-        if (msg && !isGenericDetail(msg, status)) errors.document = msg
-      }
-      // P6: el contrato nuevo no cae al fallback por URL. Sin este return,
-      // CLIENT_ALREADY_BLOCKED en POST /clients llenaría document.
-      return errors
-    }
-
-    const code = errorCode(body)
-    if (code === 'DOCUMENT_UNREADABLE' || code === 'DOCUMENT_UNREADABLE_GUARANTOR') {
-      return errors
-    }
-    if (isDocumentConflictCode(code) || isClientCreateUrl(url)) {
-      const raw =
-        typeof body.detail === 'string' && body.detail.trim()
-          ? body.detail.trim()
-          : 'Ya existe un cliente con este documento'
-      if (!isGenericDetail(raw, status)) errors.document = raw
-    }
+  if (status === 409 && !Object.keys(errors).length && newest.length) {
+    return errors
   }
 
   return errors

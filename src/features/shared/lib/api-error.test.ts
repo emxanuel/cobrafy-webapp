@@ -168,7 +168,8 @@ describe('toApiError', () => {
         '/clients',
       ),
     )
-    expect(plain409.fieldErrors.document).toBe('Ya existe un cliente con este documento')
+    expect(plain409.fieldErrors).toEqual({})
+    expect(plain409.fieldErrors.document).toBeUndefined()
     expect(plain409.code).toBeUndefined()
     expect(plain409.message).toBe('Ya existe un cliente con este documento')
   })
@@ -304,7 +305,9 @@ describe('toApiError', () => {
         '/clients/cli-1',
       ),
     )
-    expect(duplicate.fieldErrors.document).toBe('Ya existe un cliente con este documento')
+    expect(duplicate.fieldErrors).toEqual({})
+    expect(duplicate.fieldErrors.document).toBeUndefined()
+    expect(duplicate.message).toBe('Ya existe un cliente con este documento')
     expect(duplicate.code).toBe('DOCUMENT_DUPLICATE')
   })
 
@@ -479,7 +482,7 @@ describe('contrato 210-A {field, code, message}', () => {
     }
   })
 
-  it('CLIENT_DOCUMENT_EXISTS llena fieldErrors.document', () => {
+  it('formato viejo: CLIENT_DOCUMENT_EXISTS con field null va al banner, no a document', () => {
     const error = toApiError(
       axiosError(
         409,
@@ -495,7 +498,9 @@ describe('contrato 210-A {field, code, message}', () => {
         '/clients',
       ),
     )
-    expect(error.fieldErrors.document).toBe('Ya existe un cliente con este documento')
+    expect(error.fieldErrors).toEqual({})
+    expect(error.fieldErrors.document).toBeUndefined()
+    expect(error.message).toBe('Ya existe un cliente con este documento')
     expect(error.code).toBe('CLIENT_DOCUMENT_EXISTS')
   })
 
@@ -544,7 +549,9 @@ describe('contrato 210-A {field, code, message}', () => {
     const string409 = toApiError(
       axiosError(409, { detail: 'Ya existe un cliente con este documento' }, '/clients'),
     )
-    expect(string409.fieldErrors.document).toBe('Ya existe un cliente con este documento')
+    expect(string409.fieldErrors).toEqual({})
+    expect(string409.fieldErrors.document).toBeUndefined()
+    expect(string409.message).toBe('Ya existe un cliente con este documento')
     expect(string409.code).toBeUndefined()
 
     const locType = toApiError(
@@ -690,10 +697,11 @@ describe('contrato 210-A {field, code, message}', () => {
     expect(error.message).toBe('El cliente ya está bloqueado')
   })
 
-  it('el fallback de document en 409 usa mayúscula inicial (N14)', () => {
+  it('un 409 vacío en /clients no inventa fieldErrors.document (N14, formato viejo)', () => {
     const error = toApiError(axiosError(409, { detail: '' }, '/clients'))
-    expect(error.fieldErrors.document).toBe('Ya existe un cliente con este documento')
-    expect(error.message).toBe('Ya existe un cliente con este documento')
+    expect(error.fieldErrors).toEqual({})
+    expect(error.fieldErrors.document).toBeUndefined()
+    expect(error.message).toBe(GENERIC_MESSAGE)
   })
 
   it('una palabra en inglés con prefijo español cae en GENERIC_MESSAGE (F7)', () => {
@@ -846,13 +854,31 @@ describe('CBF-215 field de documento', () => {
     }
   })
 
-  it('un error de documento con field null sigue sin fieldErrors (banner)', () => {
+  it('formato viejo: un error de documento con field null sigue sin fieldErrors (banner)', () => {
     const error = toApiError(
       axiosError(422, {
-        detail: [{ field: null, code: 'value_error', message: 'Cédula inválida' }],
+        detail: [{ field: null, code: 'value_error', message: 'Cédula no válida. Revisa los 11 dígitos.' }],
       }),
     )
     expect(error.fieldErrors).toEqual({})
-    expect(error.message).toBe('Cédula inválida')
+    expect(error.message).toBe('Cédula no válida. Revisa los 11 dígitos.')
+  })
+
+  it('formato viejo: 409 CLIENT_DOCUMENT_EXISTS con field null no llena document', () => {
+    const error = toApiError(
+      axiosError(409, {
+        detail: [
+          {
+            field: null,
+            code: 'CLIENT_DOCUMENT_EXISTS',
+            message: 'Ya hay un cliente con este documento.',
+          },
+        ],
+      }),
+    )
+    expect(error.fieldErrors).toEqual({})
+    expect(error.fieldErrors.document).toBeUndefined()
+    expect(error.message).toBe('Ya hay un cliente con este documento.')
+    expect(error.code).toBe('CLIENT_DOCUMENT_EXISTS')
   })
 })

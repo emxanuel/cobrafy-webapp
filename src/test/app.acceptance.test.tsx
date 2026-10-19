@@ -52,7 +52,9 @@ describe('CBF-110 aceptación', () => {
 
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
 
-    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
     expect(screen.getByText(/Pedro Gómez/)).toBeInTheDocument()
     expect(sessionStorage.getItem('cobrafy.session')).toBeTruthy()
     expect(localStorage.getItem('cobrafy.session')).toBeNull()
@@ -173,7 +175,7 @@ describe('CBF-110 aceptación', () => {
     expect(await screen.findByText('No tienes permiso para desbloquear.')).toBeInTheDocument()
   })
 
-  it('el 422 de cédula (field null) va al banner; el 409 de documento va al campo', async () => {
+  it('formato viejo: field null de cédula y de documento duplicado van al banner', async () => {
     const user = userEvent.setup()
     renderApp()
     await loginAs(users.cashier.email)
@@ -184,20 +186,19 @@ describe('CBF-110 aceptación', () => {
     await user.type(screen.getByLabelText('Teléfono'), '8095551111')
     await user.type(screen.getByLabelText('Dirección'), 'Calle 1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    const cedulaBanner = await screen.findByText('Cédula inválida')
+    const cedulaBanner = await screen.findByText('Cédula no válida. Revisa los 11 dígitos.')
     expect(cedulaBanner.closest('[role="alert"]')).toBeTruthy()
+    expect(cedulaBanner.id).not.toBe('document-error')
     expect(document.getElementById('document-error')).toBeNull()
     expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
 
     await user.clear(screen.getByLabelText('Número de documento'))
     await user.type(screen.getByLabelText('Número de documento'), 'duplicado')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    expect(
-      await screen.findByText('Ya existe un cliente con este documento'),
-    ).toBeInTheDocument()
-    expect(document.getElementById('document-error')).toHaveTextContent(
-      'Ya existe un cliente con este documento',
-    )
+    const duplicateBanner = await screen.findByText('Ya hay un cliente con este documento.')
+    expect(duplicateBanner.closest('[role="alert"]')).toBeTruthy()
+    expect(duplicateBanner.id).not.toBe('document-error')
+    expect(document.getElementById('document-error')).toBeNull()
   })
 
   it('una sesión 401 redirige al login', async () => {

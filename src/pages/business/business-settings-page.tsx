@@ -25,7 +25,7 @@ import {
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { Button } from '@/features/shared/components/ui/button'
-import { Field, TextArea, TextInput } from '@/features/shared/components/ui/field'
+import { Field, FieldError, TextArea, TextInput } from '@/features/shared/components/ui/field'
 import { getFieldErrors, isApiError } from '@/features/shared/lib/api-error'
 import { cn } from '@/features/shared/lib/cn'
 import { formatMoney } from '@/features/shared/lib/format-money'
@@ -247,9 +247,7 @@ export function BusinessSettingsPage() {
             <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
               <legend className="text-heading text-sm font-medium">Frecuencias permitidas</legend>
               {creditFields.allowed_frequencies ? (
-                <p role="alert" className="text-danger m-0 text-sm">
-                  {fieldMessage(creditFields.allowed_frequencies)}
-                </p>
+                <FieldError>{fieldMessage(creditFields.allowed_frequencies)}</FieldError>
               ) : null}
               {FREQUENCIES.map((item) => {
                 const on = frequencies.includes(item)

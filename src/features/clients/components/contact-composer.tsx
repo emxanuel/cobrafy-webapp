@@ -3,6 +3,10 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { useCreateContactMutation } from '@/features/clients/hooks/use-clients-queries'
+import {
+  CONTACT_EDITOR_FIELDS,
+  hasUnrenderedFieldError,
+} from '@/features/clients/lib/document-field-errors'
 import { contactFormSchema } from '@/features/clients/schemas'
 import type { ContactType } from '@/features/clients/services/types'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -37,7 +41,10 @@ export function ContactComposer({ clientId }: { clientId: string }) {
     },
   })
   const apiFields = create.isError ? getFieldErrors(create.error) : {}
-  const showBanner = create.isError && Object.keys(apiFields).length === 0
+  const showBanner =
+    create.isError &&
+    (Object.keys(apiFields).length === 0 ||
+      hasUnrenderedFieldError(apiFields, (field) => CONTACT_EDITOR_FIELDS.has(field)))
 
   useEffect(() => {
     if (!create.error) return

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { Button } from '@/features/shared/components/ui/button'
-import { TextInput } from '@/features/shared/components/ui/field'
+import { Field, FieldError, TextInput } from '@/features/shared/components/ui/field'
 import { formatDueDate } from '@/features/shared/lib/format-due-date'
 import { cn } from '@/features/shared/lib/cn'
 import {
@@ -50,10 +50,12 @@ export function FirstDuePicker({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor="first-due" className="text-heading text-sm font-medium">
-        Primera cuota
-      </label>
+    <Field
+      id="first-due"
+      label="Primera cuota"
+      error={error}
+      hint={error ? undefined : firstDueHint(frequency)}
+    >
       <TextInput
         id="first-due"
         type="date"
@@ -67,14 +69,7 @@ export function FirstDuePicker({
           if (event.key === 'Enter') event.preventDefault()
         }}
       />
-      {error ? (
-        <p id="first-due-error" role="alert" className="text-danger text-sm">
-          {error}
-        </p>
-      ) : (
-        <p className="text-text text-sm">{firstDueHint(frequency)}</p>
-      )}
-    </div>
+    </Field>
   )
 }
 
@@ -145,11 +140,7 @@ function QuincenalPicker({
           {expanded ? 'Ver menos fechas' : 'Ver más fechas'}
         </Button>
       ) : null}
-      {error ? (
-        <p role="alert" className="text-danger text-sm">
-          {error}
-        </p>
-      ) : null}
+      {error ? <FieldError>{error}</FieldError> : null}
     </fieldset>
   )
 }

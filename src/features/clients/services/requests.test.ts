@@ -50,11 +50,11 @@ describe('client requests', () => {
     } catch (error) {
       expect(isApiError(error)).toBe(true)
       expect(getFieldErrors(error)).toEqual({})
-      expect((error as Error).message).toBe('Cédula inválida')
+      expect((error as Error).message).toBe('Cédula no válida. Revisa los 11 dígitos.')
     }
   })
 
-  it('expone el 409 en document con el mensaje del backend', async () => {
+  it('formato viejo: el 409 de documento duplicado con field null no llena document', async () => {
     try {
       await createClient({
         name: 'Ana Pérez',
@@ -66,7 +66,8 @@ describe('client requests', () => {
       throw new Error('debía fallar')
     } catch (error) {
       expect(isApiError(error)).toBe(true)
-      expect(getFieldErrors(error).document).toBe('Ya existe un cliente con este documento')
+      expect(getFieldErrors(error)).toEqual({})
+      expect((error as Error).message).toBe('Ya hay un cliente con este documento.')
     }
   })
 
@@ -493,7 +494,7 @@ describe('client requests', () => {
     }
   })
 
-  it('PATCH /clients/:id 409 CLIENT_DOCUMENT_EXISTS (forma nueva) va a document', async () => {
+  it('formato viejo: PATCH /clients/:id 409 CLIENT_DOCUMENT_EXISTS con field null no va a document', async () => {
     server.use(
       http.patch('*/clients/:id', () =>
         HttpResponse.json(
@@ -502,7 +503,7 @@ describe('client requests', () => {
               {
                 field: null,
                 code: 'CLIENT_DOCUMENT_EXISTS',
-                message: 'Ya existe un cliente con este documento',
+                message: 'Ya hay un cliente con este documento.',
               },
             ],
           },
@@ -515,7 +516,8 @@ describe('client requests', () => {
       throw new Error('debía fallar')
     } catch (error) {
       expect(isApiError(error)).toBe(true)
-      expect(getFieldErrors(error).document).toBe('Ya existe un cliente con este documento')
+      expect(getFieldErrors(error)).toEqual({})
+      expect((error as Error).message).toBe('Ya hay un cliente con este documento.')
     }
   })
 

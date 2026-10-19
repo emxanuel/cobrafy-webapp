@@ -1028,7 +1028,7 @@ export const handlers = [
         {
           field: null,
           code: 'value_error',
-          message: 'Cédula inválida',
+          message: 'Cédula no válida. Revisa los 11 dígitos.',
         },
       ])
     }
@@ -1037,7 +1037,7 @@ export const handlers = [
         {
           field: null,
           code: 'CLIENT_DOCUMENT_EXISTS',
-          message: 'Ya existe un cliente con este documento',
+          message: 'Ya hay un cliente con este documento.',
         },
       ])
     }

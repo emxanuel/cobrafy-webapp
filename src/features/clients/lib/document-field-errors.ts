@@ -1,5 +1,29 @@
 import { ApiError, isApiError } from '@/features/shared/lib/api-error'
 
+export const CLIENT_FORM_FIELDS = new Set([
+  'name',
+  'doc_type',
+  'document',
+  'phone',
+  'collector_membership_id',
+  'address',
+])
+
+const CONTACT_ROW_DOCUMENT = /^contacts\.\d+\.document$/
+
+export const CONTACT_EDITOR_FIELDS = new Set(['name', 'phone', 'relationship', 'document'])
+
+export function isClientFormField(field: string): boolean {
+  return CLIENT_FORM_FIELDS.has(field) || CONTACT_ROW_DOCUMENT.test(field)
+}
+
+export function hasUnrenderedFieldError(
+  fieldErrors: Record<string, string>,
+  isRendered: (field: string) => boolean,
+): boolean {
+  return Object.keys(fieldErrors).some((field) => !isRendered(field))
+}
+
 /** Contacts POST/PATCH emit `field: 'document'`. Map it onto the row that made the call. */
 export function remapContactDocumentError(
   error: unknown,

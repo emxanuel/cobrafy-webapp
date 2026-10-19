@@ -7,6 +7,10 @@ import {
   useUpdateContactMutation,
 } from '@/features/clients/hooks/use-clients-queries'
 import { toContactPatch } from '@/features/clients/lib/contact-patch'
+import {
+  CONTACT_EDITOR_FIELDS,
+  hasUnrenderedFieldError,
+} from '@/features/clients/lib/document-field-errors'
 import { contactEditSchema, type ContactEditValues } from '@/features/clients/schemas'
 import type { ContactRead } from '@/features/clients/services/types'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -38,7 +42,10 @@ export function ContactCard({
     },
   })
   const apiFields = update.isError ? getFieldErrors(update.error) : {}
-  const showBanner = update.isError && Object.keys(apiFields).length === 0
+  const showBanner =
+    update.isError &&
+    (Object.keys(apiFields).length === 0 ||
+      hasUnrenderedFieldError(apiFields, (field) => CONTACT_EDITOR_FIELDS.has(field)))
   const documentInputId = `${contact.id}-document`
 
   useEffect(() => {

@@ -310,7 +310,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     expect(screen.queryByText('No se pudo verificar. Inténtalo de nuevo.')).not.toBeInTheDocument()
   })
 
-  it('con field null el banner sigue funcionando', async () => {
+  it('formato viejo: con field null el banner sigue funcionando', async () => {
     loginCashier()
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
@@ -318,9 +318,36 @@ describe('CBF-215 errores de documento en el campo', () => {
     expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
     await fillRequiredClient(user, 'malo')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    const cedulaBanner = await screen.findByText('Cédula inválida')
+    const cedulaBanner = await screen.findByText('Cédula no válida. Revisa los 11 dígitos.')
     expect(cedulaBanner.closest('[role="alert"]')).toBeTruthy()
     expect(cedulaBanner.id).not.toBe('document-error')
+    expect(document.getElementById('document-error')).toBeNull()
+    expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('formato viejo: 409 CLIENT_DOCUMENT_EXISTS con field null va al banner, no al campo', async () => {
+    loginCashier()
+    server.use(
+      okCheck(),
+      http.post('*/clients', () =>
+        contractError(409, [
+          {
+            field: null,
+            code: 'CLIENT_DOCUMENT_EXISTS',
+            message: 'Ya hay un cliente con este documento.',
+          },
+        ]),
+      ),
+    )
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    await fillRequiredClient(user, '001-9999999-9')
+    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    const banner = await screen.findByText('Ya hay un cliente con este documento.')
+    expect(banner.closest('[role="alert"]')).toBeTruthy()
+    expect(banner.id).not.toBe('document-error')
     expect(document.getElementById('document-error')).toBeNull()
     expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
   })
@@ -346,5 +373,119 @@ describe('CBF-215 errores de documento en el campo', () => {
     await user.type(screen.getByLabelText('Número de documento'), '0')
     expect(document.getElementById('document-error')).toBeNull()
     expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('al editar el campo en PATCH /clients/:id el error se borra', async () => {
+    loginCashier()
+    server.use(
+      okCheck(),
+      http.patch('*/clients/:id', () => contractError(409, [CBF_215_DOCUMENT_EXISTS])),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/editar')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    const input = screen.getByLabelText('Número de documento')
+    await user.clear(input)
+    await user.type(input, '001-9999999-9')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => {
+      expect(document.getElementById('document-error')).toHaveTextContent(
+        CBF_215_DOCUMENT_EXISTS.message,
+      )
+    })
+
+    await user.type(screen.getByLabelText('Número de documento'), '0')
+    expect(document.getElementById('document-error')).toBeNull()
+    expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('al editar el documento de un contacto el error de PATCH se borra', async () => {
+    loginCashier()
+    const first = contactFixture({ id: 'ct-1', name: 'Garante 1', document: '001-2222222-2' })
+    server.use(
+      okCheck(),
+      http.get('*/clients/:id', () =>
+        HttpResponse.json(clientFixture({ id: 'cli-1', contacts: [first] })),
+      ),
+      http.patch('*/clients/:id/contacts/:contactId', () =>
+        contractError(422, [CBF_215_CEDULA_INVALID]),
+      ),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/editar')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    const garante = screen.getByRole('group', { name: 'Garante 1' })
+    const contactInput = within(garante).getByLabelText('Número de documento (opcional)')
+    await user.clear(contactInput)
+    await user.type(contactInput, '001-1111111-1')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => {
+      expect(document.getElementById('contacts.0.document-error')).toHaveTextContent(
+        CBF_215_CEDULA_INVALID.message,
+      )
+    })
+
+    await user.type(within(garante).getByLabelText('Número de documento (opcional)'), '0')
+    expect(document.getElementById('contacts.0.document-error')).toBeNull()
+    expect(within(garante).getByLabelText('Número de documento (opcional)')).not.toHaveAttribute(
+      'aria-invalid',
+    )
+  })
+
+  it('un 422 field foo o guarantors.1.document muestra banner en el form de cliente', async () => {
+    loginCashier()
+    const cases = [
+      { field: 'foo', message: 'Campo desconocido foo' },
+      { field: 'guarantors.1.document', message: 'Garante anidado' },
+    ]
+    for (const item of cases) {
+      server.use(
+        okCheck(),
+        http.post('*/clients', () =>
+          contractError(422, [{ field: item.field, code: 'value_error', message: item.message }]),
+        ),
+      )
+      window.history.pushState({}, '', '/clientes/nuevo')
+      const user = userEvent.setup()
+      const view = renderApp()
+      expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+      await fillRequiredClient(user, '001-1111111-1')
+      await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+      const banner = await screen.findByText(item.message)
+      expect(banner.closest('[role="alert"]')).toBeTruthy()
+      expect(document.getElementById('document-error')).toBeNull()
+      expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
+      view.unmount()
+    }
+  })
+
+  it('un 422 field foo o guarantors.1.document muestra banner en el composer', async () => {
+    loginCashier()
+    const cases = [
+      { field: 'foo', message: 'Campo desconocido foo' },
+      { field: 'guarantors.1.document', message: 'Garante anidado' },
+    ]
+    for (const item of cases) {
+      server.use(
+        http.post('*/clients/:id/contacts', () =>
+          contractError(422, [{ field: item.field, code: 'value_error', message: item.message }]),
+        ),
+      )
+      window.history.pushState({}, '', '/clientes/cli-1')
+      const user = userEvent.setup()
+      const view = renderApp()
+      expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Agregar garante' }))
+      await user.type(screen.getByLabelText('Nombre'), 'Pedro Gómez')
+      await user.type(screen.getByLabelText('Teléfono'), '8095552222')
+      await user.type(screen.getByLabelText('Relación'), 'Hermano')
+      await user.click(screen.getByRole('button', { name: 'Guardar contacto' }))
+      const banner = await screen.findByText(item.message)
+      expect(banner.closest('[role="alert"]')).toBeTruthy()
+      expect(document.getElementById('new-contact-document-error')).toBeNull()
+      view.unmount()
+    }
   })
 })
