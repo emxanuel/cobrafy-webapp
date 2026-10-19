@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { useCreateContactMutation } from '@/features/clients/hooks/use-clients-queries'
@@ -37,6 +37,16 @@ export function ContactComposer({ clientId }: { clientId: string }) {
     },
   })
   const apiFields = create.isError ? getFieldErrors(create.error) : {}
+  const showBanner = create.isError && Object.keys(apiFields).length === 0
+
+  useEffect(() => {
+    if (!create.error) return
+    const documentError = getFieldErrors(create.error).document
+    if (!documentError) return
+    const input = document.getElementById('new-contact-document')
+    input?.focus()
+    input?.scrollIntoView?.({ block: 'center' })
+  }, [create.error])
 
   if (!open) {
     return (
@@ -99,7 +109,7 @@ export function ContactComposer({ clientId }: { clientId: string }) {
         ),
       )}
     >
-      {create.isError ? <Alert>{getApiErrorMessage(create.error)}</Alert> : null}
+      {showBanner ? <Alert>{getApiErrorMessage(create.error)}</Alert> : null}
       <Field id="new-contact-name" label="Nombre" error={form.formState.errors.name?.message ?? apiFields.name}>
         <TextInput id="new-contact-name" {...form.register('name')} />
       </Field>
@@ -123,7 +133,11 @@ export function ContactComposer({ clientId }: { clientId: string }) {
             </SelectInput>
           </Field>
           <Field id="new-contact-document" label="Documento (opcional)" error={apiFields.document}>
-            <TextInput id="new-contact-document" {...form.register('document')} />
+            <TextInput
+              id="new-contact-document"
+              error={apiFields.document}
+              {...form.register('document', { onChange: () => create.reset() })}
+            />
           </Field>
         </>
       ) : null}

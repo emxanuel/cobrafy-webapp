@@ -5,7 +5,13 @@ import { useBusinessStore } from '@/features/business/stores/business-store'
 import { getFieldErrors, isApiError } from '@/features/shared/lib/api-error'
 import { http, HttpResponse } from 'msw'
 
-import { authResponse, businesses, membership, users } from '@/test/fixtures'
+import {
+  authResponse,
+  businesses,
+  CBF_215_CEDULA_INVALID,
+  membership,
+  users,
+} from '@/test/fixtures'
 import { clientWrites, contactWrites, searchRequests } from '@/test/handlers'
 import { server } from '@/test/server'
 import {
@@ -102,6 +108,67 @@ describe('client requests', () => {
     expect(result.failedContactNames).toEqual(['Pedro Gómez'])
     expect(result.failed).toEqual([{ name: 'Pedro Gómez', op: 'add' }])
     expect(result.client.name).toBe('Ana Pérez')
+  })
+
+  it('POST /clients/:id/contacts 422 field document se remapea al contacto que llamó', async () => {
+    let creates = 0
+    server.use(
+      http.post('*/clients/:id/contacts', () => {
+        creates += 1
+        if (creates === 2) {
+          return HttpResponse.json({ detail: [CBF_215_CEDULA_INVALID] }, { status: 422 })
+        }
+        return HttpResponse.json(
+          {
+            id: `ct-${creates}`,
+            client_id: 'cli-x',
+            type: 'garante',
+            name: `Garante ${creates}`,
+            phone: '8095552222',
+            relationship: 'Hermano',
+            address: null,
+            doc_type: 'cedula',
+            document: '001-2222222-2',
+            has_document: true,
+            document_available: true,
+            is_active: true,
+          },
+          { status: 201 },
+        )
+      }),
+    )
+    try {
+      await createClientWithContacts(
+        {
+          name: 'Ana Pérez',
+          doc_type: 'cedula',
+          document: '001-1234567-8',
+          phone: '8095551111',
+          address: 'Calle 1',
+        },
+        [
+          {
+            type: 'garante',
+            name: 'Garante 1',
+            phone: '8095552222',
+            relationship: 'Hermano',
+            document: '001-2222222-2',
+          },
+          {
+            type: 'garante',
+            name: 'Garante 2',
+            phone: '8095553333',
+            relationship: 'Primo',
+            document: '001-3333333-3',
+          },
+        ],
+      )
+      throw new Error('debía fallar')
+    } catch (error) {
+      expect(isApiError(error)).toBe(true)
+      expect(getFieldErrors(error)['contacts.1.document']).toBe(CBF_215_CEDULA_INVALID.message)
+      expect(getFieldErrors(error).document).toBeUndefined()
+    }
   })
 
   it('al editar solo el teléfono el PATCH no manda document, address ni doc_type', async () => {

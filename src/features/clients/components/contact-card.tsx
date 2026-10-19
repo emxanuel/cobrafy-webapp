@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import {
@@ -38,6 +38,17 @@ export function ContactCard({
     },
   })
   const apiFields = update.isError ? getFieldErrors(update.error) : {}
+  const showBanner = update.isError && Object.keys(apiFields).length === 0
+  const documentInputId = `${contact.id}-document`
+
+  useEffect(() => {
+    if (!update.error) return
+    const documentError = getFieldErrors(update.error).document
+    if (!documentError) return
+    const input = document.getElementById(documentInputId)
+    input?.focus()
+    input?.scrollIntoView?.({ block: 'center' })
+  }, [update.error, documentInputId])
 
   if (!editing) {
     return (
@@ -91,7 +102,7 @@ export function ContactCard({
           )
         })}
       >
-        {update.isError ? <Alert>{getApiErrorMessage(update.error)}</Alert> : null}
+        {showBanner ? <Alert>{getApiErrorMessage(update.error)}</Alert> : null}
         <Field
           id={`${contact.id}-name`}
           label="Nombre"
@@ -126,11 +137,15 @@ export function ContactCard({
               </SelectInput>
             </Field>
             <Field
-              id={`${contact.id}-document`}
+              id={documentInputId}
               label="Documento (opcional)"
               error={apiFields.document}
             >
-              <TextInput id={`${contact.id}-document`} {...form.register('document')} />
+              <TextInput
+                id={documentInputId}
+                error={apiFields.document}
+                {...form.register('document', { onChange: () => update.reset() })}
+              />
             </Field>
           </>
         ) : null}

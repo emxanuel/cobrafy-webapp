@@ -2,7 +2,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
 import { useFieldArray, useForm, type FieldPath } from 'react-hook-form'
 
-import { mapApiFieldErrors } from '@/features/clients/lib/document-field-errors'
 import {
   clientFormSchema,
   emptyClientForm,
@@ -110,16 +109,19 @@ export function ClientForm({
     setErrorForDismiss(error)
     setDismissedFields(new Set())
   }
-  const apiFields = error
-    ? mapApiFieldErrors(getFieldErrors(error), contacts.fields)
-    : {}
+  const saveFields = error ? getFieldErrors(error) : {}
+  const checkFields = check.isError ? getFieldErrors(check.error) : {}
+  const apiFields = { ...checkFields, ...saveFields }
   const forbidden = isApiError(error) && error.status === 403
   const timedOut = isApiError(error) && error.status === 0 && !client
-  const showBanner = Boolean(error) && (forbidden || timedOut || Object.keys(apiFields).length === 0)
+  const showBanner =
+    (Boolean(error) && (forbidden || timedOut || Object.keys(saveFields).length === 0)) ||
+    (!error && check.isError && Object.keys(checkFields).length === 0)
 
   useEffect(() => {
-    if (!error) return
-    const mapped = mapApiFieldErrors(getFieldErrors(error), form.getValues('contacts'))
+    const source = error ?? (check.isError ? check.error : undefined)
+    if (!source) return
+    const mapped = getFieldErrors(source)
     const names = Object.keys(mapped)
     for (const [name, message] of Object.entries(mapped)) {
       form.setError(name as FieldPath<ClientFormValues>, { type: 'server', message })
@@ -128,7 +130,7 @@ export function ClientForm({
     if (!first) return
     form.setFocus(first as FieldPath<ClientFormValues>)
     document.getElementById(first)?.scrollIntoView?.({ block: 'center' })
-  }, [error, form])
+  }, [error, check.error, check.isError, form])
 
   function dismissField(name: FieldPath<ClientFormValues>) {
     form.clearErrors(name)
@@ -163,11 +165,14 @@ export function ClientForm({
     >
       {showBanner ? (
         <Alert>
-          {forbidden
+            {forbidden
             ? 'No tienes permiso para guardar este cliente.'
             : timedOut
               ? UNCONFIRMED_MUTATION_MESSAGE
-              : getApiErrorMessage(error, 'No se pudo guardar el cliente.')}
+              : getApiErrorMessage(
+                  error ?? check.error,
+                  'No se pudo guardar el cliente.',
+                )}
         </Alert>
       ) : null}
 
@@ -194,7 +199,10 @@ export function ClientForm({
               autoComplete="off"
               error={fieldError('document')}
               {...form.register('document', {
-                onChange: () => dismissField('document'),
+                onChange: () => {
+                  dismissField('document')
+                  check.reset()
+                },
                 onBlur: () => {
                   const document = form.getValues('document').trim()
                   const docType = form.getValues('doc_type')

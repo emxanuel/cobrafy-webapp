@@ -181,22 +181,10 @@ export const CBF_215_PASSPORT_INVALID = {
   message: 'Pasaporte no válido. Usa de 6 a 20 letras o números.',
 } as const
 
-export const CBF_215_RNC_INVALID = {
-  field: 'document',
-  code: 'value_error',
-  message: 'RNC no válido. Revisa los 9 dígitos.',
-} as const
-
 export const CBF_215_DOCUMENT_EXISTS = {
   field: 'document',
   code: 'CLIENT_DOCUMENT_EXISTS',
   message: 'Ya hay un cliente con este documento.',
-} as const
-
-export const CBF_215_GUARANTOR_DOCUMENT_DUPLICATE = {
-  field: 'guarantors.0.document',
-  code: 'DOCUMENT_DUPLICATE',
-  message: 'Este documento ya está en otro garante o es el del cliente.',
 } as const
 
 export const pendingInvite: InvitationRead = {

@@ -4,6 +4,7 @@ import {
   toContactCreate,
   toContactPatch,
 } from '@/features/clients/lib/contact-patch'
+import { remapContactDocumentError } from '@/features/clients/lib/document-field-errors'
 import {
   persistContactsSaveNotice,
   type ContactsSaveNotice,
@@ -175,12 +176,20 @@ export async function saveContactsDiff(
   const applied: FailedContact[] = []
   let stoppedOnUnauthorized = false
 
-  async function run(op: () => Promise<unknown>, row: FailedContact): Promise<'stop' | 'continue'> {
+  async function run(
+    op: () => Promise<unknown>,
+    row: FailedContact,
+    formIndex?: number,
+  ): Promise<'stop' | 'continue'> {
     try {
       await op()
       applied.push(row)
       return 'continue'
     } catch (error) {
+      if (formIndex !== undefined) {
+        const remapped = remapContactDocumentError(error, formIndex)
+        if (remapped) throw remapped
+      }
       failed.push(row)
       if (isUnauthorized(error)) {
         stoppedOnUnauthorized = true
@@ -200,8 +209,8 @@ export async function saveContactsDiff(
     if (outcome === 'stop') return { failed, applied, stoppedOnUnauthorized }
   }
 
-  const toCreate: ContactDraft[] = []
-  for (const item of next) {
+  const toCreate: Array<{ item: ContactDraft; index: number }> = []
+  for (const [index, item] of next.entries()) {
     const label = item.name.trim() || 'contacto'
     if (item.id && !prevById.has(item.id)) {
       failed.push({ name: label, op: 'edit' })
@@ -209,22 +218,24 @@ export async function saveContactsDiff(
     }
     const existing = item.id ? prevById.get(item.id) : undefined
     if (!existing) {
-      toCreate.push(item)
+      toCreate.push({ item, index })
       continue
     }
     if (contactUnchanged(existing, item)) continue
     const outcome = await run(
       () => updateContact(clientId, existing.id, toContactPatch(existing, item)),
       { name: label, op: 'edit' },
+      index,
     )
     if (outcome === 'stop') return { failed, applied, stoppedOnUnauthorized }
   }
 
-  for (const item of toCreate) {
+  for (const { item, index } of toCreate) {
     const label = item.name.trim() || 'contacto'
     const outcome = await run(
       () => createContact(clientId, toContactCreate(item)),
       { name: label, op: 'add' },
+      index,
     )
     if (outcome === 'stop') return { failed, applied, stoppedOnUnauthorized }
   }
