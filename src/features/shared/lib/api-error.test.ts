@@ -324,7 +324,7 @@ const BACKEND_A_SPANISH_MESSAGES = [
   'Debe tener como máximo 500 caracteres',
   'Debe ser un número entero',
   'Debe ser verdadero o falso',
-  'Debe ser un UUID',
+  'Identificador inválido',
   'Valor no permitido',
   'Fecha inválida (usa AAAA-MM-DD)',
   'Fecha y hora inválidas',
@@ -333,7 +333,7 @@ const BACKEND_A_SPANISH_MESSAGES = [
   'Debe ser mayor que 0',
   'Debe ser menor que 100',
   'Debe ser una lista',
-  'Debe tener al menos 1 elementos',
+  'Debe tener al menos 1 elemento',
   'Debe tener como máximo 50 elementos',
   'El cuerpo debe ser un objeto',
   'El cuerpo no es un JSON válido',
@@ -364,28 +364,57 @@ describe('contrato 210-A {field, code, message}', () => {
   it('un item con field null va al mensaje, no a un campo', () => {
     const error = toApiError(
       axiosError(422, {
-        detail: [{ field: null, code: 'AMOUNT_OVER_MAX', message: 'El monto supera el máximo' }],
+        detail: [{ field: null, code: 'value_error', message: 'El monto supera el máximo' }],
       }),
     )
     expect(error.fieldErrors).toEqual({})
     expect(error.message).toBe('El monto supera el máximo')
-    expect(error.code).toBe('AMOUNT_OVER_MAX')
+    expect(error.code).toBe('value_error')
   })
 
-  it('acepta Idempotency-Key como field', () => {
+  it('un 422 de bitácora llena fieldErrors.from y fieldErrors.to', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          { field: 'from', code: 'value_error', message: 'from y to deben incluir zona horaria' },
+          { field: 'to', code: 'value_error', message: 'from y to deben incluir zona horaria' },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.from).toBe('from y to deben incluir zona horaria')
+    expect(error.fieldErrors.to).toBe('from y to deben incluir zona horaria')
+    expect(error.message).toBe('from y to deben incluir zona horaria')
+    expect(error.code).toBe('value_error')
+  })
+
+  it('acepta Idempotency-Key como field con value_error', () => {
     const error = toApiError(
       axiosError(422, {
         detail: [
           {
             field: 'Idempotency-Key',
-            code: 'uuid_parsing',
-            message: 'Idempotency-Key debe ser un UUID',
+            code: 'value_error',
+            message: 'Idempotency-Key: identificador inválido',
           },
         ],
       }),
     )
-    expect(error.fieldErrors['Idempotency-Key']).toBe('Idempotency-Key debe ser un UUID')
+    expect(error.fieldErrors['Idempotency-Key']).toBe('Idempotency-Key: identificador inválido')
+    expect(error.code).toBe('value_error')
+    expect(error.message).toBe('Idempotency-Key: identificador inválido')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+  })
+
+  it('un UUID inválido en el body usa uuid_parsing e Identificador inválido', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: 'client_id', code: 'uuid_parsing', message: 'Identificador inválido' }],
+      }),
+    )
+    expect(error.fieldErrors.client_id).toBe('Identificador inválido')
     expect(error.code).toBe('uuid_parsing')
+    expect(error.message).toBe('Identificador inválido')
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
   })
 
   it('lee los 6 códigos 409 nuevos con el mensaje del backend', () => {
@@ -660,10 +689,28 @@ describe('contrato 210-A {field, code, message}', () => {
     },
   )
 
+  it.each([
+    'Idempotency-Key: identificador inválido',
+    'client_id: identificador inválido',
+  ] as const)('"%s" se muestra tal cual (prefijo con : recortado, resto español)', (message) => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: null, code: 'value_error', message }],
+      }),
+    )
+    expect(error.message).toBe(message)
+    expect(error.message).not.toBe(GENERIC_MESSAGE)
+  })
+
   it('LEADING_IDENTIFIER solo ancla al inicio (B5)', () => {
     expect(LEADING_IDENTIFIER.test('client_id is required')).toBe(true)
     expect(LEADING_IDENTIFIER.test('value_error')).toBe(true)
-    expect(LEADING_IDENTIFIER.test('note: client_id is required')).toBe(false)
+    expect(LEADING_IDENTIFIER.test('Idempotency-Key: identificador inválido')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('client_id: identificador inválido')).toBe(true)
+    expect(LEADING_IDENTIFIER.test('see value_error')).toBe(false)
+    expect(LEADING_IDENTIFIER.test('see client_id is required')).toBe(false)
+    expect(LEADING_IDENTIFIER.test('see Idempotency-Key: identificador inválido')).toBe(false)
+    expect(LEADING_IDENTIFIER.test('see client_id: identificador inválido')).toBe(false)
     expect(LEADING_IDENTIFIER.test('anchor_date must not be in the future')).toBe(true)
     expect(LEADING_IDENTIFIER.test('see anchor_date must not be in the future')).toBe(false)
   })
@@ -677,7 +724,13 @@ describe('contrato 210-A {field, code, message}', () => {
     ['from y to deben incluir zona horaria', 'no'],
     ['From y to deben incluir zona horaria', 'no'],
     ['anchor_date no puede ser posterior a hoy', 'no'],
+    ['anchor_date y anchor_offset van juntos', 'no'],
     ['client_id debe ser un UUID', 'no'],
+    ['Identificador inválido', 'no'],
+    ['Idempotency-Key: identificador inválido', 'no'],
+    ['client_id: identificador inválido', 'no'],
+    ['Idempotency-Key: must be a UUID', 'sí'],
+    ['client_id: invalid uuid', 'sí'],
   ] as const)('el detalle con identificador "%s" %s cae en GENERIC_MESSAGE', (message, falls) => {
     const error = toApiError(
       axiosError(422, {

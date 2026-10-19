@@ -613,12 +613,12 @@ export const handlers = [
     }
     if (!body.name || !body.name.trim()) {
       return contractError(422, [
-        { field: null, code: 'value_error', message: 'El nombre es obligatorio' },
+        { field: 'name', code: 'value_error', message: 'El nombre es obligatorio' },
       ])
     }
     if (!body.password) {
       return contractError(422, [
-        { field: null, code: 'value_error', message: 'La contraseña es obligatoria' },
+        { field: 'password', code: 'value_error', message: 'La contraseña es obligatoria' },
       ])
     }
     return HttpResponse.json({

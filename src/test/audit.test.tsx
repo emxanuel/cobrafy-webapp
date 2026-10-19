@@ -185,7 +185,8 @@ describe('bitácora', () => {
         HttpResponse.json(
           {
             detail: [
-              { field: null, code: 'value_error', message: 'from y to deben incluir zona horaria' },
+              { field: 'from', code: 'value_error', message: 'from y to deben incluir zona horaria' },
+              { field: 'to', code: 'value_error', message: 'from y to deben incluir zona horaria' },
             ],
           },
           { status: 422 },

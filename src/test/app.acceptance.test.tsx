@@ -254,6 +254,33 @@ describe('CBF-110 aceptación', () => {
     expect(screen.queryByText('001-1234567-8')).not.toBeInTheDocument()
   })
 
+  it('un 422 de nombre al aceptar invitación queda en el campo Nombre', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.post('*/invitations/accept', () =>
+        HttpResponse.json(
+          {
+            detail: [
+              { field: 'name', code: 'value_error', message: 'El nombre es obligatorio' },
+            ],
+          },
+          { status: 422 },
+        ),
+      ),
+    )
+    window.history.pushState({}, '', '/invitar/inv-ok')
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'Únete al negocio' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Nombre'), 'Nora Nueva')
+    await user.type(screen.getByLabelText('Tu contraseña'), 'clavesegura')
+    await user.type(screen.getByLabelText('Repite la contraseña'), 'clavesegura')
+    await user.click(screen.getByRole('button', { name: 'Aceptar invitación' }))
+    await waitFor(() => {
+      expect(document.getElementById('name-error')).toHaveTextContent('El nombre es obligatorio')
+    })
+    expect(screen.getByRole('heading', { name: 'Únete al negocio' })).toBeInTheDocument()
+  })
+
   it('acepta una invitación y deja que el invitado ponga su contraseña', async () => {
     const user = userEvent.setup()
     window.history.pushState({}, '', '/invitar/inv-ok')
