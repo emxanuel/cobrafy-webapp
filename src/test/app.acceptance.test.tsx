@@ -185,6 +185,38 @@ describe('CBF-110 aceptación', () => {
           client_id: null,
         }),
       ),
+      http.post('*/clients', async ({ request }) => {
+        const payload = (await request.json()) as { document?: string }
+        if (payload.document === 'malo') {
+          return HttpResponse.json(
+            {
+              detail: [
+                {
+                  field: null,
+                  code: 'value_error',
+                  message: 'Cédula no válida. Revisa los 11 dígitos.',
+                },
+              ],
+            },
+            { status: 422 },
+          )
+        }
+        if (payload.document === 'duplicado') {
+          return HttpResponse.json(
+            {
+              detail: [
+                {
+                  field: null,
+                  code: 'CLIENT_DOCUMENT_EXISTS',
+                  message: 'Ya hay un cliente con este documento.',
+                },
+              ],
+            },
+            { status: 409 },
+          )
+        }
+        return HttpResponse.json({ detail: 'no esperado' }, { status: 500 })
+      }),
     )
     const user = userEvent.setup()
     renderApp()

@@ -182,6 +182,28 @@ export function seedClient(client: ClientDetail) {
   clients.set(client.id, client)
 }
 
+export function persistCreatedContact(clientId: string, payload: ContactCreate) {
+  const current = clients.get(clientId) ?? clientFixture({ id: clientId })
+  contactCount += 1
+  const contact = {
+    id: `ct-${contactCount}`,
+    client_id: clientId,
+    type: payload.type,
+    name: payload.name,
+    phone: payload.phone,
+    relationship: payload.relationship,
+    address: payload.address ?? null,
+    doc_type: payload.doc_type ?? null,
+    document: payload.document ?? null,
+    has_document: Boolean(payload.document),
+    document_available: true,
+    is_active: true,
+  }
+  current.contacts = [...current.contacts, contact]
+  clients.set(clientId, current)
+  return contact
+}
+
 export function seedSale(sale: Record<string, unknown>) {
   sales.set(String(sale.id), sale)
 }
@@ -818,24 +840,7 @@ export const handlers = [
         },
       ])
     }
-    contactCount += 1
-    const contact = {
-      id: `ct-${contactCount}`,
-      client_id: id,
-      type: payload.type,
-      name: payload.name,
-      phone: payload.phone,
-      relationship: payload.relationship,
-      address: payload.address ?? null,
-      doc_type: payload.doc_type ?? null,
-      document: payload.document ?? null,
-      has_document: Boolean(payload.document),
-      document_available: true,
-      is_active: true,
-    }
-    current.contacts = [...current.contacts, contact]
-    clients.set(id, current)
-    return HttpResponse.json(contact, { status: 201 })
+    return HttpResponse.json(persistCreatedContact(id, payload), { status: 201 })
   }),
 
   http.delete('*/clients/:id/contacts/:contactId', ({ request, params }) => {
@@ -1026,7 +1031,7 @@ export const handlers = [
     if (payload.document === 'malo') {
       return contractError(422, [
         {
-          field: null,
+          field: 'document',
           code: 'value_error',
           message: 'Cédula no válida. Revisa los 11 dígitos.',
         },
@@ -1035,13 +1040,14 @@ export const handlers = [
     if (payload.document === '001-0000000-0' || payload.document === 'duplicado') {
       return contractError(409, [
         {
-          field: null,
+          field: 'document',
           code: 'CLIENT_DOCUMENT_EXISTS',
           message: 'Ya hay un cliente con este documento.',
         },
       ])
     }
     createdCount += 1
+    clientWrites.push({ method: request.method, url: request.url, body: payload })
     const saved = clientFixture({
       id: `cli-new-${createdCount}`,
       name: payload.name,

@@ -4,13 +4,16 @@ import {
   toContactCreate,
   toContactPatch,
 } from '@/features/clients/lib/contact-patch'
-import { remapContactDocumentError } from '@/features/clients/lib/document-field-errors'
+import {
+  PartialClientSaveError,
+  remapContactDocumentError,
+} from '@/features/clients/lib/document-field-errors'
 import {
   persistContactsSaveNotice,
   type ContactsSaveNotice,
   type FailedContact,
 } from '@/features/clients/lib/failed-contacts-notice'
-import { isApiError } from '@/features/shared/lib/api-error'
+import { isApiError, type ApiError } from '@/features/shared/lib/api-error'
 import { api } from '@/features/shared/services/client'
 import type {
   ClientCheckRead,
@@ -164,40 +167,54 @@ function isUnauthorized(error: unknown) {
   return isApiError(error) && error.status === 401
 }
 
+export type SaveContactsDiffResult = ContactsSaveNotice & {
+  createdByIndex: Record<number, ContactRead>
+  documentError: ApiError | null
+}
+
 export async function saveContactsDiff(
   clientId: string,
   previous: ContactRead[],
   next: ContactDraft[],
-): Promise<ContactsSaveNotice> {
+): Promise<SaveContactsDiffResult> {
   const prevActive = previous.filter((item) => item.is_active)
   const prevById = new Map(prevActive.map((item) => [item.id, item]))
   const keptIds = new Set(next.map((item) => item.id).filter((id): id is string => Boolean(id)))
   const failed: FailedContact[] = []
   const applied: FailedContact[] = []
+  const createdByIndex: Record<number, ContactRead> = {}
+  let documentError: ApiError | null = null
   let stoppedOnUnauthorized = false
 
-  async function run(
-    op: () => Promise<unknown>,
+  async function run<T>(
+    op: () => Promise<T>,
     row: FailedContact,
     formIndex?: number,
-  ): Promise<'stop' | 'continue'> {
+  ): Promise<{ status: 'stop' | 'continue'; value?: T }> {
     try {
-      await op()
+      const value = await op()
       applied.push(row)
-      return 'continue'
+      return { status: 'continue', value }
     } catch (error) {
       if (formIndex !== undefined) {
         const remapped = remapContactDocumentError(error, formIndex)
-        if (remapped) throw remapped
+        if (remapped) {
+          documentError = remapped
+          return { status: 'stop' }
+        }
       }
       failed.push(row)
       if (isUnauthorized(error)) {
         stoppedOnUnauthorized = true
         persistContactsSaveNotice({ failed, applied, stoppedOnUnauthorized })
-        return 'stop'
+        return { status: 'stop' }
       }
-      return 'continue'
+      return { status: 'continue' }
     }
+  }
+
+  function snapshot(): SaveContactsDiffResult {
+    return { failed, applied, stoppedOnUnauthorized, createdByIndex, documentError }
   }
 
   for (const item of prevActive) {
@@ -206,7 +223,7 @@ export async function saveContactsDiff(
       () => deleteContact(clientId, item.id),
       { name: item.name, op: 'remove' },
     )
-    if (outcome === 'stop') return { failed, applied, stoppedOnUnauthorized }
+    if (outcome.status === 'stop') return snapshot()
   }
 
   const toCreate: Array<{ item: ContactDraft; index: number }> = []
@@ -227,7 +244,7 @@ export async function saveContactsDiff(
       { name: label, op: 'edit' },
       index,
     )
-    if (outcome === 'stop') return { failed, applied, stoppedOnUnauthorized }
+    if (outcome.status === 'stop') return snapshot()
   }
 
   for (const { item, index } of toCreate) {
@@ -237,10 +254,11 @@ export async function saveContactsDiff(
       { name: label, op: 'add' },
       index,
     )
-    if (outcome === 'stop') return { failed, applied, stoppedOnUnauthorized }
+    if (outcome.value) createdByIndex[index] = outcome.value
+    if (outcome.status === 'stop') return snapshot()
   }
 
-  return { failed, applied, stoppedOnUnauthorized }
+  return snapshot()
 }
 
 async function reloadClient(created: ClientRead): Promise<ClientDetail> {
@@ -251,14 +269,23 @@ async function reloadClient(created: ClientRead): Promise<ClientDetail> {
   }
 }
 
+function throwIfDocumentError(
+  diff: SaveContactsDiffResult,
+  savedClient: ClientRead,
+) {
+  if (!diff.documentError) return
+  throw new PartialClientSaveError(diff.documentError, savedClient, diff.createdByIndex)
+}
+
 export async function createClientWithContacts(
   payload: ClientCreate,
   contacts: ContactDraft[],
 ): Promise<CreateClientWithContactsResult> {
   const created = await createClient(payload)
-  const notice = await saveContactsDiff(created.id, [], contacts)
+  const diff = await saveContactsDiff(created.id, [], contacts)
+  throwIfDocumentError(diff, created)
   const client = await reloadClient(created)
-  return toCreateResult(client, notice)
+  return toCreateResult(client, diff)
 }
 
 export async function updateClientWithContacts(
@@ -273,7 +300,8 @@ export async function updateClientWithContacts(
     Object.keys(patch).length > 0
       ? await updateClient(clientId, patch)
       : previousClient
-  const notice = await saveContactsDiff(clientId, previousContacts, contacts)
+  const diff = await saveContactsDiff(clientId, previousContacts, contacts)
+  throwIfDocumentError(diff, saved)
   const client = await reloadClient(saved)
-  return toCreateResult(client, notice)
+  return toCreateResult(client, diff)
 }

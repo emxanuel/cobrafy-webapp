@@ -25,7 +25,7 @@ export function ClientFormPage() {
   const navigate = useNavigate()
   const existing = useClient(clientId)
   const create = useCreateClientMutation()
-  const update = useUpdateClientMutation(clientId ?? '')
+  const update = useUpdateClientMutation()
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
   const role = activeMembership(memberships, activeBusinessId)?.role ?? null
@@ -61,34 +61,44 @@ export function ClientFormPage() {
         error={error}
         submitLabel={isEdit ? 'Guardar cambios' : 'Guardar cliente'}
         onSubmit={(payload) => {
+          const go = (result: { client: { id: string } }) =>
+            navigate(
+              fromVenta
+                ? `/clientes/${result.client.id}/ventas/nueva`
+                : `/clientes/${result.client.id}`,
+            )
           if (isEdit && clientId) {
             if (!existing.data) return
             update.mutate(
               {
+                clientId,
                 client: payload.client,
                 contacts: payload.contacts,
-                previousContacts: existing.data.contacts,
-                previousClient: existing.data,
+                previousContacts: payload.resume?.previousContacts ?? existing.data.contacts,
+                previousClient: payload.resume?.client ?? existing.data,
               },
-              {
-                onSuccess: (result) =>
-                  navigate(
-                    fromVenta
-                      ? `/clientes/${result.client.id}/ventas/nueva`
-                      : `/clientes/${result.client.id}`,
-                  ),
-              },
+              { onSuccess: go },
             )
             return
           }
-          create.mutate(payload, {
-            onSuccess: (result) =>
-              navigate(
-                fromVenta
-                  ? `/clientes/${result.client.id}/ventas/nueva`
-                  : `/clientes/${result.client.id}`,
-              ),
-          })
+          if (payload.resume) {
+            create.reset()
+            update.mutate(
+              {
+                clientId: payload.resume.client.id,
+                client: payload.client,
+                contacts: payload.contacts,
+                previousContacts: payload.resume.previousContacts,
+                previousClient: payload.resume.client,
+              },
+              { onSuccess: go },
+            )
+            return
+          }
+          create.mutate(
+            { client: payload.client, contacts: payload.contacts },
+            { onSuccess: go },
+          )
         }}
       />
     </>

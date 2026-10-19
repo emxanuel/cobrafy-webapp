@@ -10,6 +10,7 @@ import { toContactPatch } from '@/features/clients/lib/contact-patch'
 import {
   CONTACT_EDITOR_FIELDS,
   hasUnrenderedFieldError,
+  unrenderedFieldMessages,
 } from '@/features/clients/lib/document-field-errors'
 import { contactEditSchema, type ContactEditValues } from '@/features/clients/schemas'
 import type { ContactRead } from '@/features/clients/services/types'
@@ -42,10 +43,12 @@ export function ContactCard({
     },
   })
   const apiFields = update.isError ? getFieldErrors(update.error) : {}
+  const isRenderedField = (field: string) => CONTACT_EDITOR_FIELDS.has(field)
+  const bannerUnrendered = unrenderedFieldMessages(apiFields, isRenderedField)
   const showBanner =
     update.isError &&
     (Object.keys(apiFields).length === 0 ||
-      hasUnrenderedFieldError(apiFields, (field) => CONTACT_EDITOR_FIELDS.has(field)))
+      hasUnrenderedFieldError(apiFields, isRenderedField))
   const documentInputId = `${contact.id}-document`
 
   useEffect(() => {
@@ -109,7 +112,13 @@ export function ContactCard({
           )
         })}
       >
-        {showBanner ? <Alert>{getApiErrorMessage(update.error)}</Alert> : null}
+        {showBanner ? (
+          <Alert>
+            {bannerUnrendered.length
+              ? bannerUnrendered.join(' ')
+              : getApiErrorMessage(update.error)}
+          </Alert>
+        ) : null}
         <Field
           id={`${contact.id}-name`}
           label="Nombre"

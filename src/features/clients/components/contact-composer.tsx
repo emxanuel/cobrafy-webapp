@@ -6,6 +6,7 @@ import { useCreateContactMutation } from '@/features/clients/hooks/use-clients-q
 import {
   CONTACT_EDITOR_FIELDS,
   hasUnrenderedFieldError,
+  unrenderedFieldMessages,
 } from '@/features/clients/lib/document-field-errors'
 import { contactFormSchema } from '@/features/clients/schemas'
 import type { ContactType } from '@/features/clients/services/types'
@@ -41,10 +42,12 @@ export function ContactComposer({ clientId }: { clientId: string }) {
     },
   })
   const apiFields = create.isError ? getFieldErrors(create.error) : {}
+  const isRenderedField = (field: string) => CONTACT_EDITOR_FIELDS.has(field)
+  const bannerUnrendered = unrenderedFieldMessages(apiFields, isRenderedField)
   const showBanner =
     create.isError &&
     (Object.keys(apiFields).length === 0 ||
-      hasUnrenderedFieldError(apiFields, (field) => CONTACT_EDITOR_FIELDS.has(field)))
+      hasUnrenderedFieldError(apiFields, isRenderedField))
 
   useEffect(() => {
     if (!create.error) return
@@ -116,7 +119,13 @@ export function ContactComposer({ clientId }: { clientId: string }) {
         ),
       )}
     >
-      {showBanner ? <Alert>{getApiErrorMessage(create.error)}</Alert> : null}
+      {showBanner ? (
+        <Alert>
+          {bannerUnrendered.length
+            ? bannerUnrendered.join(' ')
+            : getApiErrorMessage(create.error)}
+        </Alert>
+      ) : null}
       <Field id="new-contact-name" label="Nombre" error={form.formState.errors.name?.message ?? apiFields.name}>
         <TextInput id="new-contact-name" {...form.register('name')} />
       </Field>

@@ -7,6 +7,7 @@ import {
   hasUnrenderedFieldError,
   isClientFormField,
   remapContactDocumentError,
+  unrenderedFieldMessages,
 } from './document-field-errors'
 
 describe('document field errors (CBF-215)', () => {
@@ -57,6 +58,12 @@ describe('document field errors (CBF-215)', () => {
     expect(hasUnrenderedFieldError({ document: 'x' }, (field) => isClientFormField(field, 0))).toBe(
       false,
     )
+    expect(
+      unrenderedFieldMessages(
+        { document: 'Cédula no válida. Revisa los 11 dígitos.', foo: 'Revisa este valor.' },
+        (field) => isClientFormField(field, 0),
+      ),
+    ).toEqual(['Revisa este valor.'])
   })
 
   it('doc_type, address y type no están en el set del composer/card', () => {

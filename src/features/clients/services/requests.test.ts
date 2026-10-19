@@ -5,6 +5,7 @@ import { useBusinessStore } from '@/features/business/stores/business-store'
 import { getFieldErrors, isApiError } from '@/features/shared/lib/api-error'
 import { http, HttpResponse } from 'msw'
 
+import { isPartialClientSaveError } from '@/features/clients/lib/document-field-errors'
 import {
   authResponse,
   businesses,
@@ -12,8 +13,9 @@ import {
   membership,
   users,
 } from '@/test/fixtures'
-import { clientWrites, contactWrites, searchRequests } from '@/test/handlers'
+import { clientWrites, contactWrites, persistCreatedContact, searchRequests } from '@/test/handlers'
 import { server } from '@/test/server'
+import type { ContactCreate } from './types'
 import {
   createClient,
   createClientWithContacts,
@@ -37,7 +39,7 @@ describe('client requests', () => {
     useBusinessStore.getState().setActiveBusinessId(businesses.norte.id)
   })
 
-  it('expone el 422 de cédula en el mensaje (field null → banner)', async () => {
+  it('expone el 422 de cédula en el campo document', async () => {
     try {
       await createClient({
         name: 'Ana Pérez',
@@ -49,12 +51,49 @@ describe('client requests', () => {
       throw new Error('debía fallar')
     } catch (error) {
       expect(isApiError(error)).toBe(true)
-      expect(getFieldErrors(error)).toEqual({})
+      expect(getFieldErrors(error)).toEqual({
+        document: 'Cédula no válida. Revisa los 11 dígitos.',
+      })
       expect((error as Error).message).toBe('Cédula no válida. Revisa los 11 dígitos.')
     }
   })
 
+  it('el 409 de documento duplicado va al campo document', async () => {
+    try {
+      await createClient({
+        name: 'Ana Pérez',
+        doc_type: 'cedula',
+        document: 'duplicado',
+        phone: '8095551111',
+        address: 'Calle 1',
+      })
+      throw new Error('debía fallar')
+    } catch (error) {
+      expect(isApiError(error)).toBe(true)
+      expect(getFieldErrors(error)).toEqual({
+        document: 'Ya hay un cliente con este documento.',
+      })
+      expect((error as Error).message).toBe('Ya hay un cliente con este documento.')
+    }
+  })
+
   it('formato viejo: el 409 de documento duplicado con field null no llena document', async () => {
+    server.use(
+      http.post('*/clients', () =>
+        HttpResponse.json(
+          {
+            detail: [
+              {
+                field: null,
+                code: 'CLIENT_DOCUMENT_EXISTS',
+                message: 'Ya hay un cliente con este documento.',
+              },
+            ],
+          },
+          { status: 409 },
+        ),
+      ),
+    )
     try {
       await createClient({
         name: 'Ana Pérez',
@@ -167,8 +206,136 @@ describe('client requests', () => {
       throw new Error('debía fallar')
     } catch (error) {
       expect(isApiError(error)).toBe(true)
+      expect(isPartialClientSaveError(error)).toBe(true)
       expect(getFieldErrors(error)['contacts.1.document']).toBe(CBF_215_CEDULA_INVALID.message)
       expect(getFieldErrors(error).document).toBeUndefined()
+      if (isPartialClientSaveError(error)) {
+        expect(error.savedClient.id).toMatch(/^cli-new-/)
+        expect(error.createdByIndex[0]?.name).toBe('Garante 1')
+        expect(error.createdByIndex[1]).toBeUndefined()
+      }
+    }
+  })
+
+  it('el reintento no hace un segundo POST /clients y guarda el garante corregido', async () => {
+    const contactPosts: Array<{ document?: string | null; name?: string }> = []
+    server.use(
+      http.post('*/clients/:id/contacts', async ({ request, params }) => {
+        const payload = (await request.json()) as ContactCreate
+        contactPosts.push({ document: payload.document, name: payload.name })
+        if (payload.document === '001-0000001-1') {
+          return HttpResponse.json({ detail: [CBF_215_CEDULA_INVALID] }, { status: 422 })
+        }
+        return HttpResponse.json(persistCreatedContact(String(params.id), payload), {
+          status: 201,
+        })
+      }),
+    )
+    const payload = {
+      name: 'Ana Pérez',
+      doc_type: 'cedula' as const,
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    }
+    const contacts = [
+      {
+        type: 'garante' as const,
+        name: 'Pedro Gómez',
+        phone: '8095552222',
+        relationship: 'Hermano',
+        document: '001-0000001-1',
+      },
+    ]
+    try {
+      await createClientWithContacts(payload, contacts)
+      throw new Error('debía fallar')
+    } catch (error) {
+      expect(isPartialClientSaveError(error)).toBe(true)
+      if (!isPartialClientSaveError(error)) throw error
+      expect(clientWrites.filter((item) => item.method === 'POST')).toHaveLength(1)
+      expect(contactPosts).toHaveLength(1)
+      const retry = await updateClientWithContacts(
+        error.savedClient.id,
+        payload,
+        Object.values(error.createdByIndex),
+        [{ ...contacts[0], document: '001-7654321-0' }],
+        error.savedClient,
+      )
+      expect(clientWrites.filter((item) => item.method === 'POST')).toHaveLength(1)
+      expect(contactPosts).toHaveLength(2)
+      expect(contactPosts[1]?.document).toBe('001-7654321-0')
+      expect(retry.failedContacts).toBe(0)
+      expect(retry.client.contacts).toHaveLength(1)
+    }
+  })
+
+  it('el reintento al editar no vuelve a POST el contacto ya creado', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    const contactPosts: Array<{ document?: string | null; name?: string }> = []
+    server.use(
+      http.post('*/clients/:id/contacts', async ({ request, params }) => {
+        const payload = (await request.json()) as ContactCreate
+        contactPosts.push({ document: payload.document, name: payload.name })
+        if (payload.document === '001-0000001-1') {
+          return HttpResponse.json({ detail: [CBF_215_CEDULA_INVALID] }, { status: 422 })
+        }
+        return HttpResponse.json(persistCreatedContact(String(params.id), payload), {
+          status: 201,
+        })
+      }),
+    )
+    const payload = {
+      name: created.name,
+      doc_type: created.doc_type,
+      document: created.document ?? '001-1234567-8',
+      phone: created.phone,
+      address: created.address,
+    }
+    const contacts = [
+      {
+        type: 'garante' as const,
+        name: 'Garante 1',
+        phone: '8095552222',
+        relationship: 'Hermano',
+        document: '001-2222222-2',
+      },
+      {
+        type: 'garante' as const,
+        name: 'Garante 2',
+        phone: '8095553333',
+        relationship: 'Primo',
+        document: '001-0000001-1',
+      },
+    ]
+    try {
+      await updateClientWithContacts(created.id, payload, [], contacts, created)
+      throw new Error('debía fallar')
+    } catch (error) {
+      expect(isPartialClientSaveError(error)).toBe(true)
+      if (!isPartialClientSaveError(error)) throw error
+      expect(contactPosts.map((item) => item.name)).toEqual(['Garante 1', 'Garante 2'])
+      const retry = await updateClientWithContacts(
+        created.id,
+        payload,
+        Object.values(error.createdByIndex),
+        [
+          { ...contacts[0], id: error.createdByIndex[0]?.id },
+          { ...contacts[1], document: '001-3333333-3' },
+        ],
+        error.savedClient,
+      )
+      expect(contactPosts.map((item) => item.name)).toEqual(['Garante 1', 'Garante 2', 'Garante 2'])
+      expect(contactPosts.filter((item) => item.name === 'Garante 1')).toHaveLength(1)
+      expect(contactPosts[2]?.document).toBe('001-3333333-3')
+      expect(retry.failedContacts).toBe(0)
+      expect(retry.client.contacts.map((item) => item.name)).toEqual(['Garante 1', 'Garante 2'])
     }
   })
 

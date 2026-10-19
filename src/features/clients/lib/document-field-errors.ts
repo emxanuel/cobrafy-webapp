@@ -1,4 +1,5 @@
 import { ApiError, isApiError } from '@/features/shared/lib/api-error'
+import type { ClientRead, ContactRead } from '@/features/clients/services/types'
 
 export const CLIENT_FORM_FIELDS = new Set([
   'name',
@@ -26,7 +27,37 @@ export function hasUnrenderedFieldError(
   fieldErrors: Record<string, string>,
   isRendered: (field: string) => boolean,
 ): boolean {
-  return Object.keys(fieldErrors).some((field) => !isRendered(field))
+  return unrenderedFieldMessages(fieldErrors, isRendered).length > 0
+}
+
+export function unrenderedFieldMessages(
+  fieldErrors: Record<string, string>,
+  isRendered: (field: string) => boolean,
+): string[] {
+  return Object.entries(fieldErrors)
+    .filter(([field]) => !isRendered(field))
+    .map(([, message]) => message)
+}
+
+/** Client and some contacts already saved; retry must not POST them again. */
+export class PartialClientSaveError extends ApiError {
+  readonly savedClient: ClientRead
+  readonly createdByIndex: Record<number, ContactRead>
+
+  constructor(
+    cause: ApiError,
+    savedClient: ClientRead,
+    createdByIndex: Record<number, ContactRead>,
+  ) {
+    super(cause.message, cause.status, cause.fieldErrors, cause.code, cause.codes)
+    this.name = 'PartialClientSaveError'
+    this.savedClient = savedClient
+    this.createdByIndex = createdByIndex
+  }
+}
+
+export function isPartialClientSaveError(error: unknown): error is PartialClientSaveError {
+  return error instanceof PartialClientSaveError
 }
 
 /** Contacts POST/PATCH emit `field: 'document'`. Map it onto the row that made the call. */

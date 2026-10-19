@@ -5,6 +5,8 @@ import { useFieldArray, useForm, type FieldPath } from 'react-hook-form'
 import {
   hasUnrenderedFieldError,
   isClientFormField,
+  isPartialClientSaveError,
+  unrenderedFieldMessages,
 } from '@/features/clients/lib/document-field-errors'
 import {
   clientFormSchema,
@@ -15,7 +17,9 @@ import { useCheckClientMutation } from '@/features/clients/hooks/use-clients-que
 import type {
   ClientCreate,
   ClientDetail,
+  ClientRead,
   ContactDraft,
+  ContactRead,
 } from '@/features/clients/services/types'
 import type { MemberRead } from '@/features/members/services/types'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -36,9 +40,22 @@ import { UNCONFIRMED_MUTATION_MESSAGE } from '@/features/shared/services/client'
 export type ClientFormSubmit = {
   client: ClientCreate
   contacts: ContactDraft[]
+  resume?: {
+    client: ClientRead
+    previousContacts: ContactRead[]
+  }
 }
 
-function toSubmit(values: ClientFormValues): ClientFormSubmit {
+function mergeContacts(current: ContactRead[], incoming: ContactRead[]) {
+  const byId = new Map(current.map((item) => [item.id, item]))
+  for (const item of incoming) byId.set(item.id, item)
+  return [...byId.values()]
+}
+
+function toSubmit(
+  values: ClientFormValues,
+  savedByIndex: Record<number, ContactRead> = {},
+): ClientFormSubmit {
   return {
     client: {
       name: values.name,
@@ -49,8 +66,8 @@ function toSubmit(values: ClientFormValues): ClientFormSubmit {
       notes: values.notes || null,
       collector_membership_id: values.collector_membership_id || null,
     },
-    contacts: values.contacts.map((item) => ({
-      id: item.contact_id,
+    contacts: values.contacts.map((item, index) => ({
+      id: item.contact_id || savedByIndex[index]?.id,
       type: item.type,
       name: item.name,
       phone: item.phone,
@@ -109,9 +126,19 @@ export function ClientForm({
   const check = useCheckClientMutation()
   const [errorForDismiss, setErrorForDismiss] = useState(error)
   const [dismissedFields, setDismissedFields] = useState<Set<string>>(() => new Set())
+  const [resumeClient, setResumeClient] = useState<ClientRead | null>(() => client ?? null)
+  const [resumeContacts, setResumeContacts] = useState<ContactRead[]>(
+    () => client?.contacts.filter((item) => item.is_active) ?? [],
+  )
+  const [savedByIndex, setSavedByIndex] = useState<Record<number, ContactRead>>({})
   if (error !== errorForDismiss) {
     setErrorForDismiss(error)
     setDismissedFields(new Set())
+    if (isPartialClientSaveError(error)) {
+      setResumeClient(error.savedClient)
+      setResumeContacts((current) => mergeContacts(current, Object.values(error.createdByIndex)))
+      setSavedByIndex((current) => ({ ...current, ...error.createdByIndex }))
+    }
   }
   const saveFields = error ? getFieldErrors(error) : {}
   const checkFields = check.isError ? getFieldErrors(check.error) : {}
@@ -127,8 +154,20 @@ export function ClientForm({
     (!error &&
       check.isError &&
       (Object.keys(checkFields).length === 0 || checkHasUnrendered))
+  const bannerUnrendered = unrenderedFieldMessages(
+    error ? saveFields : checkFields,
+    isRenderedField,
+  )
 
   useEffect(() => {
+    if (isPartialClientSaveError(error)) {
+      for (const [index, saved] of Object.entries(error.createdByIndex)) {
+        form.setValue(
+          `contacts.${index}.contact_id` as FieldPath<ClientFormValues>,
+          saved.id,
+        )
+      }
+    }
     const source = error ?? (check.isError ? check.error : undefined)
     if (!source) return
     const mapped = getFieldErrors(source)
@@ -170,7 +209,14 @@ export function ClientForm({
   return (
     <form
       className="flex flex-col gap-6"
-      onSubmit={form.handleSubmit((values) => onSubmit(toSubmit(values)))}
+      onSubmit={form.handleSubmit((values) =>
+        onSubmit({
+          ...toSubmit(values, savedByIndex),
+          resume: resumeClient
+            ? { client: resumeClient, previousContacts: resumeContacts }
+            : undefined,
+        }),
+      )}
       noValidate
     >
       {showBanner ? (
@@ -179,10 +225,12 @@ export function ClientForm({
             ? 'No tienes permiso para guardar este cliente.'
             : timedOut
               ? UNCONFIRMED_MUTATION_MESSAGE
-              : getApiErrorMessage(
-                  error ?? check.error,
-                  'No se pudo guardar el cliente.',
-                )}
+              : bannerUnrendered.length
+                ? bannerUnrendered.join(' ')
+                : getApiErrorMessage(
+                    error ?? check.error,
+                    'No se pudo guardar el cliente.',
+                  )}
         </Alert>
       ) : null}
 
@@ -198,7 +246,15 @@ export function ClientForm({
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id="doc_type" label="Tipo de documento" error={fieldError('doc_type')}>
-            <SelectInput id="doc_type" {...form.register('doc_type')}>
+            <SelectInput
+              id="doc_type"
+              {...form.register('doc_type', {
+                onChange: () => {
+                  dismissField('document')
+                  check.reset()
+                },
+              })}
+            >
               <option value="cedula">Cédula</option>
               <option value="pasaporte">Pasaporte</option>
             </SelectInput>
@@ -272,6 +328,7 @@ export function ClientForm({
               variant="outline"
               onClick={() =>
                 contacts.append({
+                  contact_id: '',
                   type: 'referencia',
                   name: '',
                   phone: '',
@@ -288,6 +345,7 @@ export function ClientForm({
               variant="outline"
               onClick={() =>
                 contacts.append({
+                  contact_id: '',
                   type: 'garante',
                   name: '',
                   phone: '',
