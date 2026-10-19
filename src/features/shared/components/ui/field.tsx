@@ -1,3 +1,4 @@
+import { CircleAlert } from 'lucide-react'
 import type {
   InputHTMLAttributes,
   ReactNode,
@@ -28,7 +29,12 @@ export function Field({
       </label>
       {children}
       {error ? (
-        <p id={`${id}-error`} role="alert" className="text-danger text-sm">
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="text-danger flex items-start gap-1.5 text-sm"
+        >
+          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           {error}
         </p>
       ) : hint ? (

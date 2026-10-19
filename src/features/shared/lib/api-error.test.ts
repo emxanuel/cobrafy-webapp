@@ -1,7 +1,14 @@
 import axios from 'axios'
 import { describe, expect, it } from 'vitest'
 
-import { maxContactsMessage } from '@/test/fixtures'
+import {
+  CBF_215_CEDULA_INVALID,
+  CBF_215_DOCUMENT_EXISTS,
+  CBF_215_GUARANTOR_DOCUMENT_DUPLICATE,
+  CBF_215_PASSPORT_INVALID,
+  CBF_215_RNC_INVALID,
+  maxContactsMessage,
+} from '@/test/fixtures'
 
 import {
   ApiError,
@@ -816,4 +823,62 @@ describe('contrato 210-A {field, code, message}', () => {
       expect(error.fieldErrors).toEqual({})
     },
   )
+})
+
+describe('CBF-215 field de documento', () => {
+  it('un 422 con field document va al campo, no por el status', () => {
+    for (const item of [CBF_215_CEDULA_INVALID, CBF_215_PASSPORT_INVALID, CBF_215_RNC_INVALID]) {
+      const error = toApiError(axiosError(422, { detail: [item] }))
+      expect(error.status).toBe(422)
+      expect(error.code).toBe(item.code)
+      expect(error.fieldErrors.document).toBe(item.message)
+      expect(error.message).toBe(item.message)
+    }
+  })
+
+  it('un 422 con field guarantors.1.document va a esa clave', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [
+          CBF_215_CEDULA_INVALID,
+          {
+            field: 'guarantors.1.document',
+            code: 'value_error',
+            message: CBF_215_CEDULA_INVALID.message,
+          },
+        ],
+      }),
+    )
+    expect(error.fieldErrors.document).toBe(CBF_215_CEDULA_INVALID.message)
+    expect(error.fieldErrors['guarantors.1.document']).toBe(CBF_215_CEDULA_INVALID.message)
+  })
+
+  it('un 409 con field document usa CLIENT_DOCUMENT_EXISTS y el message del backend', () => {
+    const error = toApiError(axiosError(409, { detail: [CBF_215_DOCUMENT_EXISTS] }, '/clients'))
+    expect(error.status).toBe(409)
+    expect(error.code).toBe(CBF_215_DOCUMENT_EXISTS.code)
+    expect(error.fieldErrors.document).toBe(CBF_215_DOCUMENT_EXISTS.message)
+    expect(error.message).toBe(CBF_215_DOCUMENT_EXISTS.message)
+  })
+
+  it('un garante duplicado con field guarantors.0.document va a ese input', () => {
+    const error = toApiError(
+      axiosError(409, { detail: [CBF_215_GUARANTOR_DOCUMENT_DUPLICATE] }, '/clients'),
+    )
+    expect(error.code).toBe(CBF_215_GUARANTOR_DOCUMENT_DUPLICATE.code)
+    expect(error.fieldErrors['guarantors.0.document']).toBe(
+      CBF_215_GUARANTOR_DOCUMENT_DUPLICATE.message,
+    )
+    expect(error.fieldErrors.document).toBeUndefined()
+  })
+
+  it('un error de documento con field null sigue sin fieldErrors (banner)', () => {
+    const error = toApiError(
+      axiosError(422, {
+        detail: [{ field: null, code: 'value_error', message: 'Cédula inválida' }],
+      }),
+    )
+    expect(error.fieldErrors).toEqual({})
+    expect(error.message).toBe('Cédula inválida')
+  })
 })
