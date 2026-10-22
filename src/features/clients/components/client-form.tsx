@@ -59,17 +59,36 @@ function mergeContacts(current: ContactRead[], incoming: ContactRead[]) {
   return [...byId.values()]
 }
 
-function toSubmit(values: ClientFormValues): ClientFormSubmit {
+function toClientCreate(values: ClientFormValues): ClientCreate {
   return {
-    client: {
-      name: values.name,
-      doc_type: values.doc_type,
-      document: values.document,
-      phone: values.phone,
-      address: values.address,
-      notes: values.notes || null,
-      collector_membership_id: values.collector_membership_id || null,
-    },
+    name: values.name,
+    doc_type: values.doc_type,
+    document: values.document,
+    phone: values.phone,
+    address: values.address,
+    notes: values.notes || null,
+    collector_membership_id: values.collector_membership_id || null,
+  }
+}
+
+function toSavedClientCreate(saved: ClientRead): ClientCreate {
+  return {
+    name: saved.name,
+    doc_type: saved.doc_type,
+    document: saved.document ?? '',
+    phone: saved.phone,
+    address: saved.address,
+    notes: saved.notes || null,
+    collector_membership_id: saved.collector_membership_id || null,
+  }
+}
+
+function toSubmit(
+  values: ClientFormValues,
+  savedClient?: ClientRead | null,
+): ClientFormSubmit {
+  return {
+    client: savedClient ? toSavedClientCreate(savedClient) : toClientCreate(values),
     contacts: values.contacts.map((item) => ({
       id: item.contact_id || undefined,
       type: item.type,
@@ -132,6 +151,11 @@ export function ClientForm({
   })
   const contacts = useFieldArray({ control: form.control, name: 'contacts' })
   const contactValues = useWatch({ control: form.control, name: 'contacts' })
+  const docType = useWatch({ control: form.control, name: 'doc_type' })
+  const collectorId = useWatch({ control: form.control, name: 'collector_membership_id' })
+  const docTypeLabel = docType === 'pasaporte' ? 'Pasaporte' : 'Cédula'
+  const collectorLabel =
+    collectors.find((member) => member.id === collectorId)?.name ?? 'Sin asignar'
   const check = useCheckClientMutation()
   const [errorForDismiss, setErrorForDismiss] = useState(error)
   const [dismissedFields, setDismissedFields] = useState<Set<string>>(() => new Set())
@@ -218,7 +242,7 @@ export function ClientForm({
       className="flex flex-col gap-6"
       onSubmit={form.handleSubmit((values) =>
         onSubmit({
-          ...toSubmit(values),
+          ...toSubmit(values, completingGuarantor ? resumeClient : null),
           resume: resumeClient
             ? { client: resumeClient, previousContacts: resumeContacts }
             : undefined,
@@ -254,24 +278,30 @@ export function ClientForm({
             autoComplete="name"
             error={fieldError('name')}
             {...form.register('name')}
-            disabled={completingGuarantor}
+            readOnly={completingGuarantor}
           />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id="doc_type" label="Tipo de documento" error={fieldError('doc_type')}>
-            <SelectInput
-              id="doc_type"
-              {...form.register('doc_type', {
-                onChange: () => {
-                  dismissField('document')
-                  check.reset()
-                },
-              })}
-              disabled={completingGuarantor}
-            >
-              <option value="cedula">Cédula</option>
-              <option value="pasaporte">Pasaporte</option>
-            </SelectInput>
+            {completingGuarantor ? (
+              <>
+                <TextInput id="doc_type" readOnly value={docTypeLabel} />
+                <input type="hidden" {...form.register('doc_type')} />
+              </>
+            ) : (
+              <SelectInput
+                id="doc_type"
+                {...form.register('doc_type', {
+                  onChange: () => {
+                    dismissField('document')
+                    check.reset()
+                  },
+                })}
+              >
+                <option value="cedula">Cédula</option>
+                <option value="pasaporte">Pasaporte</option>
+              </SelectInput>
+            )}
           </Field>
           <Field id="document" label="Número de documento" error={fieldError('document')}>
             <TextInput
@@ -286,12 +316,12 @@ export function ClientForm({
                 onBlur: () => {
                   if (completingGuarantor) return
                   const document = form.getValues('document').trim()
-                  const docType = form.getValues('doc_type')
+                  const nextDocType = form.getValues('doc_type')
                   if (!document) return
-                  check.mutate({ doc_type: docType, document })
+                  check.mutate({ doc_type: nextDocType, document })
                 },
               })}
-              disabled={completingGuarantor}
+              readOnly={completingGuarantor}
             />
           </Field>
           {check.data?.found && !completingGuarantor ? (
@@ -308,7 +338,7 @@ export function ClientForm({
               autoComplete="tel"
               error={fieldError('phone')}
               {...form.register('phone')}
-              disabled={completingGuarantor}
+              readOnly={completingGuarantor}
             />
           </Field>
           <Field
@@ -316,32 +346,38 @@ export function ClientForm({
             label="Cobrador asignado"
             error={fieldError('collector_membership_id')}
           >
-            <SelectInput
-              id="collector_membership_id"
-              {...form.register('collector_membership_id')}
-              disabled={completingGuarantor}
-            >
-              <option value="">Sin asignar</option>
-              {collectors.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </SelectInput>
+            {completingGuarantor ? (
+              <>
+                <TextInput id="collector_membership_id" readOnly value={collectorLabel} />
+                <input type="hidden" {...form.register('collector_membership_id')} />
+              </>
+            ) : (
+              <SelectInput
+                id="collector_membership_id"
+                {...form.register('collector_membership_id')}
+              >
+                <option value="">Sin asignar</option>
+                {collectors.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </SelectInput>
+            )}
           </Field>
         </div>
         <Field id="address" label="Dirección" error={fieldError('address')}>
           <TextInput
             id="address"
             {...form.register('address')}
-            disabled={completingGuarantor}
+            readOnly={completingGuarantor}
           />
         </Field>
         <Field id="notes" label="Notas (opcional)">
           <TextArea
             id="notes"
             {...form.register('notes')}
-            disabled={completingGuarantor}
+            readOnly={completingGuarantor}
           />
         </Field>
       </section>

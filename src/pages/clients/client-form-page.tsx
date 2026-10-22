@@ -108,7 +108,7 @@ export function ClientFormPage() {
         onSubmit={(payload) => {
           if (submitting.current) return
           submitting.current = true
-          const settle = () => {
+          const releaseOnError = () => {
             submitting.current = false
           }
           const go = (result: { client: { id: string } }) => {
@@ -137,7 +137,7 @@ export function ClientFormPage() {
                 previousContacts: payload.resume?.previousContacts ?? existing.data.contacts,
                 previousClient: payload.resume?.client ?? existing.data,
               },
-              { onSuccess: go, onSettled: settle },
+              { onSuccess: go, onError: releaseOnError },
             )
             return
           }
@@ -151,13 +151,13 @@ export function ClientFormPage() {
                 previousContacts: payload.resume.previousContacts,
                 previousClient: payload.resume.client,
               },
-              { onSuccess: go, onSettled: settle },
+              { onSuccess: go, onError: releaseOnError },
             )
             return
           }
           create.mutate(
             { client: payload.client, contacts: payload.contacts },
-            { onSuccess: go, onSettled: settle },
+            { onSuccess: go, onError: releaseOnError },
           )
         }}
       />

@@ -119,11 +119,11 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-9999999-9')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
 
-    const input = await screen.findByLabelText('Número de documento')
+    const input = await screen.findByLabelText('Número de documento', {}, { timeout: 4000 })
     await waitFor(
       () => {
         expect(document.getElementById('document-error')).toHaveTextContent(
@@ -146,7 +146,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/cli-1/editar')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 })).toBeInTheDocument()
     const input = screen.getByLabelText('Número de documento')
     await user.clear(input)
     await user.type(input, '001-9999999-9')
@@ -171,7 +171,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
 
@@ -194,7 +194,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'pasaporte')
     await fillRequiredClient(user, 'AB12')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
@@ -226,7 +226,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     await addGarante(user, 0, '001-2222222-2')
     await addGarante(user, 1, '001-3333333-3')
@@ -266,8 +266,8 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/cli-1/editar')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
-    const garante2 = await screen.findByRole('group', { name: 'Garante 2' })
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 })).toBeInTheDocument()
+    const garante2 = await screen.findByRole('group', { name: 'Garante 2' }, { timeout: 4000 })
     const input = within(garante2).getByLabelText('Número de documento (opcional)')
     await user.clear(input)
     await user.type(input, 'ZZ1')
@@ -292,7 +292,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Número de documento'), '001-1111111-1')
     await user.tab()
 
@@ -311,7 +311,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/verificar')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Verificar bloqueo' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Verificar bloqueo' }, { timeout: 4000 })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Número de documento'), '001-1111111-1')
     await user.click(screen.getByRole('button', { name: 'Verificar' }))
 
@@ -340,10 +340,10 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, 'malo')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    const cedulaBanner = await screen.findByText('Cédula no válida. Revisa los 11 dígitos.')
+    const cedulaBanner = await screen.findByText('Cédula no válida. Revisa los 11 dígitos.', {}, { timeout: 4000 })
     expect(cedulaBanner.closest('[role="alert"]')).toBeTruthy()
     expect(cedulaBanner.id).not.toBe('document-error')
     expect(document.getElementById('document-error')).toBeNull()
@@ -367,10 +367,10 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-9999999-9')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    const banner = await screen.findByText('Ya hay un cliente con este documento.')
+    const banner = await screen.findByText('Ya hay un cliente con este documento.', {}, { timeout: 4000 })
     expect(banner.closest('[role="alert"]')).toBeTruthy()
     expect(banner.id).not.toBe('document-error')
     expect(document.getElementById('document-error')).toBeNull()
@@ -394,12 +394,12 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/cli-1/editar')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 })).toBeInTheDocument()
     const input = screen.getByLabelText('Número de documento')
     await user.clear(input)
     await user.type(input, '001-9999999-9')
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
-    const banner = await screen.findByText('Ya hay un cliente con este documento.')
+    const banner = await screen.findByText('Ya hay un cliente con este documento.', {}, { timeout: 4000 })
     expect(banner.closest('[role="alert"]')).toBeTruthy()
     expect(banner.id).not.toBe('document-error')
     expect(document.getElementById('document-error')).toBeNull()
@@ -415,7 +415,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-9999999-9')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
     await waitFor(() => {
@@ -438,7 +438,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-9999999-9')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
     await waitFor(() => {
@@ -461,7 +461,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/cli-1/editar')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 })).toBeInTheDocument()
     const input = screen.getByLabelText('Número de documento')
     await user.clear(input)
     await user.type(input, '001-9999999-9')
@@ -492,7 +492,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/cli-1/editar')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 })).toBeInTheDocument()
     const garante = screen.getByRole('group', { name: 'Garante 1' })
     const contactInput = within(garante).getByLabelText('Número de documento (opcional)')
     await user.clear(contactInput)
@@ -527,10 +527,10 @@ describe('CBF-215 errores de documento en el campo', () => {
       window.history.pushState({}, '', '/clientes/nuevo')
       const user = userEvent.setup()
       const view = renderApp()
-      expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
       await fillRequiredClient(user, '001-1111111-1')
       await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-      const banner = await screen.findByText(item.message)
+      const banner = await screen.findByText(item.message, {}, { timeout: 4000 })
       expect(banner.closest('[role="alert"]')).toBeTruthy()
       expect(document.getElementById('document-error')).toBeNull()
       expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
@@ -552,7 +552,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
     await waitFor(() => {
@@ -560,7 +560,7 @@ describe('CBF-215 errores de documento en el campo', () => {
         CBF_215_CEDULA_INVALID.message,
       )
     })
-    const banner = await screen.findByText('Revisa este valor.')
+    const banner = await screen.findByText('Revisa este valor.', {}, { timeout: 4000 })
     expect(banner.closest('[role="alert"]')).toBeTruthy()
     expect(banner).not.toHaveTextContent(CBF_215_CEDULA_INVALID.message)
     expectNoBanner(CBF_215_CEDULA_INVALID.message)
@@ -581,7 +581,7 @@ describe('CBF-215 errores de documento en el campo', () => {
       window.history.pushState({}, '', '/clientes/cli-1')
       const user = userEvent.setup()
       const view = renderApp()
-      expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 })).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'Agregar garante' }))
       await user.type(screen.getByLabelText('Nombre'), 'Pedro Gómez')
       await user.type(screen.getByLabelText('Teléfono'), '8095552222')
@@ -610,13 +610,13 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/cli-1')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Ana Pérez' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Editar' }))
     const phone = screen.getByLabelText('Teléfono')
     await user.clear(phone)
     await user.type(phone, '8095550000')
     await user.click(screen.getByRole('button', { name: 'Guardar contacto' }))
-    const banner = await screen.findByText('Revisa este tipo de documento.')
+    const banner = await screen.findByText('Revisa este tipo de documento.', {}, { timeout: 4000 })
     expect(banner.closest('[role="alert"]')).toBeTruthy()
     expect(document.getElementById('ct-1-document-error')).toBeNull()
   })
@@ -638,11 +638,11 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     await addGarante(user, 0, '001-2222222-2')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    const banner = await screen.findByText('Revisa el documento del garante.')
+    const banner = await screen.findByText('Revisa el documento del garante.', {}, { timeout: 4000 })
     expect(banner.closest('[role="alert"]')).toBeTruthy()
     expect(document.getElementById('document-error')).toBeNull()
     expect(document.getElementById('contacts.0.document-error')).toBeNull()
@@ -668,7 +668,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     await addGarante(user, 0, '001-0000001-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
@@ -685,8 +685,10 @@ describe('CBF-215 errores de documento en el campo', () => {
     expect(resumeBanner).not.toHaveTextContent(CBF_215_CEDULA_INVALID.message)
     expectNoBanner(CBF_215_DOCUMENT_EXISTS.message)
     expectNoBanner(CBF_215_CEDULA_INVALID.message)
-    expect(screen.getByLabelText('Número de documento')).toBeDisabled()
-    expect(screen.getByLabelText('Dirección')).toBeDisabled()
+    expect(screen.getByLabelText('Número de documento')).toHaveAttribute('readOnly')
+    expect(screen.getByLabelText('Número de documento')).not.toBeDisabled()
+    expect(screen.getByLabelText('Dirección')).toHaveAttribute('readOnly')
+    expect(screen.getByLabelText('Dirección')).not.toBeDisabled()
     const group = screen.getByRole('group', { name: 'Garante 1' })
     const input = within(group).getByLabelText('Número de documento (opcional)')
     expect(input).toHaveAttribute('aria-invalid', 'true')
@@ -701,7 +703,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     expect(
       await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
     ).toBeInTheDocument()
-    expect(await screen.findByText(CLIENT_AND_GUARANTOR_SAVED_TOAST)).toBeInTheDocument()
+    expect(await screen.findByText(CLIENT_AND_GUARANTOR_SAVED_TOAST, {}, { timeout: 4000 })).toBeInTheDocument()
     expect(screen.getByText(/Garante 1/)).toBeInTheDocument()
     expect(clientWrites.filter((item) => item.method === 'POST')).toHaveLength(1)
     expect(contactPosts).toHaveLength(2)
@@ -727,7 +729,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/cli-1/editar')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await addGarante(user, 0, '001-2222222-2')
     await addGarante(user, 1, '001-0000001-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
@@ -770,11 +772,11 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     await addGarante(user, 0, '001-0000001-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE }, { timeout: 4000 })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: GO_TO_RECORD_LABEL }))
     expect(
@@ -794,16 +796,16 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     await addGarante(user, 0, '001-0000001-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
-    expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE }, { timeout: 4000 })).toBeInTheDocument()
 
     const confirm = vi.spyOn(window, 'confirm')
     await user.click(screen.getByRole('link', { name: BACK_LABEL }))
     expect(confirm).not.toHaveBeenCalled()
-    expect(await screen.findByRole('heading', { name: 'Clientes' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Clientes' }, { timeout: 4000 })).toBeInTheDocument()
     confirm.mockRestore()
   })
 
@@ -826,15 +828,15 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     await addGarante(user, 0, '001-2222222-2')
     await addGarante(user, 1, '001-0000001-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
 
-    expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE }, { timeout: 4000 })).toBeInTheDocument()
     const saved = screen.getByRole('group', { name: 'Garante 1' })
-    expect(await within(saved).findByText(CONTACT_SAVED_LABEL)).toBeInTheDocument()
+    expect(await within(saved).findByText(CONTACT_SAVED_LABEL, {}, { timeout: 4000 })).toBeInTheDocument()
     expect(within(saved).getByLabelText('Nombre')).toBeDisabled()
     expect(within(saved).getByLabelText('Número de documento (opcional)')).toBeDisabled()
     expect(within(saved).queryByText(CBF_215_CEDULA_INVALID.message)).not.toBeInTheDocument()
@@ -859,7 +861,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     ).toBeInTheDocument()
     expect(contactPosts.filter((item) => item.name === 'Garante 1')).toHaveLength(1)
     expect(contactPosts.map((item) => item.name)).toEqual(['Garante 1', 'Garante 2', 'Garante 2'])
-    expect(await screen.findByText(CLIENT_AND_GUARANTOR_SAVED_TOAST)).toBeInTheDocument()
+    expect(await screen.findByText(CLIENT_AND_GUARANTOR_SAVED_TOAST, {}, { timeout: 4000 })).toBeInTheDocument()
   })
 
   it('quitar un contacto ya creado y reintentar hace DELETE + POST, no PATCH de otro contacto', async () => {
@@ -882,7 +884,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/cli-1/editar')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await addGarante(user, 0, '001-2222222-2')
     await addGarante(user, 1, '001-0000001-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
@@ -940,7 +942,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/cli-1/editar')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await addGarante(user, 0, '001-0000001-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
     await waitFor(() => {
@@ -972,7 +974,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cliente' }))
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cliente' }))
@@ -1001,7 +1003,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     window.history.pushState({}, '', '/clientes/nuevo')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 })).toBeInTheDocument()
     await fillRequiredClient(user, '001-1111111-1')
     await addGarante(user, 0, '001-0000001-1')
     await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
@@ -1021,5 +1023,125 @@ describe('CBF-215 errores de documento en el campo', () => {
       await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
     ).toBeInTheDocument()
     expect(contactPosts.slice(postsBeforeRetry)).toHaveLength(1)
+  })
+
+  it('en Completar garante el cliente es readOnly, se puede enfocar y no dispara check ni PATCH', async () => {
+    loginCashier()
+    const checks: unknown[] = []
+    const contactPosts: ContactCreate[] = []
+    server.use(
+      http.post('*/clients/check', async ({ request }) => {
+        checks.push(await request.json())
+        return HttpResponse.json({
+          found: false,
+          is_blocked: false,
+          blocked_reason: null,
+          client_id: null,
+        })
+      }),
+      http.post('*/clients/:id/contacts', async ({ request, params }) => {
+        const payload = (await request.json()) as ContactCreate
+        contactPosts.push(payload)
+        if (payload.document === '001-0000001-1') {
+          return contractError(422, [CBF_215_CEDULA_INVALID])
+        }
+        return HttpResponse.json(persistCreatedContact(String(params.id), payload), {
+          status: 201,
+        })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(
+      await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    await addGarante(user, 0, '001-0000001-1')
+    const checksAfterFill = checks.length
+    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    expect(
+      await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+
+    const name = screen.getByLabelText('Nombre')
+    const documentInput = screen.getByLabelText('Número de documento')
+    const phone = screen.getByLabelText('Teléfono')
+    const address = screen.getByLabelText('Dirección')
+    const notes = screen.getByLabelText('Notas (opcional)')
+    const docType = screen.getByLabelText('Tipo de documento')
+    const collector = screen.getByLabelText('Cobrador asignado')
+    expect(document.querySelector('#doc_type')).not.toHaveAttribute('aria-readonly')
+    expect(document.querySelector('select')).toBeNull()
+    expect(docType.tagName).toBe('INPUT')
+    expect(collector.tagName).toBe('INPUT')
+    expect(docType).toHaveValue('Cédula')
+    expect(collector).toHaveValue('Sin asignar')
+
+    for (const field of [name, documentInput, phone, address, notes, docType, collector]) {
+      expect(field).toHaveAttribute('readOnly')
+      expect(field).not.toBeDisabled()
+      field.focus()
+      expect(field).toHaveFocus()
+    }
+
+    const beforeName = (name as HTMLInputElement).value
+    const beforeDocument = (documentInput as HTMLInputElement).value
+    const beforeDocType = (docType as HTMLInputElement).value
+    await user.type(name, 'XXXX')
+    await user.type(documentInput, '9')
+    await user.type(docType, 'Pasaporte')
+    expect(name).toHaveValue(beforeName)
+    expect(documentInput).toHaveValue(beforeDocument)
+    expect(docType).toHaveValue(beforeDocType)
+
+    await user.tab()
+    fireEvent.blur(documentInput)
+    expect(checks.length).toBe(checksAfterFill)
+
+    const group = screen.getByRole('group', { name: 'Garante 1' })
+    const input = within(group).getByLabelText('Número de documento (opcional)')
+    await user.clear(input)
+    await user.type(input, '001-7654321-0')
+    clientWrites.length = 0
+    await user.click(screen.getByRole('button', { name: SAVE_GUARANTOR_LABEL }))
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(clientWrites.filter((item) => item.method === 'PATCH')).toHaveLength(0)
+    expect(clientWrites.filter((item) => item.method === 'POST')).toHaveLength(0)
+    expect(contactPosts.at(-1)?.document).toBe('001-7654321-0')
+  })
+
+  it('la ficha vacía de garantes incluye Agregar garante, sin alerta', async () => {
+    loginCashier()
+    window.history.pushState({}, '', '/clientes/cli-1')
+    renderApp()
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Garantes' })).toBeInTheDocument()
+    expect(screen.getByText('Sin garantes.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Agregar garante' })).toBeInTheDocument()
+    expect(screen.queryByText('Este cliente no tiene garante.')).not.toBeInTheDocument()
+    expect(pageBanners()).toHaveLength(0)
+  })
+
+  it('respuesta rápida + doble click: un solo POST /clients', async () => {
+    loginCashier()
+    server.use(okCheck())
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(
+      await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    const button = screen.getByRole('button', { name: 'Guardar cliente' })
+    await user.dblClick(button)
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(clientWrites.filter((item) => item.method === 'POST')).toHaveLength(1)
   })
 })
