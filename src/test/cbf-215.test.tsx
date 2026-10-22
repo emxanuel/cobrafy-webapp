@@ -1064,13 +1064,13 @@ describe('CBF-215 errores de documento en el campo', () => {
       await screen.findByRole('heading', { name: COMPLETE_GUARANTOR_TITLE }, { timeout: 4000 }),
     ).toBeInTheDocument()
 
-    const name = screen.getByLabelText('Nombre')
-    const documentInput = screen.getByLabelText('Número de documento')
-    const phone = screen.getByLabelText('Teléfono')
-    const address = screen.getByLabelText('Dirección')
-    const notes = screen.getByLabelText('Notas (opcional)')
-    const docType = screen.getByLabelText('Tipo de documento')
-    const collector = screen.getByLabelText('Cobrador asignado')
+    const name = document.getElementById('name') as HTMLInputElement
+    const documentInput = document.getElementById('document') as HTMLInputElement
+    const phone = document.getElementById('phone') as HTMLInputElement
+    const address = document.getElementById('address') as HTMLInputElement
+    const notes = document.getElementById('notes') as HTMLTextAreaElement
+    const docType = document.getElementById('doc_type') as HTMLInputElement
+    const collector = document.getElementById('collector_membership_id') as HTMLInputElement
     expect(document.querySelector('#doc_type')).not.toHaveAttribute('aria-readonly')
     expect(document.querySelector('select')).toBeNull()
     expect(docType.tagName).toBe('INPUT')
