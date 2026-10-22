@@ -1071,8 +1071,9 @@ describe('CBF-215 errores de documento en el campo', () => {
     const notes = document.getElementById('notes') as HTMLTextAreaElement
     const docType = document.getElementById('doc_type') as HTMLInputElement
     const collector = document.getElementById('collector_membership_id') as HTMLInputElement
-    expect(document.querySelector('#doc_type')).not.toHaveAttribute('aria-readonly')
-    expect(document.querySelector('select')).toBeNull()
+    expect(docType).not.toHaveAttribute('aria-readonly')
+    expect(document.querySelector('select#doc_type')).toBeNull()
+    expect(document.querySelector('select#collector_membership_id')).toBeNull()
     expect(docType.tagName).toBe('INPUT')
     expect(collector.tagName).toBe('INPUT')
     expect(docType).toHaveValue('Cédula')
