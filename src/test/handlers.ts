@@ -853,12 +853,14 @@ export const handlers = [
     const clientId = String(params.id)
     const contactId = String(params.contactId)
     const current = clients.get(clientId)
-    if (current) {
-      current.contacts = current.contacts.map((item) =>
-        item.id === contactId ? { ...item, is_active: false } : item,
-      )
-      clients.set(clientId, current)
+    const contact = current?.contacts.find((item) => item.id === contactId)
+    if (!current || !contact || !contact.is_active) {
+      return HttpResponse.json({ detail: 'recurso no encontrado' }, { status: 404 })
     }
+    current.contacts = current.contacts.map((item) =>
+      item.id === contactId ? { ...item, is_active: false } : item,
+    )
+    clients.set(clientId, current)
     return new HttpResponse(null, { status: 204 })
   }),
 

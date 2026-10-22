@@ -24,7 +24,7 @@ import {
   membership,
   users,
 } from './fixtures'
-import { clientWrites, contactWrites, persistCreatedContact } from './handlers'
+import { clientWrites, contactWrites, persistCreatedContact, seedClient } from './handlers'
 import { renderApp, seedAuth } from './render'
 import { server } from './server'
 
@@ -756,6 +756,7 @@ describe('CBF-215 errores de documento en el campo', () => {
     expect(contactPosts[2]?.document).toBe('001-3333333-3')
     expect(screen.getAllByText(/Garante 1 ·/).length).toBe(1)
     expect(screen.getByText(/Garante 2 ·/)).toBeInTheDocument()
+    expect(contactWrites.filter((item) => item.method === 'PATCH')).toHaveLength(0)
   })
 
   it('Ir a la ficha navega sin reenviar el garante pendiente', async () => {
@@ -1126,6 +1127,174 @@ describe('CBF-215 errores de documento en el campo', () => {
     expect(screen.getByRole('button', { name: 'Agregar garante' })).toBeInTheDocument()
     expect(screen.queryByText('Este cliente no tiene garante.')).not.toBeInTheDocument()
     expect(pageBanners()).toHaveLength(0)
+  })
+
+  it('un 422 de documento en el cliente no manda requests de contactos', async () => {
+    loginCashier()
+    server.use(
+      okCheck(),
+      http.post('*/clients', () => contractError(422, [CBF_215_CEDULA_INVALID])),
+    )
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(
+      await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    await addGarante(user, 0, '001-2222222-2')
+    contactWrites.length = 0
+    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    await waitFor(() => {
+      expect(document.getElementById('document-error')).toHaveTextContent(
+        CBF_215_CEDULA_INVALID.message,
+      )
+    })
+    expect(contactWrites).toHaveLength(0)
+  })
+
+  it('después de un 422, cambiar el tipo de documento limpia el error aunque el campo ya perdió el foco', async () => {
+    loginCashier()
+    server.use(
+      http.post('*/clients/check', () => contractError(422, [CBF_215_CEDULA_INVALID])),
+      http.post('*/clients', () => contractError(422, [CBF_215_CEDULA_INVALID])),
+    )
+    window.history.pushState({}, '', '/clientes/nuevo')
+    const user = userEvent.setup()
+    renderApp()
+    expect(
+      await screen.findByRole('heading', { name: 'Nuevo cliente' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    await fillRequiredClient(user, '001-1111111-1')
+    await user.click(screen.getByRole('button', { name: 'Guardar cliente' }))
+    await waitFor(() => {
+      expect(document.getElementById('document-error')).toHaveTextContent(
+        CBF_215_CEDULA_INVALID.message,
+      )
+    })
+
+    const documentInput = screen.getByLabelText('Número de documento')
+    expect(documentInput).toHaveFocus()
+    await user.click(screen.getByLabelText('Tipo de documento'))
+    expect(documentInput).not.toHaveFocus()
+    await waitFor(() => {
+      expect(document.getElementById('document-error')).toHaveTextContent(
+        CBF_215_CEDULA_INVALID.message,
+      )
+    })
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'pasaporte')
+    expect(document.getElementById('document-error')).toBeNull()
+    expect(screen.getByLabelText('Número de documento')).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('quitar un contacto, fallar otra cosa y reintentar: un solo DELETE y sin aviso falso', async () => {
+    loginCashier()
+    const toRemove = contactFixture({
+      id: 'ct-rm-1',
+      name: 'Luis Quitar',
+      type: 'referencia',
+      doc_type: null,
+      document: null,
+      has_document: false,
+    })
+    seedClient(clientFixture({ id: 'cli-1', contacts: [toRemove] }))
+    server.use(
+      okCheck(),
+      http.post('*/clients/:id/contacts', async ({ request, params }) => {
+        const payload = (await request.json()) as ContactCreate
+        if (payload.document === '001-0000001-1') {
+          return contractError(422, [CBF_215_CEDULA_INVALID])
+        }
+        return HttpResponse.json(persistCreatedContact(String(params.id), payload), {
+          status: 201,
+        })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/editar')
+    const user = userEvent.setup()
+    renderApp()
+    expect(
+      await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await user.click(
+      within(screen.getByRole('group', { name: 'Referencia 1' })).getByRole('button', {
+        name: 'Quitar',
+      }),
+    )
+    confirm.mockRestore()
+    await addGarante(user, 0, '001-0000001-1')
+    contactWrites.length = 0
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => {
+      expect(document.getElementById('contacts.0.document-error')).toHaveTextContent(
+        CBF_215_CEDULA_INVALID.message,
+      )
+    })
+    expect(contactWrites.filter((item) => item.method === 'DELETE')).toHaveLength(1)
+
+    const group = screen.getByRole('group', { name: 'Garante 1' })
+    const input = within(group).getByLabelText('Número de documento (opcional)')
+    await user.clear(input)
+    await user.type(input, '001-7654321-0')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(contactWrites.filter((item) => item.method === 'DELETE')).toHaveLength(1)
+    expect(screen.queryByText(/No se pudo quitar a Luis Quitar/)).not.toBeInTheDocument()
+  })
+
+  it('el reintento no manda PATCH de contactos ya guardados que no cambiaron', async () => {
+    loginCashier()
+    const saved = contactFixture({
+      id: 'ct-saved-1',
+      name: 'Garante Viejo',
+      document: '001-2222222-2',
+    })
+    seedClient(clientFixture({ id: 'cli-1', contacts: [saved] }))
+    const contactPosts: ContactCreate[] = []
+    server.use(
+      okCheck(),
+      http.post('*/clients/:id/contacts', async ({ request, params }) => {
+        const payload = (await request.json()) as ContactCreate
+        contactPosts.push(payload)
+        if (payload.document === '001-0000001-1') {
+          return contractError(422, [CBF_215_CEDULA_INVALID])
+        }
+        return HttpResponse.json(persistCreatedContact(String(params.id), payload), {
+          status: 201,
+        })
+      }),
+    )
+    window.history.pushState({}, '', '/clientes/cli-1/editar')
+    const user = userEvent.setup()
+    renderApp()
+    expect(
+      await screen.findByRole('heading', { name: 'Editar cliente' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    await addGarante(user, 1, '001-0000001-1')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => {
+      expect(document.getElementById('contacts.1.document-error')).toHaveTextContent(
+        CBF_215_CEDULA_INVALID.message,
+      )
+    })
+
+    const group = screen.getByRole('group', { name: 'Garante 2' })
+    const input = within(group).getByLabelText('Número de documento (opcional)')
+    await user.clear(input)
+    await user.type(input, '001-3333333-3')
+    const postsBeforeRetry = contactPosts.length
+    contactWrites.length = 0
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    expect(
+      await screen.findByRole('heading', { name: 'Ana Pérez' }, { timeout: 4000 }),
+    ).toBeInTheDocument()
+    expect(contactWrites.filter((item) => item.method === 'PATCH')).toHaveLength(0)
+    expect(contactPosts.slice(postsBeforeRetry)).toHaveLength(1)
+    expect(contactPosts.at(-1)?.document).toBe('001-3333333-3')
   })
 
   it('respuesta rápida + doble click: un solo POST /clients', async () => {

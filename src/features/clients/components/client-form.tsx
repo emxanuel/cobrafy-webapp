@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useFieldArray, useForm, useWatch, type FieldPath } from 'react-hook-form'
 
 import {
@@ -168,7 +168,11 @@ export function ClientForm({
     setDismissedFields(new Set())
     if (isPartialClientSaveError(error)) {
       setResumeClient(error.savedClient)
-      setResumeContacts((current) => mergeContacts(current, Object.values(error.createdByIndex)))
+      setResumeContacts((current) =>
+        mergeContacts(current, Object.values(error.createdByIndex)).filter(
+          (item) => !error.removedIds.includes(item.id),
+        ),
+      )
     }
   }
   const saveFields = error ? getFieldErrors(error) : {}
@@ -190,6 +194,7 @@ export function ClientForm({
     isRenderedField,
   )
 
+  const appliedErrorSource = useRef<unknown>(null)
   useEffect(() => {
     if (isPartialClientSaveError(error)) {
       for (const [index, saved] of Object.entries(error.createdByIndex)) {
@@ -200,7 +205,12 @@ export function ClientForm({
       }
     }
     const source = error ?? (check.isError ? check.error : undefined)
-    if (!source) return
+    if (!source) {
+      appliedErrorSource.current = null
+      return
+    }
+    if (appliedErrorSource.current === source) return
+    appliedErrorSource.current = source
     const mapped = getFieldErrors(source)
     const names = Object.keys(mapped)
     for (const [name, message] of Object.entries(mapped)) {
@@ -240,9 +250,9 @@ export function ClientForm({
   return (
     <form
       className="flex flex-col gap-6"
-      onSubmit={form.handleSubmit((values) =>
+      onSubmit={form.handleSubmit(() =>
         onSubmit({
-          ...toSubmit(values, completingGuarantor ? resumeClient : null),
+          ...toSubmit(form.getValues(), completingGuarantor ? resumeClient : null),
           resume: resumeClient
             ? { client: resumeClient, previousContacts: resumeContacts }
             : undefined,

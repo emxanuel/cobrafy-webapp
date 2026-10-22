@@ -139,7 +139,12 @@ export async function deleteContact(
   clientId: string,
   contactId: string,
 ): Promise<void> {
-  await api.delete(`/clients/${clientId}/contacts/${contactId}`)
+  try {
+    await api.delete(`/clients/${clientId}/contacts/${contactId}`)
+  } catch (error) {
+    if (isApiError(error) && error.status === 404) return
+    throw error
+  }
 }
 
 export type CreateClientWithContactsResult = {
@@ -169,6 +174,7 @@ function isUnauthorized(error: unknown) {
 
 export type SaveContactsDiffResult = ContactsSaveNotice & {
   createdByIndex: Record<number, ContactRead>
+  removedIds: string[]
   documentError: ApiError | null
 }
 
@@ -183,6 +189,7 @@ export async function saveContactsDiff(
   const failed: FailedContact[] = []
   const applied: FailedContact[] = []
   const createdByIndex: Record<number, ContactRead> = {}
+  const removedIds: string[] = []
   let documentError: ApiError | null = null
   let stoppedOnUnauthorized = false
 
@@ -214,15 +221,17 @@ export async function saveContactsDiff(
   }
 
   function snapshot(): SaveContactsDiffResult {
-    return { failed, applied, stoppedOnUnauthorized, createdByIndex, documentError }
+    return { failed, applied, stoppedOnUnauthorized, createdByIndex, removedIds, documentError }
   }
 
   for (const item of prevActive) {
     if (keptIds.has(item.id)) continue
+    const appliedCount = applied.length
     const outcome = await run(
       () => deleteContact(clientId, item.id),
       { name: item.name, op: 'remove' },
     )
+    if (applied.length > appliedCount) removedIds.push(item.id)
     if (outcome.status === 'stop') return snapshot()
   }
 
@@ -274,7 +283,12 @@ function throwIfDocumentError(
   savedClient: ClientRead,
 ) {
   if (!diff.documentError) return
-  throw new PartialClientSaveError(diff.documentError, savedClient, diff.createdByIndex)
+  throw new PartialClientSaveError(
+    diff.documentError,
+    savedClient,
+    diff.createdByIndex,
+    diff.removedIds,
+  )
 }
 
 export async function createClientWithContacts(

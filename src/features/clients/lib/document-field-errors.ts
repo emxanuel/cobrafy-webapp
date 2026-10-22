@@ -43,16 +43,19 @@ export function unrenderedFieldMessages(
 export class PartialClientSaveError extends ApiError {
   readonly savedClient: ClientRead
   readonly createdByIndex: Record<number, ContactRead>
+  readonly removedIds: string[]
 
   constructor(
     cause: ApiError,
     savedClient: ClientRead,
     createdByIndex: Record<number, ContactRead>,
+    removedIds: string[] = [],
   ) {
     super(cause.message, cause.status, cause.fieldErrors, cause.code, cause.codes)
     this.name = 'PartialClientSaveError'
     this.savedClient = savedClient
     this.createdByIndex = createdByIndex
+    this.removedIds = removedIds
   }
 }
 

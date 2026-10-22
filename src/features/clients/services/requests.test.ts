@@ -20,6 +20,7 @@ import {
   createClient,
   createClientWithContacts,
   createContact,
+  deleteContact,
   getClient,
   saveContactsDiff,
   searchClients,
@@ -336,7 +337,66 @@ describe('client requests', () => {
       expect(contactPosts[2]?.document).toBe('001-3333333-3')
       expect(retry.failedContacts).toBe(0)
       expect(retry.client.contacts.map((item) => item.name)).toEqual(['Garante 1', 'Garante 2'])
+      expect(contactWrites.filter((item) => item.method === 'PATCH')).toHaveLength(0)
     }
+  })
+
+  it('un 422 de documento en el cliente no manda requests de contactos', async () => {
+    server.use(
+      http.post('*/clients', () =>
+        HttpResponse.json({ detail: [CBF_215_CEDULA_INVALID] }, { status: 422 }),
+      ),
+    )
+    contactWrites.length = 0
+    try {
+      await createClientWithContacts(
+        {
+          name: 'Ana Pérez',
+          doc_type: 'cedula',
+          document: '001-1111111-1',
+          phone: '8095551111',
+          address: 'Calle 1',
+        },
+        [
+          {
+            type: 'garante',
+            name: 'Pedro Gómez',
+            phone: '8095552222',
+            relationship: 'Hermano',
+            document: '001-2222222-2',
+          },
+        ],
+      )
+      throw new Error('debía fallar')
+    } catch (error) {
+      expect(isApiError(error)).toBe(true)
+      expect(getFieldErrors(error)).toEqual({
+        document: CBF_215_CEDULA_INVALID.message,
+      })
+    }
+    expect(contactWrites).toHaveLength(0)
+  })
+
+  it('un 404 de DELETE se trata como éxito y no llena el aviso de quitar', async () => {
+    const created = await createClient({
+      name: 'Ana Pérez',
+      doc_type: 'cedula',
+      document: '001-1234567-8',
+      phone: '8095551111',
+      address: 'Calle 1',
+    })
+    const first = await createContact(created.id, {
+      type: 'referencia',
+      name: 'Luis Quitar',
+      phone: '8095550001',
+      relationship: 'Primo',
+    })
+    await deleteContact(created.id, first.id)
+    contactWrites.length = 0
+    const notice = await saveContactsDiff(created.id, [first], [])
+    expect(notice.failed).toEqual([])
+    expect(notice.removedIds).toEqual([first.id])
+    expect(contactWrites.filter((item) => item.method === 'DELETE')).toHaveLength(1)
   })
 
   it('al editar solo el teléfono el PATCH no manda document, address ni doc_type', async () => {
