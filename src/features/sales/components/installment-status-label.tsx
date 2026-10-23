@@ -1,27 +1,27 @@
 import {
-  installmentStatusKind,
-  type InstallmentStatusKind,
+  installmentStatusLabel,
+  installmentStatusTone,
 } from '@/features/sales/lib/installment-status'
 import type { InstallmentRead } from '@/features/sales/services/types'
+import { cn } from '@/features/shared/lib/cn'
 
-const LABEL: Record<InstallmentStatusKind, { icon: string; word: string }> = {
-  pending: { icon: '○', word: 'Pendiente' },
-  paid: { icon: '●', word: 'Pagada' },
-  partial: { icon: '◐', word: 'Parcial' },
-  overdue: { icon: '⚠', word: 'Vencida' },
-  cancelled: { icon: '⊘', word: 'Cancelada' },
-}
-
-/** Isolated status cell: icon + word. Swap the look here (pending Emmanuel OK). */
+/** Isolated status cell: icon + word. Never color alone. */
 export function InstallmentStatusLabel({
   status,
+  hasPayment,
 }: {
   status: string | InstallmentRead['status']
+  hasPayment?: boolean
 }) {
-  const kind = installmentStatusKind(status)
-  const copy = LABEL[kind]
+  const copy = installmentStatusLabel(status, hasPayment)
   return (
-    <span className="inline-flex items-center gap-1">
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 whitespace-nowrap',
+        installmentStatusTone(status),
+      )}
+      aria-label={copy.word}
+    >
       <span aria-hidden>{copy.icon}</span>
       {copy.word}
     </span>

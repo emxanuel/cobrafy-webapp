@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { CuotaDots } from '@/features/sales/components/cuota-dots'
 import { InstallmentStatusLabel } from '@/features/sales/components/installment-status-label'
+import { InstallmentSummaryLine } from '@/features/sales/components/installment-summary-line'
 import { installmentStatusKind } from '@/features/sales/lib/installment-status'
 import { saleDotStatuses } from '@/features/sales/lib/dot-status'
 import { isSaleVoided } from '@/features/sales/lib/sale-status'
@@ -29,7 +30,16 @@ export function InstallmentTable({ sale }: { sale: SaleDetail }) {
   const voided = isSaleVoided(sale.status)
   const rows = expanded ? sale.installments : sale.installments.slice(0, PREVIEW_ROWS)
   const summary = voided ? (
-    <InstallmentStatusLabel status="cancelled" />
+    <InstallmentSummaryLine
+      voided
+      count={sale.installments_count}
+      summary={sale.installments_summary}
+    />
+  ) : sale.installments_summary ? (
+    <InstallmentSummaryLine
+      count={sale.installments_count}
+      summary={sale.installments_summary}
+    />
   ) : (
     installmentHeaderSummary(sale)
   )
@@ -40,7 +50,11 @@ export function InstallmentTable({ sale }: { sale: SaleDetail }) {
         <h2 className="m-0 text-lg">Cuotas</h2>
         <span className="text-sm">{summary}</span>
       </div>
-      <CuotaDots count={sale.installments_count} statuses={saleDotStatuses(sale)} />
+      <CuotaDots
+        count={sale.installments_count}
+        statuses={saleDotStatuses(sale)}
+        summary={sale.installments_summary}
+      />
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr>
@@ -75,8 +89,11 @@ export function InstallmentTable({ sale }: { sale: SaleDetail }) {
                 >
                   {formatMoney(row.amount)}
                 </td>
-                <td className="border-border border-b px-1 py-2">
-                  <InstallmentStatusLabel status={cancelled ? 'cancelled' : row.status} />
+                <td className="border-border border-b px-1 py-2 whitespace-nowrap">
+                  <InstallmentStatusLabel
+                    status={cancelled ? 'cancelled' : row.status}
+                    hasPayment={cancelled ? undefined : row.has_payment}
+                  />
                 </td>
               </tr>
             )

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeSaleDetail, normalizeSimulation } from './requests'
+import { normalizeSale, normalizeSaleDetail, normalizeSimulation } from './requests'
 
 describe('normalizeSimulation / normalizeSaleDetail vs fa39236', () => {
   it('lee financed, no financed_balance, y no inventa first_due_date', () => {
@@ -89,5 +89,100 @@ describe('normalizeSimulation / normalizeSaleDetail vs fa39236', () => {
     })
     expect(sale.balance).toBeNull()
     expect(sale.total).toBe('100.00')
+  })
+
+  it('SaleRead lee los campos nuevos de cuotas y tolera un backend viejo', () => {
+    const withFields = normalizeSale({
+      id: 'sale-3',
+      sale_number: 3,
+      client_id: 'cli-1',
+      client: { id: 'cli-1', name: 'Ana Pérez' },
+      item_description: 'Radio',
+      total: '18000.00',
+      balance: '17500.00',
+      status: 'activa',
+      frequency: 'mensual',
+      installments_count: 12,
+      regular_installment_amount: '1500.00',
+      last_installment_amount: '1503.00',
+      installments: [
+        { number: 1, status: 'overdue', has_payment: true },
+        { number: 2, status: 'pending', has_payment: false },
+      ],
+      installments_summary: { paid: 0, partial: 0, overdue: 1, pending: 11, cancelled: 0 },
+    })
+    expect(withFields.regular_installment_amount).toBe('1500.00')
+    expect(withFields.last_installment_amount).toBe('1503.00')
+    expect(withFields.installments).toEqual([
+      { number: 1, status: 'overdue', has_payment: true },
+      { number: 2, status: 'pending', has_payment: false },
+    ])
+    expect(withFields.installments_summary).toEqual({
+      paid: 0,
+      partial: 0,
+      overdue: 1,
+      pending: 11,
+      cancelled: 0,
+    })
+
+    const old = normalizeSale({
+      id: 'sale-4',
+      sale_number: 4,
+      client_id: 'cli-1',
+      client: { id: 'cli-1', name: 'Ana Pérez' },
+      item_description: 'Radio',
+      total: '100.00',
+      status: 'activa',
+    })
+    expect(old).not.toHaveProperty('regular_installment_amount')
+    expect(old).not.toHaveProperty('last_installment_amount')
+    expect(old).not.toHaveProperty('installments')
+    expect(old).not.toHaveProperty('installments_summary')
+  })
+
+  it('SaleDetail acepta has_payment opcional en cada cuota', () => {
+    const sale = normalizeSaleDetail({
+      id: 'sale-5',
+      sale_number: 5,
+      client_id: 'cli-1',
+      client: { id: 'cli-1', name: 'Ana Pérez' },
+      item_description: 'Radio',
+      total: '1500.00',
+      balance: '1500.00',
+      status: 'activa',
+      installments_count: 1,
+      installments: [
+        {
+          number: 1,
+          due_date: '2026-11-17',
+          amount: '1500.00',
+          paid: '50.00',
+          late_fee: '0.00',
+          status: 'overdue',
+          has_payment: true,
+        },
+      ],
+      contract: {},
+      warnings: [],
+    })
+    expect(sale.installments[0]?.has_payment).toBe(true)
+    const old = normalizeSaleDetail({
+      id: 'sale-6',
+      sale_number: 6,
+      client_id: 'cli-1',
+      item_description: 'Radio',
+      total: '1500.00',
+      installments: [
+        {
+          number: 1,
+          due_date: '2026-11-17',
+          amount: '1500.00',
+          paid: '0.00',
+          late_fee: '0.00',
+          status: 'pending',
+        },
+      ],
+    })
+    expect(old.installments[0]).not.toHaveProperty('has_payment')
   })
 })

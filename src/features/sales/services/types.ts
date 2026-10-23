@@ -22,6 +22,23 @@ export type InstallmentRead = {
   paid: string
   late_fee: string
   status: string
+  /** Present on GET /sales/{id} when the backend sends it. Absent on old backends. */
+  has_payment?: boolean
+}
+
+/** GET /sales and GET /clients/{id}/sales installment row. */
+export type SaleListInstallment = {
+  number: number
+  status: string
+  has_payment?: boolean
+}
+
+export type InstallmentsSummary = {
+  paid: number
+  partial: number
+  overdue: number
+  pending: number
+  cancelled: number
 }
 
 export const LATE_FEE_KINDS = ['percent', 'fixed'] as const
@@ -141,6 +158,11 @@ export type SaleRead = {
   void_reason: string | null
   voided_by: SaleVoidedBy | null
   created_at: string
+  /** Absent on old backends — the card falls back to today's layout. */
+  regular_installment_amount?: string
+  last_installment_amount?: string
+  installments?: SaleListInstallment[]
+  installments_summary?: InstallmentsSummary
 }
 
 export type SaleContractSeller = {
@@ -167,7 +189,7 @@ export type SaleContract = {
 }
 
 /** POST /sales, GET /sales/{id} — exact SaleDetail. */
-export type SaleDetail = SaleRead & {
+export type SaleDetail = Omit<SaleRead, 'installments'> & {
   installments: InstallmentRead[]
   contract: SaleContract
   warnings: SaleWarning[]

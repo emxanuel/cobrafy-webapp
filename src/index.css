@@ -153,3 +153,18 @@ textarea {
     transparent 58%
   );
 }
+
+.cuota-dot-partial {
+  border-color: var(--warning);
+  background: linear-gradient(90deg, var(--warning) 50%, transparent 50%);
+}
+
+.cuota-dot-late-partial {
+  border-color: var(--danger);
+  background: linear-gradient(90deg, var(--danger) 50%, transparent 50%);
+}
+
+.cuota-dot-pending-paid {
+  border-color: var(--text);
+  background: radial-gradient(circle, var(--text) 0 2.5px, transparent 3px);
+}

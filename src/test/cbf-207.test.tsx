@@ -181,7 +181,10 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     expect(screen.getByText(/Se registró con el precio equivocado/)).toBeInTheDocument()
     expect(screen.getByText(/Anulada por Ana Pérez/)).toBeInTheDocument()
     expect(screen.getByLabelText('4 cuotas canceladas')).toBeInTheDocument()
-    expect(screen.getAllByText('Cancelada')).toHaveLength(5)
+    expect(screen.getAllByText('Cancelada')).toHaveLength(4)
+    const cuotas = screen.getByRole('heading', { name: 'Cuotas' }).parentElement
+    expect(cuotas).not.toBeNull()
+    expect(within(cuotas as HTMLElement).getByText(/4 canceladas/)).toBeInTheDocument()
     expectFigure('Saldo pendiente', `${formatMoney('0.00')} · anulada`)
     const banner = screen.getByText('⊘ Venta anulada').closest('section')
     expect(banner).not.toBeNull()
@@ -241,7 +244,7 @@ describe('CBF-207 detalle, contrato, anulación y crédito', () => {
     expect(within(header as HTMLElement).getByText('3 de 12 pagadas')).toBeInTheDocument()
     expect(within(header as HTMLElement).queryByText('Pagada')).not.toBeInTheDocument()
     expect(
-      screen.getByLabelText('12 cuotas: 3 pagadas, 1 atrasada, 1 parcial, 7 pendientes'),
+      screen.getByLabelText('12 cuotas: 3 pagadas, 1 parcial, 1 vencida, 7 pendientes'),
     ).toBeInTheDocument()
   })
 
