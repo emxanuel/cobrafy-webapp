@@ -2,10 +2,12 @@ import { api, CREATE_SALE_TIMEOUT_MS } from '@/features/shared/services/client'
 import {
   FREQUENCIES,
   type CreditSettings,
+  type CreditSettingsLateFees,
   type CreditSettingsWrite,
   type Frequency,
   type InstallmentPreview,
   type InstallmentRead,
+  type LateFeeKind,
   type SaleContract,
   type SaleContractSeller,
   type SaleCreateRequest,
@@ -92,6 +94,47 @@ function asNullableString(value: unknown): string | null {
   return text || null
 }
 
+function hasOwn(row: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(row, key)
+}
+
+function isLateFeeKind(value: unknown): value is LateFeeKind {
+  return value === 'percent' || value === 'fixed' || value === null
+}
+
+function isPassthroughAmount(value: unknown): value is string | null {
+  return value === null || typeof value === 'string'
+}
+
+/** Echo GET mora fields as-is. Missing keys stay missing — never invent values. */
+export function echoLateFeeFields(
+  source: object | null | undefined,
+): Partial<CreditSettingsLateFees> {
+  if (source == null) return {}
+  const row = source as Record<string, unknown>
+  const out: Partial<CreditSettingsLateFees> = {}
+  if (hasOwn(row, 'late_fee_kind') && isLateFeeKind(row.late_fee_kind)) {
+    out.late_fee_kind = row.late_fee_kind
+  }
+  if (hasOwn(row, 'late_fee_percent') && isPassthroughAmount(row.late_fee_percent)) {
+    out.late_fee_percent = row.late_fee_percent
+  }
+  if (hasOwn(row, 'late_fee_fixed') && isPassthroughAmount(row.late_fee_fixed)) {
+    out.late_fee_fixed = row.late_fee_fixed
+  }
+  if (
+    hasOwn(row, 'late_fee_grace_days') &&
+    typeof row.late_fee_grace_days === 'number' &&
+    Number.isInteger(row.late_fee_grace_days)
+  ) {
+    out.late_fee_grace_days = row.late_fee_grace_days
+  }
+  if (hasOwn(row, 'late_fee_cap') && isPassthroughAmount(row.late_fee_cap)) {
+    out.late_fee_cap = row.late_fee_cap
+  }
+  return out
+}
+
 export function normalizeCreditSettings(data: unknown): CreditSettings {
   const row = (data ?? {}) as Record<string, unknown>
   const rawFreq = row.allowed_frequencies
@@ -107,6 +150,7 @@ export function normalizeCreditSettings(data: unknown): CreditSettings {
     max_installments: asInt(row.max_installments, 24) || 24,
     min_down_payment_percent: asNullableString(row.min_down_payment_percent),
     ...(typeof row.configured === 'boolean' ? { configured: row.configured } : {}),
+    ...echoLateFeeFields(row),
   }
 }
 
@@ -221,7 +265,10 @@ function trimCreditAmount(value: string | null): string | null {
   return value.trim()
 }
 
-/** CreditSettingsWrite only. Never forward GET `configured` — extra keys 422. */
+/**
+ * CreditSettingsWrite only. Never forward GET `configured` — extra keys 422.
+ * Re-sends the 5 mora fields only when the GET (or caller) already had them.
+ */
 export function toCreditSettingsWrite(
   payload: CreditSettings | CreditSettingsWrite,
 ): CreditSettingsWrite {
@@ -233,17 +280,21 @@ export function toCreditSettingsWrite(
     allowed_frequencies: payload.allowed_frequencies,
     max_installments: payload.max_installments,
     min_down_payment_percent: payload.min_down_payment_percent,
+    ...echoLateFeeFields(payload),
   }
 }
 
-export function buildCreditSettingsWrite(input: {
-  surcharge_kind: CreditSettingsWrite['surcharge_kind']
-  surcharge_percent: string
-  surcharge_amount: string
-  allowed_frequencies: CreditSettingsWrite['allowed_frequencies']
-  max_installments: number
-  min_down_payment_percent: string
-}): CreditSettingsWrite {
+export function buildCreditSettingsWrite(
+  input: {
+    surcharge_kind: CreditSettingsWrite['surcharge_kind']
+    surcharge_percent: string
+    surcharge_amount: string
+    allowed_frequencies: CreditSettingsWrite['allowed_frequencies']
+    max_installments: number
+    min_down_payment_percent: string
+  },
+  fromGet?: CreditSettings,
+): CreditSettingsWrite {
   return toCreditSettingsWrite({
     interest_method: 'recargo_fijo',
     surcharge_kind: input.surcharge_kind,
@@ -255,6 +306,7 @@ export function buildCreditSettingsWrite(input: {
     min_down_payment_percent: input.min_down_payment_percent.trim()
       ? input.min_down_payment_percent.trim()
       : null,
+    ...echoLateFeeFields(fromGet),
   })
 }
 

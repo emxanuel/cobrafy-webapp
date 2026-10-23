@@ -322,14 +322,17 @@ export function BusinessSettingsPage() {
               onClick={() => {
                 setCreditNotice(false)
                 saveCredit.mutate(
-                  buildCreditSettingsWrite({
-                    surcharge_kind: kind,
-                    surcharge_percent: percent,
-                    surcharge_amount: amount,
-                    allowed_frequencies: frequencies,
-                    max_installments: maxInstallments,
-                    min_down_payment_percent: minDown,
-                  }),
+                  buildCreditSettingsWrite(
+                    {
+                      surcharge_kind: kind,
+                      surcharge_percent: percent,
+                      surcharge_amount: amount,
+                      allowed_frequencies: frequencies,
+                      max_installments: maxInstallments,
+                      min_down_payment_percent: minDown,
+                    },
+                    settings.data,
+                  ),
                   {
                     onSuccess: () => {
                       setCreditDraft(null)

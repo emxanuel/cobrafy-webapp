@@ -24,6 +24,28 @@ export type InstallmentRead = {
   status: string
 }
 
+export const LATE_FEE_KINDS = ['percent', 'fixed'] as const
+export type LateFeeKind = (typeof LATE_FEE_KINDS)[number] | null
+
+/** API names. Never use late_fee_percent_bp / late_fee_fixed_cents / late_fee_cap_cents. */
+export const LATE_FEE_FIELDS = [
+  'late_fee_kind',
+  'late_fee_percent',
+  'late_fee_fixed',
+  'late_fee_grace_days',
+  'late_fee_cap',
+] as const
+
+export type LateFeeField = (typeof LATE_FEE_FIELDS)[number]
+
+export type CreditSettingsLateFees = {
+  late_fee_kind: LateFeeKind
+  late_fee_percent: string | null
+  late_fee_fixed: string | null
+  late_fee_grace_days: number
+  late_fee_cap: string | null
+}
+
 export type CreditSettings = {
   interest_method: string
   surcharge_kind: SurchargeKind
@@ -34,7 +56,7 @@ export type CreditSettings = {
   min_down_payment_percent: string | null
   /** Sent by backend PR #22. If absent (old backend), do not show the Design banner. */
   configured?: boolean
-}
+} & Partial<CreditSettingsLateFees>
 
 /** PUT body. Extra keys (including GET `configured`) → 422. */
 export type CreditSettingsWrite = {
@@ -45,7 +67,7 @@ export type CreditSettingsWrite = {
   allowed_frequencies: Frequency[]
   max_installments: number
   min_down_payment_percent: string | null
-}
+} & Partial<CreditSettingsLateFees>
 
 export type SimulateSaleRequest = {
   client_id?: string | null

@@ -66,6 +66,8 @@ function contractError(status: 409 | 422, items: ContractErrorItem[]) {
   return HttpResponse.json({ detail: items }, { status })
 }
 
+type LateFeeKind = 'percent' | 'fixed' | null
+
 type CreditSettingsState = {
   interest_method: string
   surcharge_kind: 'percent_of_financed' | 'fixed_amount'
@@ -77,6 +79,11 @@ type CreditSettingsState = {
   configured: boolean
   /** false = no row → GET defaults + POST CREDIT_SETTINGS_MISSING */
   hasRow: boolean
+  late_fee_kind?: LateFeeKind
+  late_fee_percent?: string | null
+  late_fee_fixed?: string | null
+  late_fee_grace_days?: number
+  late_fee_cap?: string | null
 }
 
 function defaultCreditSettings(): CreditSettingsState {
@@ -159,6 +166,24 @@ function creditSettingsRead() {
   void _hasRow
   void _configured
   return { ...rest, configured: creditSettingsConfigured(creditSettingsState) }
+}
+
+function lateFeeKindFromWrite(body: Record<string, unknown>): LateFeeKind {
+  if (!('late_fee_kind' in body)) return null
+  const value = body.late_fee_kind
+  return value === 'percent' || value === 'fixed' || value === null ? value : null
+}
+
+function nullableAmountFromWrite(body: Record<string, unknown>, key: string): string | null {
+  if (!(key in body)) return null
+  const value = body[key]
+  return typeof value === 'string' || value === null ? value : null
+}
+
+function graceDaysFromWrite(body: Record<string, unknown>): number {
+  if (!('late_fee_grace_days' in body)) return 0
+  const value = body.late_fee_grace_days
+  return typeof value === 'number' && Number.isInteger(value) ? value : 0
 }
 
 function isZeroPaid(paid: unknown): boolean {
@@ -1230,6 +1255,11 @@ export const handlers = [
       'allowed_frequencies',
       'max_installments',
       'min_down_payment_percent',
+      'late_fee_kind',
+      'late_fee_percent',
+      'late_fee_fixed',
+      'late_fee_grace_days',
+      'late_fee_cap',
     ])
     const extra = Object.keys(body).filter((key) => !writeKeys.has(key))
     if (extra.length) {
@@ -1263,6 +1293,11 @@ export const handlers = [
         typeof body.min_down_payment_percent === 'string' ? body.min_down_payment_percent : null,
       configured: true,
       hasRow: true,
+      late_fee_kind: lateFeeKindFromWrite(body),
+      late_fee_percent: nullableAmountFromWrite(body, 'late_fee_percent'),
+      late_fee_fixed: nullableAmountFromWrite(body, 'late_fee_fixed'),
+      late_fee_grace_days: graceDaysFromWrite(body),
+      late_fee_cap: nullableAmountFromWrite(body, 'late_fee_cap'),
     }
     return HttpResponse.json(creditSettingsRead())
   }),
