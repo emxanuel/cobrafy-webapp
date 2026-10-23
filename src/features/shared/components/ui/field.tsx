@@ -1,3 +1,4 @@
+import { CircleAlert } from 'lucide-react'
 import type {
   InputHTMLAttributes,
   ReactNode,
@@ -14,6 +15,29 @@ type FieldProps = {
   hint?: string
 }
 
+export function FieldError({
+  id,
+  children,
+}: {
+  id?: string
+  children: ReactNode
+}) {
+  return (
+    <p
+      id={id}
+      role="alert"
+      className="text-danger flex items-start gap-1.5 text-sm"
+    >
+      <CircleAlert
+        className="text-danger mt-0.5 size-4 shrink-0"
+        size={16}
+        aria-hidden="true"
+      />
+      {children}
+    </p>
+  )
+}
+
 export function Field({
   id,
   label,
@@ -28,9 +52,7 @@ export function Field({
       </label>
       {children}
       {error ? (
-        <p id={`${id}-error`} role="alert" className="text-danger text-sm">
-          {error}
-        </p>
+        <FieldError id={`${id}-error`}>{error}</FieldError>
       ) : hint ? (
         <p className="text-text text-sm">{hint}</p>
       ) : null}
@@ -39,7 +61,7 @@ export function Field({
 }
 
 const controlClass =
-  'w-full rounded-md border border-border bg-bg px-3 py-2.5 text-heading outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 aria-invalid:border-danger disabled:cursor-default disabled:bg-muted disabled:text-heading disabled:opacity-100'
+  'w-full rounded-md border border-border bg-bg px-3 py-2.5 text-heading outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 aria-invalid:border-danger disabled:cursor-default disabled:bg-muted disabled:text-heading disabled:opacity-100 read-only:cursor-default read-only:bg-muted read-only:text-heading'
 
 export function TextInput({
   error,

@@ -168,6 +168,25 @@ export function maxContactsMessage(limit = MAX_CONTACTS_PER_CLIENT): string {
   return `El cliente ya tiene el máximo de ${limit} contactos`
 }
 
+/** Backend CBF-215 `{ field, code, message }` for document errors. */
+export const CBF_215_CEDULA_INVALID = {
+  field: 'document',
+  code: 'value_error',
+  message: 'Cédula no válida. Revisa los 11 dígitos.',
+} as const
+
+export const CBF_215_PASSPORT_INVALID = {
+  field: 'document',
+  code: 'value_error',
+  message: 'Pasaporte no válido. Usa de 6 a 20 letras o números.',
+} as const
+
+export const CBF_215_DOCUMENT_EXISTS = {
+  field: 'document',
+  code: 'CLIENT_DOCUMENT_EXISTS',
+  message: 'Ya hay un cliente con este documento.',
+} as const
+
 export const pendingInvite: InvitationRead = {
   id: 'inv-1',
   email: 'nuevo@negocio.com',

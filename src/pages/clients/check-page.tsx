@@ -13,6 +13,7 @@ import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
 import { Button, buttonVariants } from '@/features/shared/components/ui/button'
 import { Field, TextInput } from '@/features/shared/components/ui/field'
+import { getFieldErrors } from '@/features/shared/lib/api-error'
 import { cn } from '@/features/shared/lib/cn'
 import { formatDate } from '@/features/shared/lib/format-date'
 import { normalizeDocumentInput } from '@/features/shared/lib/mask-document'
@@ -34,6 +35,9 @@ export function CheckPage() {
   const [fieldError, setFieldError] = useState('')
   const [result, setResult] = useState<CheckResult | null>(null)
   const verify = useVerifyClientMutation()
+  const apiFields = verify.isError ? getFieldErrors(verify.error) : {}
+  const shownFieldError = fieldError || apiFields.document
+  const showBanner = verify.isError && !apiFields.document
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
   const role = activeMembership(memberships, activeBusinessId)?.role ?? null
@@ -119,8 +123,8 @@ export function CheckPage() {
         <Field
           id="check-document"
           label="Número de documento"
-          error={fieldError}
-          hint={fieldError ? undefined : 'Con o sin guiones.'}
+          error={shownFieldError}
+          hint={shownFieldError ? undefined : 'Con o sin guiones.'}
         >
           <TextInput
             id="check-document"
@@ -128,7 +132,7 @@ export function CheckPage() {
             inputMode={docType === 'cedula' ? 'numeric' : 'text'}
             placeholder={docType === 'cedula' ? '001-0000000-0' : 'AB1234567'}
             value={document}
-            error={fieldError}
+            error={shownFieldError}
             onChange={(event) => {
               setDocument(event.target.value)
               setFieldError('')
@@ -142,7 +146,7 @@ export function CheckPage() {
         </Button>
       </form>
 
-      {verify.isError ? (
+      {showBanner ? (
         <Alert>No se pudo verificar. Inténtalo de nuevo.</Alert>
       ) : null}
 

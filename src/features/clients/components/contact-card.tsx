@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import {
@@ -7,6 +7,11 @@ import {
   useUpdateContactMutation,
 } from '@/features/clients/hooks/use-clients-queries'
 import { toContactPatch } from '@/features/clients/lib/contact-patch'
+import {
+  CONTACT_EDITOR_FIELDS,
+  hasUnrenderedFieldError,
+  unrenderedFieldMessages,
+} from '@/features/clients/lib/document-field-errors'
 import { contactEditSchema, type ContactEditValues } from '@/features/clients/schemas'
 import type { ContactRead } from '@/features/clients/services/types'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -38,6 +43,22 @@ export function ContactCard({
     },
   })
   const apiFields = update.isError ? getFieldErrors(update.error) : {}
+  const isRenderedField = (field: string) => CONTACT_EDITOR_FIELDS.has(field)
+  const bannerUnrendered = unrenderedFieldMessages(apiFields, isRenderedField)
+  const showBanner =
+    update.isError &&
+    (Object.keys(apiFields).length === 0 ||
+      hasUnrenderedFieldError(apiFields, isRenderedField))
+  const documentInputId = `${contact.id}-document`
+
+  useEffect(() => {
+    if (!update.error) return
+    const documentError = getFieldErrors(update.error).document
+    if (!documentError) return
+    const input = document.getElementById(documentInputId)
+    input?.focus()
+    input?.scrollIntoView?.({ block: 'center' })
+  }, [update.error, documentInputId])
 
   if (!editing) {
     return (
@@ -91,7 +112,13 @@ export function ContactCard({
           )
         })}
       >
-        {update.isError ? <Alert>{getApiErrorMessage(update.error)}</Alert> : null}
+        {showBanner ? (
+          <Alert>
+            {bannerUnrendered.length
+              ? bannerUnrendered.join(' ')
+              : getApiErrorMessage(update.error)}
+          </Alert>
+        ) : null}
         <Field
           id={`${contact.id}-name`}
           label="Nombre"
@@ -126,11 +153,15 @@ export function ContactCard({
               </SelectInput>
             </Field>
             <Field
-              id={`${contact.id}-document`}
+              id={documentInputId}
               label="Documento (opcional)"
               error={apiFields.document}
             >
-              <TextInput id={`${contact.id}-document`} {...form.register('document')} />
+              <TextInput
+                id={documentInputId}
+                error={apiFields.document}
+                {...form.register('document', { onChange: () => update.reset() })}
+              />
             </Field>
           </>
         ) : null}

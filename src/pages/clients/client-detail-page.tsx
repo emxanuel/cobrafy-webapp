@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useParams } from 'react-router'
+import { Link, useLocation, useParams } from 'react-router'
 
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import {
@@ -17,6 +17,7 @@ import { ClientRecordHeader } from '@/features/clients/components/client-record-
 import { displayFreeText } from '@/features/clients/lib/display-document'
 import { ContactCard } from '@/features/clients/components/contact-card'
 import { ContactComposer } from '@/features/clients/components/contact-composer'
+import { CLIENT_TOAST_MS } from '@/features/clients/lib/complete-guarantor'
 import {
   failedContactsNotice,
   parseContactsSaveNotice,
@@ -38,12 +39,21 @@ import {
 
 export function ClientDetailPage() {
   const { clientId = '' } = useParams()
+  const location = useLocation()
   const [contactsNotice] = useState(() =>
     parseContactsSaveNotice(sessionStorage.getItem(FAILED_CONTACTS_KEY)),
+  )
+  const [toast, setToast] = useState(
+    () => (location.state as { toast?: string } | null)?.toast ?? null,
   )
   useEffect(() => {
     sessionStorage.removeItem(FAILED_CONTACTS_KEY)
   }, [])
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), CLIENT_TOAST_MS)
+    return () => window.clearTimeout(timer)
+  }, [toast])
   const failedNotice = failedContactsNotice(contactsNotice.failed, {
     applied: contactsNotice.applied,
     stoppedOnUnauthorized: contactsNotice.stoppedOnUnauthorized,
@@ -119,6 +129,8 @@ export function ClientDetailPage() {
           </Link>
         ) : null}
       </div>
+
+      {toast ? <Alert tone="success" title={toast} /> : null}
 
       {failedNotice ? <Alert>{failedNotice}</Alert> : null}
 

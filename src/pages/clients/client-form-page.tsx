@@ -1,4 +1,5 @@
-import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { useRef, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { useSessionStore } from '@/features/auth/stores/session-store'
 import {
@@ -11,6 +12,13 @@ import {
   useUpdateClientMutation,
 } from '@/features/clients/hooks/use-clients-queries'
 import { ClientForm } from '@/features/clients/components/client-form'
+import {
+  BACK_LABEL,
+  CLIENT_AND_GUARANTOR_SAVED_TOAST,
+  COMPLETE_GUARANTOR_TITLE,
+  SAVE_GUARANTOR_LABEL,
+} from '@/features/clients/lib/complete-guarantor'
+import { isPartialClientSaveError } from '@/features/clients/lib/document-field-errors'
 import { useMembersQuery } from '@/features/members/hooks/use-members-queries'
 import { PageHeader } from '@/features/shared/components/page-header'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -25,7 +33,7 @@ export function ClientFormPage() {
   const navigate = useNavigate()
   const existing = useClient(clientId)
   const create = useCreateClientMutation()
-  const update = useUpdateClientMutation(clientId ?? '')
+  const update = useUpdateClientMutation()
   const memberships = useSessionStore((s) => s.memberships)
   const activeBusinessId = useBusinessStore((s) => s.activeBusinessId)
   const role = activeMembership(memberships, activeBusinessId)?.role ?? null
@@ -35,6 +43,12 @@ export function ClientFormPage() {
   )
   const pending = create.isPending || update.isPending
   const error = create.error ?? update.error
+  const [resumeClientId, setResumeClientId] = useState<string | null>(null)
+  const submitting = useRef(false)
+  if (!isEdit && isPartialClientSaveError(error) && !resumeClientId) {
+    setResumeClientId(error.savedClient.id)
+  }
+  const completingGuarantor = Boolean(resumeClientId)
 
   if (isEdit && existing.isPending) {
     return (
@@ -50,45 +64,101 @@ export function ClientFormPage() {
 
   return (
     <>
+      {completingGuarantor ? (
+        <Link
+          to="/clientes"
+          className="text-accent inline-flex min-h-11 items-center no-underline"
+        >
+          {BACK_LABEL}
+        </Link>
+      ) : null}
       <PageHeader
-        title={isEdit ? 'Editar cliente' : 'Nuevo cliente'}
-        description="Completa la ficha. Puedes agregar varias referencias y garantes."
+        title={
+          completingGuarantor
+            ? COMPLETE_GUARANTOR_TITLE
+            : isEdit
+              ? 'Editar cliente'
+              : 'Nuevo cliente'
+        }
+        description={
+          completingGuarantor
+            ? undefined
+            : 'Completa la ficha. Puedes agregar varias referencias y garantes.'
+        }
       />
       <ClientForm
+        key={clientId ?? 'nuevo'}
         client={existing.data}
         collectors={collectors}
         pending={pending}
         error={error}
-        submitLabel={isEdit ? 'Guardar cambios' : 'Guardar cliente'}
+        completingGuarantor={completingGuarantor}
+        submitLabel={
+          completingGuarantor
+            ? SAVE_GUARANTOR_LABEL
+            : isEdit
+              ? 'Guardar cambios'
+              : 'Guardar cliente'
+        }
+        onGoToRecord={
+          resumeClientId
+            ? () => navigate(`/clientes/${resumeClientId}`)
+            : undefined
+        }
         onSubmit={(payload) => {
+          if (submitting.current) return
+          submitting.current = true
+          const releaseOnError = () => {
+            submitting.current = false
+          }
+          const go = (result: { client: { id: string } }) => {
+            if (completingGuarantor) {
+              navigate(`/clientes/${result.client.id}`, {
+                state: { toast: CLIENT_AND_GUARANTOR_SAVED_TOAST },
+              })
+              return
+            }
+            navigate(
+              fromVenta
+                ? `/clientes/${result.client.id}/ventas/nueva`
+                : `/clientes/${result.client.id}`,
+            )
+          }
           if (isEdit && clientId) {
-            if (!existing.data) return
+            if (!existing.data) {
+              submitting.current = false
+              return
+            }
             update.mutate(
               {
+                clientId,
                 client: payload.client,
                 contacts: payload.contacts,
-                previousContacts: existing.data.contacts,
-                previousClient: existing.data,
+                previousContacts: payload.resume?.previousContacts ?? existing.data.contacts,
+                previousClient: payload.resume?.client ?? existing.data,
               },
-              {
-                onSuccess: (result) =>
-                  navigate(
-                    fromVenta
-                      ? `/clientes/${result.client.id}/ventas/nueva`
-                      : `/clientes/${result.client.id}`,
-                  ),
-              },
+              { onSuccess: go, onError: releaseOnError },
             )
             return
           }
-          create.mutate(payload, {
-            onSuccess: (result) =>
-              navigate(
-                fromVenta
-                  ? `/clientes/${result.client.id}/ventas/nueva`
-                  : `/clientes/${result.client.id}`,
-              ),
-          })
+          if (payload.resume) {
+            create.reset()
+            update.mutate(
+              {
+                clientId: payload.resume.client.id,
+                client: payload.client,
+                contacts: payload.contacts,
+                previousContacts: payload.resume.previousContacts,
+                previousClient: payload.resume.client,
+              },
+              { onSuccess: go, onError: releaseOnError },
+            )
+            return
+          }
+          create.mutate(
+            { client: payload.client, contacts: payload.contacts },
+            { onSuccess: go, onError: releaseOnError },
+          )
         }}
       />
     </>

@@ -1,7 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
-import { useFieldArray, useForm } from 'react-hook-form'
+import { Check } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useFieldArray, useForm, useWatch, type FieldPath } from 'react-hook-form'
 
+import {
+  CLIENT_SAVED_BANNER_BODY,
+  CLIENT_SAVED_BANNER_TITLE,
+  CONTACT_SAVED_LABEL,
+  GO_TO_RECORD_LABEL,
+} from '@/features/clients/lib/complete-guarantor'
+import {
+  hasUnrenderedFieldError,
+  isClientFormField,
+  isPartialClientSaveError,
+  unrenderedFieldMessages,
+} from '@/features/clients/lib/document-field-errors'
 import {
   clientFormSchema,
   emptyClientForm,
@@ -11,7 +24,9 @@ import { useCheckClientMutation } from '@/features/clients/hooks/use-clients-que
 import type {
   ClientCreate,
   ClientDetail,
+  ClientRead,
   ContactDraft,
+  ContactRead,
 } from '@/features/clients/services/types'
 import type { MemberRead } from '@/features/members/services/types'
 import { Alert } from '@/features/shared/components/ui/alert'
@@ -32,21 +47,50 @@ import { UNCONFIRMED_MUTATION_MESSAGE } from '@/features/shared/services/client'
 export type ClientFormSubmit = {
   client: ClientCreate
   contacts: ContactDraft[]
+  resume?: {
+    client: ClientRead
+    previousContacts: ContactRead[]
+  }
 }
 
-function toSubmit(values: ClientFormValues): ClientFormSubmit {
+function mergeContacts(current: ContactRead[], incoming: ContactRead[]) {
+  const byId = new Map(current.map((item) => [item.id, item]))
+  for (const item of incoming) byId.set(item.id, item)
+  return [...byId.values()]
+}
+
+function toClientCreate(values: ClientFormValues): ClientCreate {
   return {
-    client: {
-      name: values.name,
-      doc_type: values.doc_type,
-      document: values.document,
-      phone: values.phone,
-      address: values.address,
-      notes: values.notes || null,
-      collector_membership_id: values.collector_membership_id || null,
-    },
+    name: values.name,
+    doc_type: values.doc_type,
+    document: values.document,
+    phone: values.phone,
+    address: values.address,
+    notes: values.notes || null,
+    collector_membership_id: values.collector_membership_id || null,
+  }
+}
+
+function toSavedClientCreate(saved: ClientRead): ClientCreate {
+  return {
+    name: saved.name,
+    doc_type: saved.doc_type,
+    document: saved.document ?? '',
+    phone: saved.phone,
+    address: saved.address,
+    notes: saved.notes || null,
+    collector_membership_id: saved.collector_membership_id || null,
+  }
+}
+
+function toSubmit(
+  values: ClientFormValues,
+  savedClient?: ClientRead | null,
+): ClientFormSubmit {
+  return {
+    client: savedClient ? toSavedClientCreate(savedClient) : toClientCreate(values),
     contacts: values.contacts.map((item) => ({
-      id: item.contact_id,
+      id: item.contact_id || undefined,
       type: item.type,
       name: item.name,
       phone: item.phone,
@@ -88,60 +132,151 @@ export function ClientForm({
   pending,
   error,
   submitLabel,
+  completingGuarantor = false,
   onSubmit,
+  onGoToRecord,
 }: {
   client?: ClientDetail
   collectors: MemberRead[]
   pending: boolean
   error: unknown
   submitLabel: string
+  completingGuarantor?: boolean
   onSubmit: (payload: ClientFormSubmit) => void
+  onGoToRecord?: () => void
 }) {
   const form = useForm<ClientFormValues>({
     resolver: zodResolver(clientFormSchema),
     defaultValues: client ? fromClient(client) : emptyClientForm(),
   })
   const contacts = useFieldArray({ control: form.control, name: 'contacts' })
+  const contactValues = useWatch({ control: form.control, name: 'contacts' })
+  const docType = useWatch({ control: form.control, name: 'doc_type' })
+  const collectorId = useWatch({ control: form.control, name: 'collector_membership_id' })
+  const docTypeLabel = docType === 'pasaporte' ? 'Pasaporte' : 'Cédula'
+  const collectorLabel =
+    collectors.find((member) => member.id === collectorId)?.name ?? 'Sin asignar'
   const check = useCheckClientMutation()
-  const apiFields = error ? getFieldErrors(error) : {}
+  const [errorForDismiss, setErrorForDismiss] = useState(error)
+  const [dismissedFields, setDismissedFields] = useState<Set<string>>(() => new Set())
+  const [resumeClient, setResumeClient] = useState<ClientRead | null>(() => client ?? null)
+  const [resumeContacts, setResumeContacts] = useState<ContactRead[]>(
+    () => client?.contacts.filter((item) => item.is_active) ?? [],
+  )
+  if (error !== errorForDismiss) {
+    setErrorForDismiss(error)
+    setDismissedFields(new Set())
+    if (isPartialClientSaveError(error)) {
+      setResumeClient(error.savedClient)
+      setResumeContacts((current) =>
+        mergeContacts(current, Object.values(error.createdByIndex)).filter(
+          (item) => !error.removedIds.includes(item.id),
+        ),
+      )
+    }
+  }
+  const saveFields = error ? getFieldErrors(error) : {}
+  const checkFields = check.isError ? getFieldErrors(check.error) : {}
+  const apiFields = { ...checkFields, ...saveFields }
   const forbidden = isApiError(error) && error.status === 403
   const timedOut = isApiError(error) && error.status === 0 && !client
-  const showBanner = Boolean(error) && (forbidden || timedOut || Object.keys(apiFields).length === 0)
+  const isRenderedField = (field: string) => isClientFormField(field, contacts.fields.length)
+  const saveHasUnrendered = hasUnrenderedFieldError(saveFields, isRenderedField)
+  const checkHasUnrendered = hasUnrenderedFieldError(checkFields, isRenderedField)
+  const showBanner =
+    (Boolean(error) &&
+      (forbidden || timedOut || Object.keys(saveFields).length === 0 || saveHasUnrendered)) ||
+    (!error &&
+      check.isError &&
+      (Object.keys(checkFields).length === 0 || checkHasUnrendered))
+  const bannerUnrendered = unrenderedFieldMessages(
+    error ? saveFields : checkFields,
+    isRenderedField,
+  )
 
+  const appliedErrorSource = useRef<unknown>(null)
   useEffect(() => {
-    if (!error) return
-    for (const [name, message] of Object.entries(getFieldErrors(error))) {
-      form.setError(name as 'document', { type: 'server', message })
+    if (isPartialClientSaveError(error)) {
+      for (const [index, saved] of Object.entries(error.createdByIndex)) {
+        form.setValue(
+          `contacts.${index}.contact_id` as FieldPath<ClientFormValues>,
+          saved.id,
+        )
+      }
     }
-  }, [error, form])
+    const source = error ?? (check.isError ? check.error : undefined)
+    if (!source) {
+      appliedErrorSource.current = null
+      return
+    }
+    if (appliedErrorSource.current === source) return
+    appliedErrorSource.current = source
+    const mapped = getFieldErrors(source)
+    const names = Object.keys(mapped)
+    for (const [name, message] of Object.entries(mapped)) {
+      form.setError(name as FieldPath<ClientFormValues>, { type: 'server', message })
+    }
+    const first = names[0]
+    if (!first) return
+    form.setFocus(first as FieldPath<ClientFormValues>)
+    document.getElementById(first)?.scrollIntoView?.({ block: 'center' })
+  }, [error, check.error, check.isError, form])
+
+  function dismissField(name: FieldPath<ClientFormValues>) {
+    form.clearErrors(name)
+    setDismissedFields((current) => {
+      const next = new Set(current)
+      next.add(name)
+      return next
+    })
+  }
 
   function fieldError(name: string) {
     const parts = name.split('.')
     let current: unknown = form.formState.errors
     for (const part of parts) {
-      if (!current || typeof current !== 'object') return apiFields[name]
+      if (!current || typeof current !== 'object') break
       current = (current as Record<string, unknown>)[part]
     }
     const message =
       current && typeof current === 'object' && 'message' in current
         ? String((current as { message?: string }).message ?? '')
         : ''
-    return message || apiFields[name]
+    if (message) return message
+    if (dismissedFields.has(name)) return undefined
+    return apiFields[name]
   }
 
   return (
     <form
       className="flex flex-col gap-6"
-      onSubmit={form.handleSubmit((values) => onSubmit(toSubmit(values)))}
+      onSubmit={form.handleSubmit(() =>
+        onSubmit({
+          ...toSubmit(form.getValues(), completingGuarantor ? resumeClient : null),
+          resume: resumeClient
+            ? { client: resumeClient, previousContacts: resumeContacts }
+            : undefined,
+        }),
+      )}
       noValidate
     >
+      {completingGuarantor ? (
+        <Alert tone="warning" icon="⚠" title={CLIENT_SAVED_BANNER_TITLE}>
+          {CLIENT_SAVED_BANNER_BODY}
+        </Alert>
+      ) : null}
       {showBanner ? (
         <Alert>
           {forbidden
             ? 'No tienes permiso para guardar este cliente.'
             : timedOut
               ? UNCONFIRMED_MUTATION_MESSAGE
-              : getApiErrorMessage(error, 'No se pudo guardar el cliente.')}
+              : bannerUnrendered.length
+                ? bannerUnrendered.join(' ')
+                : getApiErrorMessage(
+                    error ?? check.error,
+                    'No se pudo guardar el cliente.',
+                  )}
         </Alert>
       ) : null}
 
@@ -153,14 +288,30 @@ export function ClientForm({
             autoComplete="name"
             error={fieldError('name')}
             {...form.register('name')}
+            readOnly={completingGuarantor}
           />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id="doc_type" label="Tipo de documento" error={fieldError('doc_type')}>
-            <SelectInput id="doc_type" {...form.register('doc_type')}>
-              <option value="cedula">Cédula</option>
-              <option value="pasaporte">Pasaporte</option>
-            </SelectInput>
+            {completingGuarantor ? (
+              <>
+                <TextInput id="doc_type" readOnly value={docTypeLabel} />
+                <input type="hidden" {...form.register('doc_type')} />
+              </>
+            ) : (
+              <SelectInput
+                id="doc_type"
+                {...form.register('doc_type', {
+                  onChange: () => {
+                    dismissField('document')
+                    check.reset()
+                  },
+                })}
+              >
+                <option value="cedula">Cédula</option>
+                <option value="pasaporte">Pasaporte</option>
+              </SelectInput>
+            )}
           </Field>
           <Field id="document" label="Número de documento" error={fieldError('document')}>
             <TextInput
@@ -168,16 +319,22 @@ export function ClientForm({
               autoComplete="off"
               error={fieldError('document')}
               {...form.register('document', {
+                onChange: () => {
+                  dismissField('document')
+                  check.reset()
+                },
                 onBlur: () => {
+                  if (completingGuarantor) return
                   const document = form.getValues('document').trim()
-                  const docType = form.getValues('doc_type')
+                  const nextDocType = form.getValues('doc_type')
                   if (!document) return
-                  check.mutate({ doc_type: docType, document })
+                  check.mutate({ doc_type: nextDocType, document })
                 },
               })}
+              readOnly={completingGuarantor}
             />
           </Field>
-          {check.data?.found ? (
+          {check.data?.found && !completingGuarantor ? (
             <Alert>
               {check.data.is_blocked
                 ? `Ese documento ya está en una ficha bloqueada${check.data.blocked_reason ? `: ${check.data.blocked_reason}` : '.'}`
@@ -191,6 +348,7 @@ export function ClientForm({
               autoComplete="tel"
               error={fieldError('phone')}
               {...form.register('phone')}
+              readOnly={completingGuarantor}
             />
           </Field>
           <Field
@@ -198,67 +356,88 @@ export function ClientForm({
             label="Cobrador asignado"
             error={fieldError('collector_membership_id')}
           >
-            <SelectInput
-              id="collector_membership_id"
-              {...form.register('collector_membership_id')}
-            >
-              <option value="">Sin asignar</option>
-              {collectors.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </SelectInput>
+            {completingGuarantor ? (
+              <>
+                <TextInput id="collector_membership_id" readOnly value={collectorLabel} />
+                <input type="hidden" {...form.register('collector_membership_id')} />
+              </>
+            ) : (
+              <SelectInput
+                id="collector_membership_id"
+                {...form.register('collector_membership_id')}
+              >
+                <option value="">Sin asignar</option>
+                {collectors.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </SelectInput>
+            )}
           </Field>
         </div>
         <Field id="address" label="Dirección" error={fieldError('address')}>
-          <TextInput id="address" {...form.register('address')} />
+          <TextInput
+            id="address"
+            {...form.register('address')}
+            readOnly={completingGuarantor}
+          />
         </Field>
         <Field id="notes" label="Notas (opcional)">
-          <TextArea id="notes" {...form.register('notes')} />
+          <TextArea
+            id="notes"
+            {...form.register('notes')}
+            readOnly={completingGuarantor}
+          />
         </Field>
       </section>
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="m-0 text-xl">Referencias y garantes</h2>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                contacts.append({
-                  type: 'referencia',
-                  name: '',
-                  phone: '',
-                  relationship: '',
-                  address: '',
-                  doc_type: '',
-                  document: '',
-                })
-              }
-            >
-              Agregar referencia
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() =>
-                contacts.append({
-                  type: 'garante',
-                  name: '',
-                  phone: '',
-                  relationship: '',
-                  address: '',
-                  doc_type: '',
-                  document: '',
-                })
-              }
-            >
-              Agregar garante
-            </Button>
-          </div>
+          {completingGuarantor ? null : (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  contacts.append({
+                    contact_id: '',
+                    type: 'referencia',
+                    name: '',
+                    phone: '',
+                    relationship: '',
+                    address: '',
+                    doc_type: '',
+                    document: '',
+                  })
+                }
+              >
+                Agregar referencia
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  contacts.append({
+                    contact_id: '',
+                    type: 'garante',
+                    name: '',
+                    phone: '',
+                    relationship: '',
+                    address: '',
+                    doc_type: '',
+                    document: '',
+                  })
+                }
+              >
+                Agregar garante
+              </Button>
+            </div>
+          )}
         </div>
         {contacts.fields.map((field, index) => {
           const kind = field.type
+          const rowLocked =
+            completingGuarantor && Boolean(contactValues?.[index]?.contact_id)
           return (
             <fieldset
               key={field.id}
@@ -267,6 +446,12 @@ export function ClientForm({
               <legend className="px-1 text-sm">
                 {kind === 'garante' ? `Garante ${index + 1}` : `Referencia ${index + 1}`}
               </legend>
+              {rowLocked ? (
+                <p className="text-success m-0 flex items-center gap-1 text-sm font-medium">
+                  <Check className="size-4" size={16} aria-hidden="true" />
+                  {CONTACT_SAVED_LABEL}
+                </p>
+              ) : null}
               <Field
                 id={`contacts.${index}.name`}
                 label="Nombre"
@@ -275,6 +460,7 @@ export function ClientForm({
                 <TextInput
                   id={`contacts.${index}.name`}
                   {...form.register(`contacts.${index}.name`)}
+                  disabled={rowLocked}
                 />
               </Field>
               <Field
@@ -286,6 +472,7 @@ export function ClientForm({
                   id={`contacts.${index}.phone`}
                   inputMode="tel"
                   {...form.register(`contacts.${index}.phone`)}
+                  disabled={rowLocked}
                 />
               </Field>
               <Field
@@ -296,6 +483,7 @@ export function ClientForm({
                 <TextInput
                   id={`contacts.${index}.relationship`}
                   {...form.register(`contacts.${index}.relationship`)}
+                  disabled={rowLocked}
                 />
               </Field>
               {kind === 'garante' ? (
@@ -307,6 +495,7 @@ export function ClientForm({
                     <SelectInput
                       id={`contacts.${index}.doc_type`}
                       {...form.register(`contacts.${index}.doc_type`)}
+                      disabled={rowLocked}
                     >
                       <option value="">Sin documento</option>
                       <option value="cedula">Cédula</option>
@@ -316,41 +505,62 @@ export function ClientForm({
                   <Field
                     id={`contacts.${index}.document`}
                     label="Número de documento (opcional)"
-                    error={fieldError(`contacts.${index}.document`)}
+                    error={rowLocked ? undefined : fieldError(`contacts.${index}.document`)}
                   >
                     <TextInput
                       id={`contacts.${index}.document`}
-                      {...form.register(`contacts.${index}.document`)}
+                      error={rowLocked ? undefined : fieldError(`contacts.${index}.document`)}
+                      {...form.register(`contacts.${index}.document`, {
+                        onChange: () =>
+                          dismissField(`contacts.${index}.document` as FieldPath<ClientFormValues>),
+                      })}
+                      disabled={rowLocked}
                     />
                   </Field>
                 </>
               ) : null}
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  const name = form.getValues(`contacts.${index}.name`)
-                  if (
-                    !window.confirm(
-                      `¿Quitar a ${name.trim() || 'este contacto'} de esta ficha?`,
-                    )
-                  ) {
-                    return
-                  }
-                  contacts.remove(index)
-                }}
-              >
-                Quitar
-              </Button>
+              {completingGuarantor || rowLocked ? null : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    const name = form.getValues(`contacts.${index}.name`)
+                    if (
+                      !window.confirm(
+                        `¿Quitar a ${name.trim() || 'este contacto'} de esta ficha?`,
+                      )
+                    ) {
+                      return
+                    }
+                    contacts.remove(index)
+                  }}
+                >
+                  Quitar
+                </Button>
+              )}
             </fieldset>
           )
         })}
       </section>
 
-      <div className="sticky bottom-0 -mx-4 bg-bg/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
+      <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 bg-bg/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+        <Button
+          type="submit"
+          className={completingGuarantor ? 'min-h-12 w-full' : 'w-full sm:w-auto'}
+          disabled={pending}
+        >
           {pending ? 'Guardando…' : submitLabel}
         </Button>
+        {completingGuarantor && onGoToRecord ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12 w-full"
+            onClick={onGoToRecord}
+          >
+            {GO_TO_RECORD_LABEL}
+          </Button>
+        ) : null}
       </div>
     </form>
   )

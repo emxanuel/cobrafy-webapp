@@ -104,15 +104,17 @@ export function useCreateClientMutation() {
   })
 }
 
-export function useUpdateClientMutation(clientId: string) {
+export function useUpdateClientMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({
+      clientId,
       client,
       contacts,
       previousContacts,
       previousClient,
     }: {
+      clientId: string
       client: ClientCreate
       contacts: ContactDraft[]
       previousContacts: ContactRead[]
