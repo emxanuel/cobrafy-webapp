@@ -7,7 +7,9 @@ import {
   type Frequency,
   type InstallmentPreview,
   type InstallmentRead,
+  type InstallmentsSummary,
   type LateFeeKind,
+  type SaleListInstallment,
   type SaleContract,
   type SaleContractSeller,
   type SaleCreateRequest,
@@ -67,18 +69,52 @@ function asPreview(value: unknown): InstallmentPreview[] {
     }))
 }
 
+function asHasPayment(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
+}
+
 function asInstallments(value: unknown): InstallmentRead[] {
   if (!Array.isArray(value)) return []
   return value
     .filter((item): item is Record<string, unknown> => typeof item === 'object' && item != null)
-    .map((item) => ({
-      number: asInt(item.number, 0),
-      due_date: asString(item.due_date),
-      amount: asString(item.amount),
-      paid: asString(item.paid, '0.00'),
-      late_fee: asString(item.late_fee, '0.00'),
-      status: asString(item.status, 'pending'),
-    }))
+    .map((item) => {
+      const hasPayment = asHasPayment(item.has_payment)
+      return {
+        number: asInt(item.number, 0),
+        due_date: asString(item.due_date),
+        amount: asString(item.amount),
+        paid: asString(item.paid, '0.00'),
+        late_fee: asString(item.late_fee, '0.00'),
+        status: asString(item.status, 'pending'),
+        ...(hasPayment !== undefined ? { has_payment: hasPayment } : {}),
+      }
+    })
+}
+
+function asListInstallments(value: unknown): SaleListInstallment[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item != null)
+    .map((item) => {
+      const hasPayment = asHasPayment(item.has_payment)
+      return {
+        number: asInt(item.number, 0),
+        status: asString(item.status, 'pending'),
+        ...(hasPayment !== undefined ? { has_payment: hasPayment } : {}),
+      }
+    })
+}
+
+function asInstallmentsSummary(value: unknown): InstallmentsSummary | undefined {
+  if (typeof value !== 'object' || value == null) return undefined
+  const row = value as Record<string, unknown>
+  return {
+    paid: asInt(row.paid, 0),
+    partial: asInt(row.partial, 0),
+    overdue: asInt(row.overdue, 0),
+    pending: asInt(row.pending, 0),
+    cancelled: asInt(row.cancelled, 0),
+  }
 }
 
 function asVoidedBy(value: unknown): SaleVoidedBy | null {
@@ -189,6 +225,12 @@ export function normalizeSimulation(data: unknown): SimulateSaleResponse {
 export function normalizeSale(data: unknown): SaleRead {
   const row = (data ?? {}) as Record<string, unknown>
   const clientRaw = (row.client ?? {}) as Record<string, unknown>
+  const regular =
+    typeof row.regular_installment_amount === 'string' ? row.regular_installment_amount : undefined
+  const last =
+    typeof row.last_installment_amount === 'string' ? row.last_installment_amount : undefined
+  const installments = asListInstallments(row.installments)
+  const summary = asInstallmentsSummary(row.installments_summary)
   return {
     id: asString(row.id),
     sale_number: asInt(row.sale_number, 0),
@@ -219,6 +261,10 @@ export function normalizeSale(data: unknown): SaleRead {
     void_reason: asNullableString(row.void_reason),
     voided_by: asVoidedBy(row.voided_by),
     created_at: asString(row.created_at),
+    ...(regular !== undefined ? { regular_installment_amount: regular } : {}),
+    ...(last !== undefined ? { last_installment_amount: last } : {}),
+    ...(installments ? { installments } : {}),
+    ...(summary ? { installments_summary: summary } : {}),
   }
 }
 

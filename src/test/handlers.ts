@@ -235,7 +235,6 @@ export function seedSale(sale: Record<string, unknown>) {
 
 function saleReadFromStored(sale: Record<string, unknown>) {
   const read = { ...sale }
-  delete read.installments
   delete read.contract
   delete read.warnings
   return read
