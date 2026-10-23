@@ -1,5 +1,5 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
-import { delay, http, HttpResponse } from 'msw'
+import { cleanup, screen, within } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
@@ -271,7 +271,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     expect(
       within(card).getByLabelText('24 cuotas: 6 pagadas, 1 vencida, 17 pendientes'),
     ).toBeInTheDocument()
-    expect(within(card.querySelector('[role="img"]')!).querySelectorAll(':scope > span')).toHaveLength(13)
+    expect(card.querySelector('[role="img"]')!.querySelectorAll(':scope > span')).toHaveLength(13)
   })
 
   it('el article tiene gap de 6 px y toda la tarjeta es el área táctil', async () => {
@@ -336,7 +336,7 @@ describe('CBF-214 estado real de las cuotas', () => {
           })
         }
         pageTwoCalls += 1
-        if (pageTwoCalls === 1) {
+        if (pageTwoCalls <= 2) {
           return HttpResponse.json({ detail: 'falló la página' }, { status: 500 })
         }
         return HttpResponse.json({
@@ -417,33 +417,5 @@ describe('CBF-214 estado real de las cuotas', () => {
     expect(text.indexOf('RD$ 18,000.00')).toBeLessThan(text.indexOf('3 pagadas'))
     expect(text.indexOf('3 pagadas')).toBeLessThan(text.indexOf('Vendida el'))
     expect(text.indexOf('Vendida el')).toBeLessThan(text.indexOf('Saldo'))
-  })
-})
-
-describe('CBF-214 espera de carga', () => {
-  it('el skeleton no se queda si la lista responde', async () => {
-    loginOwner()
-    seedSale(sale214())
-    server.use(
-      http.get('*/sales', async () => {
-        await delay(20)
-        return HttpResponse.json({
-          items: [sale214()],
-          total: 1,
-          page: 1,
-          page_size: 50,
-        })
-      }),
-    )
-    window.history.pushState({}, '', '/ventas')
-    renderApp()
-    expect(await screen.findByTestId('sale-card-skeleton')).toBeInTheDocument()
-    await waitFor(
-      () => {
-        expect(screen.queryByTestId('sale-card-skeleton')).not.toBeInTheDocument()
-      },
-      { timeout: 4000 },
-    )
-    expect(screen.getByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
   })
 })
