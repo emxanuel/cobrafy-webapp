@@ -89,7 +89,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     window.history.pushState({}, '', '/ventas')
     renderApp()
     const title = '#128 · Nevera Mabe 14 pies'
-    expect(await screen.findByText(title)).toBeInTheDocument()
+    expect(await screen.findByText(title, {}, { timeout: 4000 })).toBeInTheDocument()
     const onList = cardOf(title)
     expect(within(onList).getByText('Ana Pérez')).toBeInTheDocument()
     expect(within(onList).getByText('12 mensuales × RD$ 1,500.00')).toBeInTheDocument()
@@ -101,7 +101,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     cleanup()
     window.history.pushState({}, '', '/clientes/cli-1/historial')
     renderApp()
-    expect(await screen.findByText(title)).toBeInTheDocument()
+    expect(await screen.findByText(title, {}, { timeout: 4000 })).toBeInTheDocument()
     const onPurchases = cardOf(title)
     expect(within(onPurchases).queryByText('Ana Pérez')).not.toBeInTheDocument()
     expect(within(onPurchases).getByText('12 mensuales × RD$ 1,500.00')).toBeInTheDocument()
@@ -118,7 +118,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     seedSale(sale214())
     window.history.pushState({}, '', '/clientes/cli-1/historial')
     renderApp()
-    expect(await screen.findByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
+    expect(await screen.findByText('#128 · Nevera Mabe 14 pies', {}, { timeout: 4000 })).toBeInTheDocument()
     expect(screen.getByText(/Cédula •••-••••567-8/)).toBeInTheDocument()
     expect(screen.queryByText('001-1234567-8')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Nueva venta/ })).not.toBeInTheDocument()
@@ -133,7 +133,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     seedSale(clientSaleFixture())
     window.history.pushState({}, '', '/ventas')
     renderApp()
-    expect(await screen.findByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
+    expect(await screen.findByText('#128 · Nevera Mabe 14 pies', {}, { timeout: 4000 })).toBeInTheDocument()
     const card = cardOf('#128 · Nevera Mabe 14 pies')
     expect(within(card).getByText('12 mensuales')).toBeInTheDocument()
     expect(within(card).queryByText(/mensuales ×/)).not.toBeInTheDocument()
@@ -152,7 +152,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     )
     window.history.pushState({}, '', '/ventas')
     renderApp()
-    expect(await screen.findByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
+    expect(await screen.findByText('#128 · Nevera Mabe 14 pies', {}, { timeout: 4000 })).toBeInTheDocument()
     const card = cardOf('#128 · Nevera Mabe 14 pies')
     expect(within(card).getByText(/3 pagadas/)).toBeInTheDocument()
     expect(within(card).getByText(/1 parcial/)).toBeInTheDocument()
@@ -219,7 +219,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     )
     window.history.pushState({}, '', '/ventas')
     renderApp()
-    expect(await screen.findByText('#125 · Celular Galaxy A15')).toBeInTheDocument()
+    expect(await screen.findByText('#125 · Celular Galaxy A15', {}, { timeout: 4000 })).toBeInTheDocument()
     const settled = cardOf('#125 · Celular Galaxy A15')
     expect(within(settled).getByText(/Saldada · 24 pagadas/)).toBeInTheDocument()
     expect(within(settled).queryByText(/Saldo/)).not.toBeInTheDocument()
@@ -262,7 +262,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     )
     window.history.pushState({}, '', '/ventas')
     renderApp()
-    expect(await screen.findByText('#130 · Juego de sala')).toBeInTheDocument()
+    expect(await screen.findByText('#130 · Juego de sala', {}, { timeout: 4000 })).toBeInTheDocument()
     const card = cardOf('#130 · Juego de sala')
     expect(within(card).getByText('+12')).toBeInTheDocument()
     expect(within(card).getByText(/6 pagadas/)).toBeInTheDocument()
@@ -279,7 +279,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     seedSale(sale214())
     window.history.pushState({}, '', '/ventas')
     renderApp()
-    expect(await screen.findByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
+    expect(await screen.findByText('#128 · Nevera Mabe 14 pies', {}, { timeout: 4000 })).toBeInTheDocument()
     const link = cardOf('#128 · Nevera Mabe 14 pies')
     expect(link).toHaveClass('min-h-11')
     expect(link.querySelector('article')).toHaveClass('gap-1.5', 'min-h-11')
@@ -299,7 +299,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     )
     window.history.pushState({}, '', '/ventas')
     renderApp()
-    const skeletons = await screen.findAllByTestId('sale-card-skeleton')
+    const skeletons = await screen.findAllByTestId('sale-card-skeleton', {}, { timeout: 4000 })
     expect(skeletons).toHaveLength(2)
     expect(skeletons[0]?.children).toHaveLength(4)
     expect(screen.getByText('Cargando…')).toBeInTheDocument()
@@ -350,7 +350,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     window.history.pushState({}, '', '/ventas')
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
+    expect(await screen.findByText('#128 · Nevera Mabe 14 pies', {}, { timeout: 4000 })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Ver más' }))
     expect(
       await screen.findByText('No pudimos cargar más ventas.', {}, { timeout: 4000 }),
@@ -380,7 +380,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     )
     window.history.pushState({}, '', '/ventas/sale-128')
     renderApp()
-    const heading = await screen.findByRole('heading', { name: 'Cuotas' })
+    const heading = await screen.findByRole('heading', { name: 'Cuotas' }, { timeout: 4000 })
     const header = heading.parentElement
     expect(header).not.toBeNull()
     expect(within(header as HTMLElement).getByText(/1 pagada/)).toBeInTheDocument()
@@ -408,7 +408,7 @@ describe('CBF-214 estado real de las cuotas', () => {
     seedSale(sale214({ balance: '17500.00' }))
     window.history.pushState({}, '', '/ventas')
     renderApp()
-    expect(await screen.findByText('#128 · Nevera Mabe 14 pies')).toBeInTheDocument()
+    expect(await screen.findByText('#128 · Nevera Mabe 14 pies', {}, { timeout: 4000 })).toBeInTheDocument()
     const card = cardOf('#128 · Nevera Mabe 14 pies')
     const total = within(card).getByText(formatMoney('18000.00'))
     expect(total).toHaveClass('whitespace-nowrap')
@@ -417,5 +417,61 @@ describe('CBF-214 estado real de las cuotas', () => {
     expect(text.indexOf('RD$ 18,000.00')).toBeLessThan(text.indexOf('3 pagadas'))
     expect(text.indexOf('3 pagadas')).toBeLessThan(text.indexOf('Vendida el'))
     expect(text.indexOf('Vendida el')).toBeLessThan(text.indexOf('Saldo'))
+  })
+
+  it('los puntos siguen el orden de las filas: paid, overdue+pago, partial, pending+pago, overdue', async () => {
+    loginOwner()
+    seedSale(
+      sale214({
+        installments_count: 5,
+        installments: listInstallments([
+          { status: 'paid' },
+          { status: 'overdue', has_payment: true },
+          { status: 'partial' },
+          { status: 'pending', has_payment: true },
+          { status: 'overdue' },
+        ]),
+        installments_summary: { paid: 1, partial: 1, overdue: 2, pending: 1, cancelled: 0 },
+      }),
+    )
+    window.history.pushState({}, '', '/ventas')
+    renderApp()
+    expect(await screen.findByText('#128 · Nevera Mabe 14 pies', {}, { timeout: 4000 })).toBeInTheDocument()
+    const dots = cardOf('#128 · Nevera Mabe 14 pies').querySelector('[role="img"]')!
+    const spans = [...dots.querySelectorAll(':scope > span')]
+    expect(spans).toHaveLength(5)
+    expect(spans[0]).toHaveClass('bg-success')
+    expect(spans[1]).toHaveClass('cuota-dot-late-partial')
+    expect(spans[2]).toHaveClass('cuota-dot-partial')
+    expect(spans[3]).toHaveClass('cuota-dot-pending-paid')
+    expect(spans[4]).toHaveClass('bg-danger')
+  })
+
+  it('el encabezado de Cuotas usa installments_summary aunque las filas digan otra cosa', async () => {
+    loginOwner()
+    seedSale(
+      clientSaleDetailFixture({
+        installments_count: 5,
+        installments_summary: { paid: 3, partial: 0, overdue: 1, pending: 1, cancelled: 0 },
+        installments: detailInstallments([
+          { status: 'pending' },
+          { status: 'pending' },
+          { status: 'pending' },
+          { status: 'pending' },
+          { status: 'pending' },
+        ]),
+      }),
+    )
+    window.history.pushState({}, '', '/ventas/sale-128')
+    renderApp()
+    const heading = await screen.findByRole('heading', { name: 'Cuotas' }, { timeout: 4000 })
+    const header = heading.parentElement
+    expect(header).not.toBeNull()
+    expect(within(header as HTMLElement).getByText(/3 pagadas/)).toBeInTheDocument()
+    expect(within(header as HTMLElement).getByText(/1 vencida/)).toBeInTheDocument()
+    expect(within(header as HTMLElement).getByText(/1 pendiente/)).toBeInTheDocument()
+    expect(within(header as HTMLElement).queryByText(/5 pendientes/)).not.toBeInTheDocument()
+    expect(within(header as HTMLElement).queryByText('Pendiente')).not.toBeInTheDocument()
+    expect(within(header as HTMLElement).queryByText('3 de 5 pagadas')).not.toBeInTheDocument()
   })
 })

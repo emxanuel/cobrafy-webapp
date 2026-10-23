@@ -9,26 +9,57 @@ const VARIANTS: Array<{
   api: string
   hasPayment?: boolean
   dotClass: string
+  tone: string
   word: string
   icon: string
 }> = [
-  { status: 'paid', api: 'paid', dotClass: 'bg-success', word: 'Pagada', icon: '●' },
-  { status: 'partial', api: 'partial', dotClass: 'cuota-dot-partial', word: 'Parcial', icon: '◐' },
-  { status: 'late', api: 'overdue', dotClass: 'bg-danger', word: 'Vencida', icon: '⚠' },
+  {
+    status: 'paid',
+    api: 'paid',
+    dotClass: 'bg-success',
+    tone: 'text-success',
+    word: 'Pagada',
+    icon: '●',
+  },
+  {
+    status: 'partial',
+    api: 'partial',
+    dotClass: 'cuota-dot-partial',
+    tone: 'text-warning',
+    word: 'Parcial',
+    icon: '◐',
+  },
+  {
+    status: 'late',
+    api: 'overdue',
+    dotClass: 'bg-danger',
+    tone: 'text-danger',
+    word: 'Vencida',
+    icon: '⚠',
+  },
   {
     status: 'late-partial',
     api: 'overdue',
     hasPayment: true,
     dotClass: 'cuota-dot-late-partial',
+    tone: 'text-danger',
     word: 'Vencida · abonada',
     icon: '⚠',
   },
-  { status: 'pending', api: 'pending', dotClass: 'border-heading', word: 'Pendiente', icon: '○' },
+  {
+    status: 'pending',
+    api: 'pending',
+    dotClass: 'border-heading',
+    tone: 'text-text',
+    word: 'Pendiente',
+    icon: '○',
+  },
   {
     status: 'pending-paid',
     api: 'pending',
     hasPayment: true,
     dotClass: 'cuota-dot-pending-paid',
+    tone: 'text-text',
     word: 'Pendiente · abonada',
     icon: '○',
   },
@@ -36,6 +67,7 @@ const VARIANTS: Array<{
     status: 'cancelled',
     api: 'cancelled',
     dotClass: 'cuota-dot-cancelled',
+    tone: 'text-text',
     word: 'Cancelada',
     icon: '⊘',
   },
@@ -48,7 +80,7 @@ function firstDot() {
 describe('variantes de cuota', () => {
   it.each(VARIANTS)(
     '$word: clase del punto, ícono + palabra y aria-label',
-    ({ status, api, hasPayment, dotClass, word, icon }) => {
+    ({ status, api, hasPayment, dotClass, tone, word, icon }) => {
       render(
         <div>
           <CuotaDots count={1} statuses={[status]} />
@@ -68,6 +100,7 @@ describe('variantes de cuota', () => {
         expect(firstDot()).not.toHaveClass('cuota-dot-pending-paid')
       }
       const label = screen.getByLabelText(word)
+      expect(label).toHaveClass(tone)
       expect(label).toHaveTextContent(icon)
       expect(label).toHaveTextContent(word)
     },
@@ -86,5 +119,18 @@ describe('variantes de cuota', () => {
     expect(
       screen.getByLabelText('24 cuotas: 6 pagadas, 1 vencida, 17 pendientes'),
     ).toBeInTheDocument()
+  })
+
+  it('13 cuotas muestra +1', () => {
+    render(
+      <CuotaDots
+        count={13}
+        statuses={Array.from({ length: 13 }, () => 'pending')}
+        summary={{ paid: 0, partial: 0, overdue: 0, pending: 13, cancelled: 0 }}
+      />,
+    )
+    expect(screen.getByText('+1')).toBeInTheDocument()
+    expect(screen.getByRole('img').querySelectorAll(':scope > span')).toHaveLength(13)
+    expect(screen.getByLabelText('13 cuotas: 13 pendientes')).toBeInTheDocument()
   })
 })

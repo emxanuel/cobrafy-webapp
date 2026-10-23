@@ -51,6 +51,21 @@ describe('InstallmentSummaryLine', () => {
     expect(screen.queryByText(/pagada/)).not.toBeInTheDocument()
   })
 
+  it('con pending 0 y partial 0 no muestra ningún 0 …', () => {
+    render(
+      <InstallmentSummaryLine
+        count={4}
+        summary={{ paid: 3, partial: 0, overdue: 1, pending: 0, cancelled: 0 }}
+      />,
+    )
+    expect(screen.getByText(/3 pagadas/).closest('p')?.textContent).toMatch(
+      /●\s*3 pagadas\s*·\s*⚠\s*1 vencida/,
+    )
+    expect(screen.queryByText(/0 /)).not.toBeInTheDocument()
+    expect(screen.queryByText(/parcial/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/pendiente/)).not.toBeInTheDocument()
+  })
+
   it('no recalcula: ignora lo que vendría de installments', () => {
     render(
       <InstallmentSummaryLine
